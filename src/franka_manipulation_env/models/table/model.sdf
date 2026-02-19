@@ -1,0 +1,84 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <model name="table">
+    <static>true</static>
+    <link name="link">
+      <collision name="surface">
+        <pose>0 0 0.735 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>1.5 0.8 0.03</size>
+          </box>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>1.0</mu>
+              <mu2>1.0</mu2>
+            </ode>
+          </friction>
+          <contact>
+            <ode>
+              <kp>1000000.0</kp>
+              <kd>1.0</kd>
+            </ode>
+          </contact>
+        </surface>
+      </collision>
+      
+      <visual name="visual_surface">
+        <pose>0 0 0.735 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>1.5 0.8 0.03</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>0.4 0.2 0.1 1</ambient>
+          <diffuse>0.4 0.2 0.1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+
+      <collision name="leg1">
+        <pose>0.68 0.33 0.36 0 0 0</pose>
+        <geometry><box><size>0.04 0.04 0.72</size></box></geometry>
+      </collision>
+      <visual name="visual_leg1">
+        <pose>0.68 0.33 0.36 0 0 0</pose>
+        <geometry><box><size>0.04 0.04 0.72</size></box></geometry>
+        <material><ambient>0.1 0.1 0.1 1</ambient><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+
+      <collision name="leg2">
+        <pose>-0.68 0.33 0.36 0 0 0</pose>
+        <geometry><box><size>0.04 0.04 0.72</size></box></geometry>
+      </collision>
+      <visual name="visual_leg2">
+        <pose>-0.68 0.33 0.36 0 0 0</pose>
+        <geometry><box><size>0.04 0.04 0.72</size></box></geometry>
+        <material><ambient>0.1 0.1 0.1 1</ambient><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+
+      <collision name="leg3">
+        <pose>0.68 -0.33 0.36 0 0 0</pose>
+        <geometry><box><size>0.04 0.04 0.72</size></box></geometry>
+      </collision>
+      <visual name="visual_leg3">
+        <pose>0.68 -0.33 0.36 0 0 0</pose>
+        <geometry><box><size>0.04 0.04 0.72</size></box></geometry>
+        <material><ambient>0.1 0.1 0.1 1</ambient><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+
+      <collision name="leg4">
+        <pose>-0.68 -0.33 0.36 0 0 0</pose>
+        <geometry><box><size>0.04 0.04 0.72</size></box></geometry>
+      </collision>
+      <visual name="visual_leg4">
+        <pose>-0.68 -0.33 0.36 0 0 0</pose>
+        <geometry><box><size>0.04 0.04 0.72</size></box></geometry>
+        <material><ambient>0.1 0.1 0.1 1</ambient><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+    </link>
+  </model>
+</sdf>

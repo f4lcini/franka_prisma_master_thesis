@@ -1,0 +1,6 @@
+#Request
+bool request_clear
+---
+#Response
+bool success
+string message

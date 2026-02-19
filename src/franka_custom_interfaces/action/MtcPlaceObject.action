@@ -1,0 +1,11 @@
+# Goal (Richiesta al Server MTC)
+geometry_msgs/PoseStamped place_pose
+float64 retreat_distance
+---
+# Result
+bool success
+string message
+---
+# Feedback
+string status
+float64 completion_percentage

@@ -1,0 +1,11 @@
+# Goal (From BT to Server MTC)
+geometry_msgs/PoseStamped target_pose
+float64 approach_distance  # pregrasp distance
+---
+# Result (Risponse BT)
+bool success
+string message
+---
+# Feedback (real-time update)
+string status
+float64 completion_percentage

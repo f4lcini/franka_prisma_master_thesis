@@ -1,0 +1,3 @@
+Identificare frame id statici
+ros2 topic echo /tf_static --once | grep frame_id -m 20
+

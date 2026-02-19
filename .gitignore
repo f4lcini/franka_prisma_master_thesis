@@ -1,0 +1,20 @@
+# --- Ignora cartelle di build e log ---
+build/
+install/
+log/
+
+# --- Ignora TUTTO il contenuto di src per default ---
+src/*
+
+# --- ECCEZIONI: Traccia solo i tuoi pacchetti ---
+!src/franka_manipulation_env/
+!src/franka_custom_interfaces/
+!src/franka_mtc_cpp_server/
+!src/franka_task_orchestrator/
+
+# --- Ignora file temporanei e di sistema ovunque ---
+**/__pycache__/
+**/*.pyc
+.vscode/
+.DS_Store
+*.swp
