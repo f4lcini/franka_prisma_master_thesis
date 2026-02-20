@@ -53,14 +53,14 @@ def generate_launch_description():
     spawn_system = Node(
         package='ros_gz_sim',
         executable='create',
-        arguments=['-name', 'fr3_system', '-topic', 'robot_description', '-x', '0', '-y', '0', '-z', '0'],
+        arguments=['-name', 'fr3_system', '-topic', 'robot_description', '-x', '0', '-y', '0', '-z', '0.0'],
         output='screen',
     )
 
     spawn_cube = Node(
         package='ros_gz_sim',
         executable='create',
-        arguments=['-name', 'target_cube', '-file', os.path.join(pkg_franka_manipulation_env, 'models', 'cube', 'model.sdf'), '-x', '0.5', '-y', '0.0', '-z', '0.8'],
+        arguments=['-name', 'target_cube', '-file', os.path.join(pkg_franka_manipulation_env, 'models', 'cube', 'model.sdf'), '-x', '0.6', '-y', '0.0', '-z', '0.775'],
         output='screen',
     )
     

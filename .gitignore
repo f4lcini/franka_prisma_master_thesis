@@ -11,6 +11,7 @@ src/*
 !src/franka_custom_interfaces/
 !src/franka_mtc_cpp_server/
 !src/franka_task_orchestrator/
+!src/fr3_application/
 
 # --- Ignora file temporanei e di sistema ovunque ---
 **/__pycache__/
