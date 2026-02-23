@@ -1,0 +1,33 @@
+graph TD
+    %% Input Strategico
+    VLM{VLM Client<br/>Gemini-3-flash} -->|Action & Arm Selection| BT
+
+    subgraph BT_LOGIC [Behaviour Tree - Groot2]
+        BT[BT Engine<br/>BehaviorTree.CPP]
+        BT -->|Sequence / Fallback| NODE_DET[Detection Node]
+        BT -->|Action Goals| NODE_MTC[MTC Task Node]
+    end
+
+    subgraph PERCEPTION [Perception]
+        YOLO[YOLO Node]
+        REPROJ[3D Deprojection]
+        NODE_DET -->|Request| YOLO
+        YOLO --> REPROJ
+        REPROJ -->|Spatial Goal| BT
+    end
+
+    subgraph PLANNING [MoveIt Task Constructor - MTC]
+        NODE_MTC -->|Start Task| MTC_EXEC[MTC Pipeline]
+        MTC_EXEC -->|Stage 1: Pre-Grasp| STAGE
+        MTC_EXEC -->|Stage 2: Grasp| STAGE
+        MTC_EXEC -->|Stage 3: Lift| STAGE
+        STAGE[MTC Stages] -->|Valid Trajectory| CONTROLLER
+    end
+
+    subgraph HARDWARE [Hardware Layer]
+        CONTROLLER[Franka Controller] --> ACTUATORS((Franka FER<br/>Actuators))
+    end
+
+    %% Feedback Loop
+    ACTUATORS -.->|Joint States| BT
+    VLM -.->|Re-Planning| BT

@@ -1,0 +1,50 @@
+graph TD
+    %% Inputs
+    TASK([Task Description]) --> VLM
+    
+    subgraph SENSORY [Sensory & State Input]
+        CAM[Raw Camera Stream<br/><i>sensor_msgs/Image</i>]
+        PCL[Depth/PointCloud<br/><i>sensor_msgs/PointCloud2</i>]
+        FB[Robot Proprioception<br/><i>Joint States / Pose</i>]
+    end
+
+    subgraph VLM_DECISION [High-Level Task Planning]
+        VLM{VLM Client<br/>Gemini-3-flash}
+        DISPATCHER[Action Dispatcher<br/>Task Parameterization]
+        
+        VLM -->|Action Choice & Arm Selection| DISPATCHER
+    end
+
+    subgraph PERCEPTION [Object Localization Pipeline]
+        YOLO[YOLO Detection<br/>Object Localization]
+        REPROJ[3D Deprojection<br/>Pixel to Meters]
+        
+        VLM -->|Target Label| YOLO
+        YOLO -->|2D Bounding Box| REPROJ
+    end
+
+    subgraph MOTION [Motion & Execution]
+        PLANNER[Motion Planner<br/>Bimanual Trajectory Gen]
+        TARGET[Target Pose<br/><i>geometry_msgs/PoseStamped</i>]
+        ACTUATORS((Franka FER<br/>Bimanual Actuators))
+        
+        REPROJ --> TARGET
+        TARGET --> PLANNER
+        DISPATCHER -->|Action Primitives & Constraints| PLANNER
+        PLANNER -->|Joint Commands| ACTUATORS
+    end
+
+    %% Global Connections
+    CAM --> VLM
+    CAM --> YOLO
+    PCL --> REPROJ
+    ACTUATORS -.->|Feedback Loop| FB
+    FB -.-> VLM
+    FB -.-> DISPATCHER
+
+    %% Styling
+    style VLM fill:#f06292,stroke:#333,color:#fff
+    style DISPATCHER fill:#ce93d8,stroke:#333
+    style YOLO fill:#9fa8da,stroke:#333
+    style ACTUATORS fill:#c8e6c9,stroke:#333
+    style SENSORY fill:#f5f5f5,stroke:#999,stroke-dasharray: 5 5
