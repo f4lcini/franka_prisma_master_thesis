@@ -1,0 +1,19 @@
+services:
+  fr3_vlm_dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: franka_vlm_container
+    network_mode: host
+    ipc: host
+    privileged: true
+    # --- AGGIUNGI QUESTE DUE RIGHE ---
+    tty: true
+    stdin_open: true
+    # --------------------------------
+    environment:
+      - DISPLAY=${DISPLAY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./src:/mm_ws/src:rw

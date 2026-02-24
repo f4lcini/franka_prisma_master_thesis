@@ -1,0 +1,16 @@
+# --- Ignora cartelle di build e log di ROS 2 ---
+build/
+install/
+log/
+
+# --- Ignora file temporanei e di sistema ---
+**/__pycache__/
+**/*.pyc
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# --- Ignora la cronologia di Git per alleggerire il context ---
+.git/
+.gitignore

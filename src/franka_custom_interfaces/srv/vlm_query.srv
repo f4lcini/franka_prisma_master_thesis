@@ -1,0 +1,9 @@
+# Request
+sensor_msgs/Image image_raw    # 
+string task_description        #
+---
+# Response
+bool success                   #
+string selected_arm            #
+string action_type             #
+string reasoning               #

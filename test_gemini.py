@@ -8,88 +8,97 @@ from google import genai
 from google.genai import types
 
 # ---------------------------------------------------------
-# 1. Definizione dello Schema (Contratto Dati per ROS2)
+# 1. Schema Definition (Data Contract for ROS2/Behavior Trees)
 # ---------------------------------------------------------
 class RobotDecision(BaseModel):
     selected_arm: Literal["left_arm", "right_arm"] = Field(
-        description="Il braccio selezionato in base alla posizione spaziale dell'oggetto."
+        description="The arm selected based on the spatial position of the object."
     )
     action_type: Literal["PICK", "PLACE", "POUR"] = Field(
-        description="Il tipo di azione che il Motion Planner (MTC) dovrà eseguire."
+        description="The type of primitive action the Motion Planner (MTC) should execute."
     )
     reasoning: str = Field(
-        description="Breve giustificazione della scelta (es. 'oggetto a destra')."
+        description="Brief justification for the choice (e.g., 'object is on the right')."
     )
 
 # ---------------------------------------------------------
-# 2. Funzione di Inferenza VLM
+# 2. VLM Inference Function
 # ---------------------------------------------------------
 def run_vlm_query():
-    # Setup degli argomenti (Stile Yigit)
-    parser = argparse.ArgumentParser(description="Query VLM per decisioni bimanuali.")
-    parser.add_argument("--image", default="/home/falco_robotics/mm_ws/test-image.jpg", help="Percorso immagine")
-    parser.add_argument("--model", default="models/gemini-3-flash-preview", help="Nome modello completo")
-    parser.add_argument("--max_side", type=int, default=112, help="Ridimensionamento per risparmio quota")
-    parser.add_argument("--thinking", default="LOW", choices=["LOW", "MEDIUM", "HIGH"], help="Livello reasoning")
-    parser.add_argument("--jpeg_quality", type=int, default=75, help="Qualità JPEG")
+    # Argument Setup (Matching Yigit's workflow)
+    parser = argparse.ArgumentParser(description="VLM Query for Bimanual Robot Decisions.")
+    parser.add_argument("--image", default="/home/falco_robotics/mm_ws/target-image.jpeg", help="Path to input image")
+    parser.add_argument("--model", default="models/gemini-3-flash-preview", help="Full model name string")
+    parser.add_argument("--max_side", type=int, default=112, help="Resize image to save quota/tokens")
+    parser.add_argument("--thinking", default="LOW", choices=["LOW", "MEDIUM", "HIGH"], help="Reasoning effort level")
+    parser.add_argument("--jpeg_quality", type=int, default=75, help="JPEG compression quality")
+    parser.add_argument("--output", default="/home/falco_robotics/mm_ws/vlm_decision.json", help="Path to save JSON result")
     args = parser.parse_args()
 
-    # Verifica API Key
+    # API Key Verification
     if "GEMINI_API_KEY" not in os.environ:
-        print("ERRORE: Variabile d'ambiente GEMINI_API_KEY non impostata.")
+        print("ERROR: GEMINI_API_KEY environment variable not set.")
         return
 
-    # Inizializzazione Client
+    # Client Initialization
     client = genai.Client()
     
-    # Caricamento e pre-elaborazione immagine (Critico per evitare 429)
+    # Image Loading and Pre-processing (Critical to avoid 429 Errors)
     try:
         img = Image.open(args.image)
         if args.max_side > 0:
             img.thumbnail((args.max_side, args.max_side))
-            print(f"Immagine ridimensionata a: {img.size}")
+            print(f"Image resized to: {img.size}")
     except Exception as e:
-        print(f"Errore caricamento immagine: {e}")
+        print(f"Error loading image: {e}")
         return
 
-    # Prompt ottimizzato per bimanualità
+    # Optimized Prompt for Bimanual Manipulation
+    # Note: We explicitly target 'the mug' to avoid picking the 'plant' again.
     prompt = """
-    Sei il modulo di High-Level Planning di un robot Franka FER bimanuale.
-    Analizza l'immagine e identifica l'oggetto target.
-    REGOLE:
-    - Se l'oggetto è nella metà SINISTRA, usa 'left_arm'.
-    - Se l'oggetto è nella metà DESTRA, usa 'right_arm'.
-    Rispondi esclusivamente in formato JSON seguendo lo schema richiesto.
+    You are the High-Level Planning module for a bimanual Franka FR3 robot.
+    Analyze the image and identify the target object: a mug.
+    
+    RULES:
+    - If the mug is in the LEFT half of the image, use 'left_arm'.
+    - If the mug is in the RIGHT half of the image, use 'right_arm'.
+    - If the mug is not found, set action_type to 'IDLE'.
+    
+    Return the result strictly in JSON format according to the provided schema.
     """
 
-    # Configurazione generazione
+    # Generation Configuration
     cfg = types.GenerateContentConfig(
         response_mime_type="application/json",
         response_schema=RobotDecision,
         thinking_config=types.ThinkingConfig(thinking_level=args.thinking),
-        temperature=0.1,
+        temperature=0.1, # Low temperature for deterministic results
     )
 
-    print(f"Inviando richiesta al modello: {args.model}...")
+    print(f"Sending request to model: {args.model}...")
     
     try:
-        # Chiamata API (corrisponde alla riga 386 di Yigit)
+        # API Call 
         response = client.models.generate_content(
             model=args.model,
             contents=[prompt, img],
             config=cfg
         )
         
-        # Output dei risultati
-        print("\n--- RISULTATO PER IL BEHAVIOR TREE ---")
-        print(response.text)
+        # Parse the JSON response
+        decision_data = json.loads(response.text)
         
-        # Validazione formale del JSON
-        data = json.loads(response.text)
-        print(f"\n[DATO ESTRATTO] Braccio: {data['selected_arm']}")
+        # Display Results
+        print("\n--- VLM RESULT ---")
+        print(json.dumps(decision_data, indent=4))
+        
+        # Save to physical file for the ROS2 Node/BT to read
+        with open(args.output, "w") as f:
+            json.dump(decision_data, f, indent=4)
+        print(f"\n[SUCCESS] Decision saved to: {args.output}")
         
     except Exception as e:
-        print(f"\nERRORE DURANTE L'INFERENZA: {e}")
+        print(f"\nINFERENCE ERROR: {e}")
 
 if __name__ == "__main__":
     run_vlm_query()

@@ -1,830 +1,837 @@
 .
-└── src
-    ├── franka_custom_interfaces
-    │   ├── action
-    │   ├── include
-    │   │   └── franka_custom_interfaces
-    │   ├── src
-    │   ├── srv
-    │   ├── CMakeLists.txt
-    │   └── package.xml
-    ├── franka_description
-    │   ├── end_effectors
-    │   │   ├── cobot_pump
-    │   │   │   ├── cobot_pump_arguments.xacro
-    │   │   │   ├── cobot_pump.urdf.xacro
-    │   │   │   └── inertials.yaml
-    │   │   ├── common
-    │   │   │   ├── ee_with_one_link.xacro
-    │   │   │   ├── franka_hand.xacro
-    │   │   │   └── utils.xacro
-    │   │   └── franka_hand
-    │   │       ├── franka_hand_arguments.xacro
-    │   │       ├── franka_hand.srdf.xacro
-    │   │       ├── franka_hand.urdf.xacro
-    │   │       └── inertials.yaml
-    │   ├── launch
-    │   │   ├── visualize_franka_duo.launch.py
-    │   │   └── visualize_franka.launch.py
-    │   ├── meshes
-    │   │   ├── robot_arms
-    │   │   │   ├── fer
-    │   │   │   │   ├── collision
-    │   │   │   │   └── visual
-    │   │   │   ├── fp3
-    │   │   │   │   ├── collision
-    │   │   │   │   └── visual
-    │   │   │   ├── fr3
-    │   │   │   │   ├── collision
-    │   │   │   │   └── visual
-    │   │   │   ├── fr3_duo
-    │   │   │   │   ├── cover
-    │   │   │   │   └── mount
-    │   │   │   └── fr3v2
-    │   │   │       ├── collision
-    │   │   │       └── visual
-    │   │   └── robot_ee
-    │   │       ├── cobot_pump
-    │   │       │   ├── collision
-    │   │       │   └── visual
-    │   │       ├── franka_hand_black
-    │   │       │   ├── collision
-    │   │       │   └── visual
-    │   │       └── franka_hand_white
-    │   │           ├── collision
-    │   │           └── visual
-    │   ├── robots
-    │   │   ├── common
-    │   │   │   ├── franka_arm.ros2_control.xacro
-    │   │   │   ├── franka_arm.srdf.xacro
-    │   │   │   ├── franka_arm.xacro
-    │   │   │   ├── franka_robot.xacro
-    │   │   │   ├── group_definition.xacro
-    │   │   │   └── utils.xacro
-    │   │   ├── fer
-    │   │   │   ├── dynamics.yaml
-    │   │   │   ├── fer.srdf.xacro
-    │   │   │   ├── fer.urdf.xacro
-    │   │   │   ├── inertials.yaml
-    │   │   │   ├── joint_limits.yaml
-    │   │   │   └── kinematics.yaml
-    │   │   ├── fp3
-    │   │   │   ├── dynamics.yaml
-    │   │   │   ├── fp3.srdf.xacro
-    │   │   │   ├── fp3.urdf.xacro
-    │   │   │   ├── inertials.yaml
-    │   │   │   ├── joint_limits.yaml
-    │   │   │   └── kinematics.yaml
-    │   │   ├── fr3
-    │   │   │   ├── dynamics.yaml
-    │   │   │   ├── fr3.srdf.xacro
-    │   │   │   ├── fr3.urdf.xacro
-    │   │   │   ├── inertials.yaml
-    │   │   │   ├── joint_limits.yaml
-    │   │   │   └── kinematics.yaml
-    │   │   ├── fr3_duo
-    │   │   │   ├── fr3_duo_cover
-    │   │   │   │   ├── fr3_duo_cover.xacro
-    │   │   │   │   ├── inertials.yaml
-    │   │   │   │   └── kinematics.yaml
-    │   │   │   ├── fr3_duo_mount
-    │   │   │   │   ├── fr3_duo_mount.xacro
-    │   │   │   │   ├── inertials.yaml
-    │   │   │   │   └── kinematics.yaml
-    │   │   │   ├── fr3_duo_arm.urdf.xacro
-    │   │   │   ├── fr3_duo_fixed_structure.urdf.xacro
-    │   │   │   └── fr3_duo.urdf.xacro
-    │   │   └── fr3v2
-    │   │       ├── dynamics.yaml
-    │   │       ├── fr3v2.srdf.xacro
-    │   │       ├── fr3v2.urdf.xacro
-    │   │       ├── inertials.yaml
-    │   │       ├── joint_limits.yaml
-    │   │       └── kinematics.yaml
-    │   ├── rviz
-    │   ├── scripts
-    │   │   └── create_urdf.py
-    │   ├── test
-    │   │   └── urdf_tests.py
-    │   ├── CMakeLists.txt
-    │   ├── CONTRIBUTING.md
-    │   ├── package.xml
-    │   └── README.md
-    ├── franka_manipulation_env
-    │   ├── config
-    │   │   ├── fr3_controllers.yaml
-    │   │   ├── moveit_controllers.yaml
-    │   │   ├── ompl_planning_override.yaml
-    │   │   └── vision_bridge.yaml
-    │   ├── include
-    │   │   └── franka_manipulation_env
-    │   ├── launch
-    │   │   ├── demo_moveit.launch.py
-    │   │   ├── moveit_core.launch.py
-    │   │   ├── sim_and_control.launch.py
-    │   │   └── sim_objects.launch.py
-    │   ├── models
-    │   │   ├── cube
-    │   │   ├── overhead_camera
-    │   │   └── table
-    │   ├── src
-    │   ├── srdf
-    │   │   └── fr3_sim_srdf.xacro
-    │   ├── urdf
-    │   │   ├── gazebo.xacro
-    │   │   └── system.urdf.xacro
-    │   ├── worlds
-    │   ├── CMakeLists.txt
-    │   ├── package.xml
-    │   └── README.md
-    ├── franka_mtc_cpp_server
-    │   ├── include
-    │   │   └── franka_mtc_cpp_server
-    │   ├── launch
-    │   │   └── mtc_server.launch.py
-    │   ├── src
-    │   │   └── mtc_pick_server.cpp
-    │   ├── CMakeLists.txt
-    │   └── package.xml
-    ├── franka_ros2
-    │   ├── franka_bringup
-    │   │   ├── config
-    │   │   │   ├── controllers.yaml
-    │   │   │   └── franka.config.yaml
-    │   │   ├── launch
-    │   │   │   ├── example.launch.py
-    │   │   │   ├── franka.launch.py
-    │   │   │   └── joint_impedance_with_ik_example_controller.launch.py
-    │   │   ├── utils
-    │   │   │   ├── __init__.py
-    │   │   │   └── launch_utils.py
-    │   │   ├── CMakeLists.txt
-    │   │   └── package.xml
-    │   ├── franka_example_controllers
-    │   │   ├── include
-    │   │   │   └── franka_example_controllers
-    │   │   │       ├── cartesian_elbow_example_controller.hpp
-    │   │   │       ├── cartesian_orientation_example_controller.hpp
-    │   │   │       ├── cartesian_pose_example_controller.hpp
-    │   │   │       ├── cartesian_velocity_example_controller.hpp
-    │   │   │       ├── default_robot_behavior_utils.hpp
-    │   │   │       ├── elbow_example_controller.hpp
-    │   │   │       ├── gravity_compensation_example_controller.hpp
-    │   │   │       ├── gripper_example_controller.hpp
-    │   │   │       ├── joint_impedance_example_controller.hpp
-    │   │   │       ├── joint_impedance_with_ik_example_controller.hpp
-    │   │   │       ├── joint_position_example_controller.hpp
-    │   │   │       ├── joint_velocity_example_controller.hpp
-    │   │   │       ├── model_example_controller.hpp
-    │   │   │       ├── motion_generator.hpp
-    │   │   │       ├── move_to_start_example_controller.hpp
-    │   │   │       ├── robot_utils.hpp
-    │   │   │       └── visibility_control.h
-    │   │   ├── src
-    │   │   │   ├── cartesian_elbow_example_controller.cpp
-    │   │   │   ├── cartesian_orientation_example_controller.cpp
-    │   │   │   ├── cartesian_pose_example_controller.cpp
-    │   │   │   ├── cartesian_velocity_example_controller.cpp
-    │   │   │   ├── elbow_example_controller.cpp
-    │   │   │   ├── gravity_compensation_example_controller.cpp
-    │   │   │   ├── gripper_example_controller.cpp
-    │   │   │   ├── joint_impedance_example_controller.cpp
-    │   │   │   ├── joint_impedance_with_ik_example_controller.cpp
-    │   │   │   ├── joint_position_example_controller.cpp
-    │   │   │   ├── joint_velocity_example_controller.cpp
-    │   │   │   ├── model_example_controller.cpp
-    │   │   │   ├── motion_generator.cpp
-    │   │   │   └── move_to_start_example_controller.cpp
-    │   │   ├── test
-    │   │   │   ├── test_gravity_compensation_example.cpp
-    │   │   │   ├── test_load_gravity_compensation_controller.cpp
-    │   │   │   ├── test_load_move_to_start_example_controller.cpp
-    │   │   │   ├── test_move_to_start_example_controller.cpp
-    │   │   │   └── test_move_to_start_example_controller.hpp
-    │   │   ├── CMakeLists.txt
-    │   │   └── package.xml
-    │   ├── franka_fr3_moveit_config
-    │   │   ├── config
-    │   │   │   ├── fr3_controllers.yaml
-    │   │   │   ├── fr3_ros_controllers.yaml
-    │   │   │   ├── kinematics.yaml
-    │   │   │   └── ompl_planning.yaml
-    │   │   ├── launch
-    │   │   │   ├── move_group.launch.py
-    │   │   │   └── moveit.launch.py
-    │   │   ├── rviz
-    │   │   ├── srdf
-    │   │   │   ├── fr3_arm_hand.xacro
-    │   │   │   ├── fr3_arm.srdf.xacro
-    │   │   │   ├── fr3_arm.xacro
-    │   │   │   ├── group_definition.xacro
-    │   │   │   └── hand.xacro
-    │   │   ├── test
-    │   │   │   └── srdf_tests.py
-    │   │   ├── CMakeLists.txt
-    │   │   └── package.xml
-    │   ├── franka_gazebo
-    │   │   ├── franka_gazebo_bringup
-    │   │   │   ├── config
-    │   │   │   │   └── franka_gazebo_controllers.yaml
-    │   │   │   ├── launch
-    │   │   │   │   ├── gazebo_joint_impedance_controller_example.launch.py
-    │   │   │   │   ├── gazebo_joint_position_controller_example.launch.py
-    │   │   │   │   ├── gazebo_joint_velocity_controller_example.launch.py
-    │   │   │   │   └── visualize_franka_robot.launch.py
-    │   │   │   ├── CMakeLists.txt
-    │   │   │   └── package.xml
-    │   │   ├── franka_ign_ros2_control
-    │   │   │   ├── include
-    │   │   │   │   └── ign_ros2_control
-    │   │   │   ├── src
-    │   │   │   │   ├── ign_ros2_control_plugin.cpp
-    │   │   │   │   ├── ign_system.cpp
-    │   │   │   │   └── model_kdl.cpp
-    │   │   │   ├── CMakeLists.txt
-    │   │   │   ├── package.xml
-    │   │   │   └── README.md
-    │   │   └── README.md
-    │   ├── franka_gripper
-    │   │   ├── config
-    │   │   │   └── franka_gripper_node.yaml
-    │   │   ├── franka_gripper
-    │   │   │   └── __init__.py
-    │   │   ├── include
-    │   │   │   └── franka_gripper
-    │   │   │       └── gripper_action_server.hpp
-    │   │   ├── launch
-    │   │   │   └── gripper.launch.py
-    │   │   ├── scripts
-    │   │   │   └── fake_gripper_state_publisher.py
-    │   │   ├── src
-    │   │   │   └── gripper_action_server.cpp
-    │   │   ├── CMakeLists.txt
-    │   │   └── package.xml
-    │   ├── franka_hardware
-    │   │   ├── include
-    │   │   │   └── franka_hardware
-    │   │   │       ├── franka_action_server.hpp
-    │   │   │       ├── franka_executor.hpp
-    │   │   │       ├── franka_hardware_interface.hpp
-    │   │   │       ├── franka_param_service_server.hpp
-    │   │   │       ├── model.hpp
-    │   │   │       ├── robot.hpp
-    │   │   │       └── ros_libfranka_logger.hpp
-    │   │   ├── src
-    │   │   │   ├── franka_action_server.cpp
-    │   │   │   ├── franka_executor.cpp
-    │   │   │   ├── franka_hardware_interface.cpp
-    │   │   │   ├── franka_param_service_server.cpp
-    │   │   │   ├── robot.cpp
-    │   │   │   └── ros_libfranka_logger.cpp
-    │   │   ├── test
-    │   │   │   ├── CMakeLists.txt
-    │   │   │   ├── fr3_unsupported_version.urdf
-    │   │   │   ├── fr3.urdf
-    │   │   │   ├── franka_action_server_test.cpp
-    │   │   │   ├── franka_hardware_cartesian_command_interface_test.cpp
-    │   │   │   ├── franka_hardware_cartesian_command_interface_test.hpp
-    │   │   │   ├── franka_hardware_interface_test.cpp
-    │   │   │   ├── franka_robot_test.cpp
-    │   │   │   ├── franka_robot_test.hpp
-    │   │   │   └── test_utils.hpp
-    │   │   ├── CMakeLists.txt
-    │   │   └── package.xml
-    │   ├── franka_msgs
-    │   │   ├── action
-    │   │   ├── msg
-    │   │   ├── srv
-    │   │   ├── CMakeLists.txt
-    │   │   └── package.xml
-    │   ├── franka_robot_state_broadcaster
-    │   │   ├── include
-    │   │   │   └── franka_robot_state_broadcaster
-    │   │   │       └── franka_robot_state_broadcaster.hpp
-    │   │   ├── src
-    │   │   │   ├── franka_robot_state_broadcaster.cpp
-    │   │   │   └── franka_robot_state_broadcaster_parameters.yaml
-    │   │   ├── test
-    │   │   │   ├── franka_robot_state_broadcaster_parameters.yaml
-    │   │   │   ├── test_franka_robot_state_broadcaster.cpp
-    │   │   │   └── test_load_franka_robot_state_broadcaster.cpp
-    │   │   ├── CMakeLists.txt
-    │   │   └── package.xml
-    │   ├── franka_ros2
-    │   │   ├── CMakeLists.txt
-    │   │   └── package.xml
-    │   ├── franka_semantic_components
-    │   │   ├── include
-    │   │   │   └── franka_semantic_components
-    │   │   │       ├── franka_cartesian_pose_interface.hpp
-    │   │   │       ├── franka_cartesian_velocity_interface.hpp
-    │   │   │       ├── franka_robot_model.hpp
-    │   │   │       ├── franka_robot_state.hpp
-    │   │   │       └── franka_semantic_component_interface.hpp
-    │   │   ├── src
-    │   │   │   ├── franka_cartesian_pose_interface.cpp
-    │   │   │   ├── franka_cartesian_velocity_interface.cpp
-    │   │   │   ├── franka_robot_model.cpp
-    │   │   │   ├── franka_robot_state.cpp
-    │   │   │   ├── franka_semantic_component_interface.cpp
-    │   │   │   ├── translation_utils.cpp
-    │   │   │   └── translation_utils.hpp
-    │   │   ├── test
-    │   │   │   ├── franka_cartesian_pose_interface_test.cpp
-    │   │   │   ├── franka_cartesian_pose_interface_test.hpp
-    │   │   │   ├── franka_cartesian_velocity_interface_test.cpp
-    │   │   │   ├── franka_cartesian_velocity_interface_test.hpp
-    │   │   │   ├── franka_robot_model_test.cpp
-    │   │   │   ├── franka_robot_model_test.hpp
-    │   │   │   ├── franka_robot_state_test.cpp
-    │   │   │   ├── franka_robot_state_test.hpp
-    │   │   │   ├── franka_semantic_interface_test.cpp
-    │   │   │   └── franka_semantic_interface_test.hpp
-    │   │   ├── CMakeLists.txt
-    │   │   └── package.xml
-    │   ├── integration_launch_testing
-    │   │   ├── test
-    │   │   │   ├── test_franka_gripper_position.py
-    │   │   │   └── test_move_to_start_example_controller.py
-    │   │   ├── CMakeLists.txt
-    │   │   └── package.xml
-    │   ├── CONTRIBUTING.md
-    │   ├── docker-compose.yml
-    │   └── README.md
-    ├── franka_ros2_multimanual
-    │   ├── franka_mm_control
-    │   │   ├── config
-    │   │   │   ├── basic_controllers.yaml
-    │   │   │   ├── controllers_gazebo.yaml
-    │   │   │   ├── controllers_ros.yaml
-    │   │   │   └── controllers.yaml
-    │   │   ├── include
-    │   │   │   └── franka_mm_control
-    │   │   │       ├── pose_reader.hpp
-    │   │   │       └── position_reader.hpp
-    │   │   ├── scripts
-    │   │   │   ├── cart_impedance_test.py
-    │   │   │   ├── cart_pos_test.py
-    │   │   │   ├── cart_vel_test.py
-    │   │   │   ├── effort_test.py
-    │   │   │   ├── position_test.py
-    │   │   │   └── velocity_test.py
-    │   │   ├── src
-    │   │   │   ├── pose_reader.cpp
-    │   │   │   └── position_reader.cpp
-    │   │   ├── CMakeLists.txt
-    │   │   └── package.xml
-    │   ├── franka_mm_hardware_interface
-    │   │   ├── include
-    │   │   │   └── franka_mm_hardware_interface
-    │   │   │       ├── control_modes.hpp
-    │   │   │       ├── franka_mm_hardware_interface.hpp
-    │   │   │       ├── franka_param_service_server.hpp
-    │   │   │       ├── franka_wrapper.hpp
-    │   │   │       ├── interfaces.hpp
-    │   │   │       ├── lambda_control.hpp
-    │   │   │       └── mode_switch_plan.hpp
-    │   │   ├── src
-    │   │   │   ├── franka_mm_hardware_interface.cpp
-    │   │   │   ├── franka_param_service_server.cpp
-    │   │   │   ├── franka_wrapper.cpp
-    │   │   │   ├── lambda_control.cpp
-    │   │   │   └── mode_switch_plan.cpp
-    │   │   ├── CMakeLists.txt
-    │   │   └── package.xml
-    │   ├── idra_franka_launch
-    │   │   ├── launch
-    │   │   │   ├── bimanual.launch.py
-    │   │   │   ├── franka1.launch.py
-    │   │   │   └── franka2.launch.py
-    │   │   ├── rviz
-    │   │   ├── scripts
-    │   │   │   ├── coffee_tray.py
-    │   │   │   ├── gear_pick.py
-    │   │   │   ├── gripper_grasp_test.py
-    │   │   │   ├── gripper_homing_test.py
-    │   │   │   └── stiffness_test.py
-    │   │   ├── urdf
-    │   │   │   └── bimanual.urdf.xacro
-    │   │   ├── CMakeLists.txt
-    │   │   └── package.xml
-    │   ├── webdocs
-    │   │   ├── images
-    │   │   ├── static
-    │   │   │   ├── css
-    │   │   │   └── js
-    │   │   └── homepage.md
-    │   └── README.md -> webdocs/homepage.md
-    ├── franka_task_orchestrator
-    │   ├── franka_task_orchestrator
-    │   │   ├── behaviors
-    │   │   │   ├── __init__.py
-    │   │   │   ├── perception_mock.py
-    │   │   │   └── pick_client.py
-    │   │   ├── __init__.py
-    │   │   └── main_engine.py
-    │   ├── resource
-    │   ├── test
-    │   │   ├── test_copyright.py
-    │   │   ├── test_flake8.py
-    │   │   └── test_pep257.py
-    │   ├── package.xml
-    │   └── setup.py
-    ├── moveit2_tutorials
-    │   ├── doc
-    │   │   ├── api
-    │   │   ├── concepts
-    │   │   │   └── hybrid_planning
-    │   │   ├── examples
-    │   │   │   ├── benchmarking
-    │   │   │   ├── bullet_collision_checker
-    │   │   │   │   ├── images
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── collision_environments
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── controller_configuration
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── creating_moveit_plugins
-    │   │   │   │   └── lerp_motion_planner
-    │   │   │   ├── custom_constraint_samplers
-    │   │   │   ├── hand_eye_calibration
-    │   │   │   │   └── images
-    │   │   │   ├── hybrid_planning
-    │   │   │   │   └── images
-    │   │   │   ├── ikfast
-    │   │   │   ├── interactivity
-    │   │   │   │   ├── include
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── kinematics
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── kinematics_configuration
-    │   │   │   ├── mobile_base_arm
-    │   │   │   │   └── images
-    │   │   │   ├── motion_planning_api
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── motion_planning_pipeline
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── move_group_interface
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── moveit_cpp
-    │   │   │   │   ├── config
-    │   │   │   │   ├── images
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── moveit_deep_grasps
-    │   │   │   ├── moveit_grasps
-    │   │   │   ├── moveit_task_constructor
-    │   │   │   ├── ompl_interface
-    │   │   │   ├── perception_pipeline
-    │   │   │   │   ├── bags
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── persistent_scenes_and_states
-    │   │   │   │   └── move_group.launch.py
-    │   │   │   ├── pick_place
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── pilz_industrial_motion_planner
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── planning
-    │   │   │   │   └── src
-    │   │   │   ├── planning_adapters
-    │   │   │   ├── planning_scene
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── planning_scene_monitor
-    │   │   │   ├── planning_scene_ros_api
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── planning_with_approximated_constraint_manifolds
-    │   │   │   ├── realtime_servo
-    │   │   │   │   ├── config
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── robot_model_and_robot_state
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── setup_assistant
-    │   │   │   ├── state_display
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── stomp_planner
-    │   │   │   ├── subframes
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── tests
-    │   │   │   │   ├── test
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── time_parameterization
-    │   │   │   ├── trac_ik
-    │   │   │   ├── trajopt_planner
-    │   │   │   │   ├── launch
-    │   │   │   │   ├── src
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── urdf_srdf
-    │   │   │   └── visualizing_collisions
-    │   │   │       ├── launch
-    │   │   │       ├── src
-    │   │   │       └── CMakeLists.txt
-    │   │   ├── how_to_contribute
-    │   │   ├── how_to_guides
-    │   │   │   ├── chomp_planner
-    │   │   │   │   ├── config
-    │   │   │   │   ├── launch
-    │   │   │   │   └── CMakeLists.txt
-    │   │   │   ├── isaac_panda
-    │   │   │   └── using_ompl_constrained_planning
-    │   │   │       ├── config
-    │   │   │       ├── launch
-    │   │   │       ├── src
-    │   │   │       └── CMakeLists.txt
-    │   │   └── tutorials
-    │   │       ├── getting_started
-    │   │       ├── pick_and_place_with_moveit_task_constructor
-    │   │       │   ├── launch
-    │   │       │   ├── src
-    │   │       │   ├── CMakeLists.txt
-    │   │       │   └── package.xml
-    │   │       ├── planning_around_objects
-    │   │       │   └── hello_moveit.cpp
-    │   │       ├── quickstart_in_rviz
-    │   │       │   ├── launch
-    │   │       │   └── CMakeLists.txt
-    │   │       ├── visualizing_in_rviz
-    │   │       │   └── hello_moveit.cpp
-    │   │       └── your_first_project
-    │   │           └── hello_moveit.cpp
-    │   ├── _scripts
-    │   │   └── tutorialformatter.py
-    │   ├── _static
-    │   │   ├── css
-    │   │   ├── images
-    │   │   └── videos
-    │   ├── _templates
-    │   ├── CMakeLists.txt
-    │   ├── conf.py
-    │   ├── package.xml
-    │   ├── README.md
-    │   ├── rosdoc.yaml
-    │   └── rosindex.yaml
-    └── moveit_task_constructor
-        ├── capabilities
-        │   ├── src
-        │   │   ├── execute_task_solution_capability.cpp
-        │   │   └── execute_task_solution_capability.h
-        │   ├── test
-        │   │   ├── CMakeLists.txt
-        │   │   ├── test_execution.launch.py
-        │   │   └── test_task_execution.cpp
-        │   ├── CMakeLists.txt
-        │   └── package.xml
-        ├── core
-        │   ├── cmake
-        │   ├── doc
-        │   │   ├── _templates
-        │   │   ├── tutorials
-        │   │   └── conf.py
-        │   ├── include
-        │   │   └── moveit
-        │   │       ├── python
-        │   │       └── task_constructor
-        │   ├── python
-        │   │   ├── bindings
-        │   │   │   ├── src
-        │   │   │   └── CMakeLists.txt
-        │   │   ├── moveit
-        │   │   │   ├── task_constructor
-        │   │   │   └── __init__.py
-        │   │   ├── pybind11
-        │   │   │   ├── docs
-        │   │   │   ├── include
-        │   │   │   ├── pybind11
-        │   │   │   ├── tests
-        │   │   │   ├── tools
-        │   │   │   ├── ubench
-        │   │   │   ├── CMakeLists.txt
-        │   │   │   ├── noxfile.py
-        │   │   │   ├── SECURITY.md
-        │   │   │   └── setup.py
-        │   │   ├── test
-        │   │   │   ├── rostest_mps.py
-        │   │   │   ├── rostest_mtc.py
-        │   │   │   ├── rostest_trampoline.py
-        │   │   │   ├── test.launch.py
-        │   │   │   └── test_mtc.py
-        │   │   └── CMakeLists.txt
-        │   ├── src
-        │   │   ├── scope_guard
-        │   │   │   ├── docs
-        │   │   │   ├── catch_tests.cpp
-        │   │   │   ├── CMakeLists.txt
-        │   │   │   ├── compile_time_tests.cpp
-        │   │   │   ├── _config.yml
-        │   │   │   ├── README.md
-        │   │   │   └── scope_guard.hpp
-        │   │   ├── solvers
-        │   │   │   ├── cartesian_path.cpp
-        │   │   │   ├── joint_interpolation.cpp
-        │   │   │   ├── multi_planner.cpp
-        │   │   │   ├── pipeline_planner.cpp
-        │   │   │   └── planner_interface.cpp
-        │   │   ├── stages
-        │   │   │   ├── CMakeLists.txt
-        │   │   │   ├── compute_ik.cpp
-        │   │   │   ├── connect.cpp
-        │   │   │   ├── current_state.cpp
-        │   │   │   ├── fix_collision_objects.cpp
-        │   │   │   ├── fixed_cartesian_poses.cpp
-        │   │   │   ├── fixed_state.cpp
-        │   │   │   ├── generate_grasp_pose.cpp
-        │   │   │   ├── generate_place_pose.cpp
-        │   │   │   ├── generate_pose.cpp
-        │   │   │   ├── generate_random_pose.cpp
-        │   │   │   ├── modify_planning_scene.cpp
-        │   │   │   ├── move_relative.cpp
-        │   │   │   ├── move_to.cpp
-        │   │   │   ├── passthrough.cpp
-        │   │   │   ├── pick.cpp
-        │   │   │   ├── plugins.cpp
-        │   │   │   ├── predicate_filter.cpp
-        │   │   │   └── simple_grasp.cpp
-        │   │   ├── CMakeLists.txt
-        │   │   ├── container.cpp
-        │   │   ├── cost_terms.cpp
-        │   │   ├── introspection.cpp
-        │   │   ├── marker_tools.cpp
-        │   │   ├── merge.cpp
-        │   │   ├── properties.cpp
-        │   │   ├── stage.cpp
-        │   │   ├── storage.cpp
-        │   │   ├── task.cpp
-        │   │   └── utils.cpp
-        │   ├── test
-        │   │   ├── CMakeLists.txt
-        │   │   ├── gtest_value_printers.cpp
-        │   │   ├── gtest_value_printers.h
-        │   │   ├── models.cpp
-        │   │   ├── models.h
-        │   │   ├── pick_pa10.cpp
-        │   │   ├── pick_pr2.cpp
-        │   │   ├── pick_ur5.cpp
-        │   │   ├── stage_mockups.cpp
-        │   │   ├── stage_mockups.h
-        │   │   ├── test_container.cpp
-        │   │   ├── test_cost_queue.cpp
-        │   │   ├── test_cost_terms.cpp
-        │   │   ├── test_fallback.cpp
-        │   │   ├── test_interface_state.cpp
-        │   │   ├── test.launch.py
-        │   │   ├── test_mockups.cpp
-        │   │   ├── test_move_relative.cpp
-        │   │   ├── test_move_to.cpp
-        │   │   ├── test_properties.cpp
-        │   │   ├── test_pruning.cpp
-        │   │   ├── test_serial.cpp
-        │   │   └── test_stage.cpp
-        │   ├── CMakeLists.txt
-        │   ├── package.xml
-        │   ├── rosdoc.yaml
-        │   └── setup.py
-        ├── demo
-        │   ├── config
-        │   │   └── panda_config.yaml
-        │   ├── include
-        │   │   └── moveit_task_constructor_demo
-        │   │       └── pick_place_task.h
-        │   ├── launch
-        │   │   ├── demo.launch.py
-        │   │   └── run.launch.py
-        │   ├── scripts
-        │   │   ├── alternatives.py
-        │   │   ├── cartesian.py
-        │   │   ├── compute_ik.py
-        │   │   ├── constrained.py
-        │   │   ├── current_state.py
-        │   │   ├── fallbacks.py
-        │   │   ├── fix_collision_objects.py
-        │   │   ├── fixed_state.py
-        │   │   ├── generate_pose.py
-        │   │   ├── merger.py
-        │   │   ├── modify_planning_scene.py
-        │   │   ├── multi_planner.py
-        │   │   ├── pickplace.py
-        │   │   └── properties.py
-        │   ├── src
-        │   │   ├── alternative_path_costs.cpp
-        │   │   ├── cartesian.cpp
-        │   │   ├── fallbacks_move_to.cpp
-        │   │   ├── ik_clearance_cost.cpp
-        │   │   ├── ik_clearance_cost_parameters.yaml
-        │   │   ├── modular.cpp
-        │   │   ├── pick_place_demo.cpp
-        │   │   ├── pick_place_demo_parameters.yaml
-        │   │   └── pick_place_task.cpp
-        │   ├── test
-        │   │   ├── CMakeLists.txt
-        │   │   └── pick_place_test.cpp
-        │   ├── CMakeLists.txt
-        │   ├── package.xml
-        │   └── README.md
-        ├── msgs
-        │   ├── action
-        │   ├── msg
-        │   ├── srv
-        │   ├── CMakeLists.txt
-        │   └── package.xml
-        ├── rviz_marker_tools
-        │   ├── include
-        │   │   └── rviz_marker_tools
-        │   │       └── marker_creation.h
-        │   ├── src
-        │   │   └── marker_creation.cpp
-        │   ├── CMakeLists.txt
-        │   └── package.xml
-        ├── visualization
-        │   ├── icons
-        │   │   └── classes
-        │   ├── motion_planning_tasks
-        │   │   ├── properties
-        │   │   │   ├── CMakeLists.txt
-        │   │   │   ├── property_factory.cpp
-        │   │   │   ├── property_factory.h
-        │   │   │   └── property_from_yaml.cpp
-        │   │   ├── src
-        │   │   │   ├── icons
-        │   │   │   ├── CMakeLists.txt
-        │   │   │   ├── factory_model.cpp
-        │   │   │   ├── factory_model.h
-        │   │   │   ├── icons.cpp
-        │   │   │   ├── icons.h
-        │   │   │   ├── job_queue.cpp
-        │   │   │   ├── job_queue.h
-        │   │   │   ├── local_task_model.cpp
-        │   │   │   ├── local_task_model.h
-        │   │   │   ├── meta_task_list_model.cpp
-        │   │   │   ├── meta_task_list_model.h
-        │   │   │   ├── plugin_init.cpp
-        │   │   │   ├── pluginlib_factory.h
-        │   │   │   ├── remote_task_model.cpp
-        │   │   │   ├── remote_task_model.h
-        │   │   │   ├── task_display.cpp
-        │   │   │   ├── task_display.h
-        │   │   │   ├── task_list_model.cpp
-        │   │   │   ├── task_list_model.h
-        │   │   │   ├── task_panel.cpp
-        │   │   │   ├── task_panel.h
-        │   │   │   └── task_panel_p.h
-        │   │   ├── test
-        │   │   │   ├── CMakeLists.txt
-        │   │   │   ├── test.launch.py
-        │   │   │   ├── test_merge_models.cpp
-        │   │   │   ├── test_solution_models.cpp
-        │   │   │   └── test_task_model.cpp
-        │   │   ├── utils
-        │   │   │   ├── CMakeLists.txt
-        │   │   │   ├── flat_merge_proxy_model.cpp
-        │   │   │   ├── flat_merge_proxy_model.h
-        │   │   │   ├── icon.cpp
-        │   │   │   ├── icon.h
-        │   │   │   ├── tree_merge_proxy_model.cpp
-        │   │   │   └── tree_merge_proxy_model.h
-        │   │   └── CMakeLists.txt
-        │   ├── visualization_tools
-        │   │   ├── include
-        │   │   │   └── moveit
-        │   │   ├── src
-        │   │   │   ├── display_solution.cpp
-        │   │   │   ├── marker_visualization.cpp
-        │   │   │   ├── task_solution_panel.cpp
-        │   │   │   └── task_solution_visualization.cpp
-        │   │   └── CMakeLists.txt
-        │   ├── CMakeLists.txt
-        │   └── package.xml
-        ├── codecov.yaml
-        └── README.md
+├── Diagrams
+├── src
+│   ├── fr3_application
+│   │   ├── fr3_application
+│   │   │   ├── fr3_pnp_node.py
+│   │   │   └── __init__.py
+│   │   ├── launch
+│   │   │   └── run_pnp.launch.py
+│   │   ├── resource
+│   │   ├── test
+│   │   │   ├── test_copyright.py
+│   │   │   ├── test_flake8.py
+│   │   │   └── test_pep257.py
+│   │   ├── package.xml
+│   │   └── setup.py
+│   ├── franka_custom_interfaces
+│   │   ├── action
+│   │   ├── srv
+│   │   ├── CMakeLists.txt
+│   │   └── package.xml
+│   ├── franka_description
+│   │   ├── end_effectors
+│   │   │   ├── cobot_pump
+│   │   │   │   ├── cobot_pump_arguments.xacro
+│   │   │   │   ├── cobot_pump.urdf.xacro
+│   │   │   │   └── inertials.yaml
+│   │   │   ├── common
+│   │   │   │   ├── ee_with_one_link.xacro
+│   │   │   │   ├── franka_hand.xacro
+│   │   │   │   └── utils.xacro
+│   │   │   └── franka_hand
+│   │   │       ├── franka_hand_arguments.xacro
+│   │   │       ├── franka_hand.srdf.xacro
+│   │   │       ├── franka_hand.urdf.xacro
+│   │   │       └── inertials.yaml
+│   │   ├── launch
+│   │   │   ├── visualize_franka_duo.launch.py
+│   │   │   └── visualize_franka.launch.py
+│   │   ├── meshes
+│   │   │   ├── robot_arms
+│   │   │   │   ├── fer
+│   │   │   │   │   ├── collision
+│   │   │   │   │   └── visual
+│   │   │   │   ├── fp3
+│   │   │   │   │   ├── collision
+│   │   │   │   │   └── visual
+│   │   │   │   ├── fr3
+│   │   │   │   │   ├── collision
+│   │   │   │   │   └── visual
+│   │   │   │   ├── fr3_duo
+│   │   │   │   │   ├── cover
+│   │   │   │   │   └── mount
+│   │   │   │   └── fr3v2
+│   │   │   │       ├── collision
+│   │   │   │       └── visual
+│   │   │   └── robot_ee
+│   │   │       ├── cobot_pump
+│   │   │       │   ├── collision
+│   │   │       │   └── visual
+│   │   │       ├── franka_hand_black
+│   │   │       │   ├── collision
+│   │   │       │   └── visual
+│   │   │       └── franka_hand_white
+│   │   │           ├── collision
+│   │   │           └── visual
+│   │   ├── robots
+│   │   │   ├── common
+│   │   │   │   ├── franka_arm.ros2_control.xacro
+│   │   │   │   ├── franka_arm.srdf.xacro
+│   │   │   │   ├── franka_arm.xacro
+│   │   │   │   ├── franka_robot.xacro
+│   │   │   │   ├── group_definition.xacro
+│   │   │   │   └── utils.xacro
+│   │   │   ├── fer
+│   │   │   │   ├── dynamics.yaml
+│   │   │   │   ├── fer.srdf.xacro
+│   │   │   │   ├── fer.urdf.xacro
+│   │   │   │   ├── inertials.yaml
+│   │   │   │   ├── joint_limits.yaml
+│   │   │   │   └── kinematics.yaml
+│   │   │   ├── fp3
+│   │   │   │   ├── dynamics.yaml
+│   │   │   │   ├── fp3.srdf.xacro
+│   │   │   │   ├── fp3.urdf.xacro
+│   │   │   │   ├── inertials.yaml
+│   │   │   │   ├── joint_limits.yaml
+│   │   │   │   └── kinematics.yaml
+│   │   │   ├── fr3
+│   │   │   │   ├── dynamics.yaml
+│   │   │   │   ├── fr3.srdf.xacro
+│   │   │   │   ├── fr3.urdf.xacro
+│   │   │   │   ├── inertials.yaml
+│   │   │   │   ├── joint_limits.yaml
+│   │   │   │   └── kinematics.yaml
+│   │   │   ├── fr3_duo
+│   │   │   │   ├── fr3_duo_cover
+│   │   │   │   │   ├── fr3_duo_cover.xacro
+│   │   │   │   │   ├── inertials.yaml
+│   │   │   │   │   └── kinematics.yaml
+│   │   │   │   ├── fr3_duo_mount
+│   │   │   │   │   ├── fr3_duo_mount.xacro
+│   │   │   │   │   ├── inertials.yaml
+│   │   │   │   │   └── kinematics.yaml
+│   │   │   │   ├── fr3_duo_arm.urdf.xacro
+│   │   │   │   ├── fr3_duo_fixed_structure.urdf.xacro
+│   │   │   │   └── fr3_duo.urdf.xacro
+│   │   │   └── fr3v2
+│   │   │       ├── dynamics.yaml
+│   │   │       ├── fr3v2.srdf.xacro
+│   │   │       ├── fr3v2.urdf.xacro
+│   │   │       ├── inertials.yaml
+│   │   │       ├── joint_limits.yaml
+│   │   │       └── kinematics.yaml
+│   │   ├── rviz
+│   │   ├── scripts
+│   │   │   └── create_urdf.py
+│   │   ├── test
+│   │   │   └── urdf_tests.py
+│   │   ├── CMakeLists.txt
+│   │   ├── CONTRIBUTING.md
+│   │   ├── package.xml
+│   │   └── README.md
+│   ├── franka_manipulation_env
+│   │   ├── config
+│   │   │   ├── fr3_controllers.yaml
+│   │   │   ├── moveit_controllers.yaml
+│   │   │   ├── ompl_planning_override.yaml
+│   │   │   └── vision_bridge.yaml
+│   │   ├── launch
+│   │   │   ├── demo_moveit.launch.py
+│   │   │   ├── moveit_core.launch.py
+│   │   │   ├── sim_and_control.launch.py
+│   │   │   └── sim_objects.launch.py
+│   │   ├── models
+│   │   │   ├── cube
+│   │   │   ├── overhead_camera
+│   │   │   └── table
+│   │   ├── srdf
+│   │   │   └── fr3_sim_srdf.xacro
+│   │   ├── urdf
+│   │   │   ├── gazebo.xacro
+│   │   │   └── system.urdf.xacro
+│   │   ├── worlds
+│   │   ├── CMakeLists.txt
+│   │   ├── package.xml
+│   │   └── README.md
+│   ├── franka_mtc_cpp_server
+│   │   ├── launch
+│   │   │   └── mtc_server.launch.py
+│   │   ├── src
+│   │   │   └── mtc_pick_server.cpp
+│   │   ├── CMakeLists.txt
+│   │   └── package.xml
+│   ├── franka_ros2
+│   │   ├── franka_bringup
+│   │   │   ├── config
+│   │   │   │   ├── controllers.yaml
+│   │   │   │   └── franka.config.yaml
+│   │   │   ├── launch
+│   │   │   │   ├── example.launch.py
+│   │   │   │   ├── franka.launch.py
+│   │   │   │   └── joint_impedance_with_ik_example_controller.launch.py
+│   │   │   ├── utils
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── launch_utils.py
+│   │   │   ├── CMakeLists.txt
+│   │   │   └── package.xml
+│   │   ├── franka_example_controllers
+│   │   │   ├── include
+│   │   │   │   └── franka_example_controllers
+│   │   │   │       ├── cartesian_elbow_example_controller.hpp
+│   │   │   │       ├── cartesian_orientation_example_controller.hpp
+│   │   │   │       ├── cartesian_pose_example_controller.hpp
+│   │   │   │       ├── cartesian_velocity_example_controller.hpp
+│   │   │   │       ├── default_robot_behavior_utils.hpp
+│   │   │   │       ├── elbow_example_controller.hpp
+│   │   │   │       ├── gravity_compensation_example_controller.hpp
+│   │   │   │       ├── gripper_example_controller.hpp
+│   │   │   │       ├── joint_impedance_example_controller.hpp
+│   │   │   │       ├── joint_impedance_with_ik_example_controller.hpp
+│   │   │   │       ├── joint_position_example_controller.hpp
+│   │   │   │       ├── joint_velocity_example_controller.hpp
+│   │   │   │       ├── model_example_controller.hpp
+│   │   │   │       ├── motion_generator.hpp
+│   │   │   │       ├── move_to_start_example_controller.hpp
+│   │   │   │       ├── robot_utils.hpp
+│   │   │   │       └── visibility_control.h
+│   │   │   ├── src
+│   │   │   │   ├── cartesian_elbow_example_controller.cpp
+│   │   │   │   ├── cartesian_orientation_example_controller.cpp
+│   │   │   │   ├── cartesian_pose_example_controller.cpp
+│   │   │   │   ├── cartesian_velocity_example_controller.cpp
+│   │   │   │   ├── elbow_example_controller.cpp
+│   │   │   │   ├── gravity_compensation_example_controller.cpp
+│   │   │   │   ├── gripper_example_controller.cpp
+│   │   │   │   ├── joint_impedance_example_controller.cpp
+│   │   │   │   ├── joint_impedance_with_ik_example_controller.cpp
+│   │   │   │   ├── joint_position_example_controller.cpp
+│   │   │   │   ├── joint_velocity_example_controller.cpp
+│   │   │   │   ├── model_example_controller.cpp
+│   │   │   │   ├── motion_generator.cpp
+│   │   │   │   └── move_to_start_example_controller.cpp
+│   │   │   ├── test
+│   │   │   │   ├── test_gravity_compensation_example.cpp
+│   │   │   │   ├── test_load_gravity_compensation_controller.cpp
+│   │   │   │   ├── test_load_move_to_start_example_controller.cpp
+│   │   │   │   ├── test_move_to_start_example_controller.cpp
+│   │   │   │   └── test_move_to_start_example_controller.hpp
+│   │   │   ├── CMakeLists.txt
+│   │   │   └── package.xml
+│   │   ├── franka_fr3_moveit_config
+│   │   │   ├── config
+│   │   │   │   ├── fr3_controllers.yaml
+│   │   │   │   ├── fr3_ros_controllers.yaml
+│   │   │   │   ├── kinematics.yaml
+│   │   │   │   └── ompl_planning.yaml
+│   │   │   ├── launch
+│   │   │   │   ├── move_group.launch.py
+│   │   │   │   └── moveit.launch.py
+│   │   │   ├── rviz
+│   │   │   ├── srdf
+│   │   │   │   ├── fr3_arm_hand.xacro
+│   │   │   │   ├── fr3_arm.srdf.xacro
+│   │   │   │   ├── fr3_arm.xacro
+│   │   │   │   ├── group_definition.xacro
+│   │   │   │   └── hand.xacro
+│   │   │   ├── test
+│   │   │   │   └── srdf_tests.py
+│   │   │   ├── CMakeLists.txt
+│   │   │   └── package.xml
+│   │   ├── franka_gazebo
+│   │   │   ├── franka_gazebo_bringup
+│   │   │   │   ├── config
+│   │   │   │   │   └── franka_gazebo_controllers.yaml
+│   │   │   │   ├── launch
+│   │   │   │   │   ├── gazebo_joint_impedance_controller_example.launch.py
+│   │   │   │   │   ├── gazebo_joint_position_controller_example.launch.py
+│   │   │   │   │   ├── gazebo_joint_velocity_controller_example.launch.py
+│   │   │   │   │   └── visualize_franka_robot.launch.py
+│   │   │   │   ├── CMakeLists.txt
+│   │   │   │   └── package.xml
+│   │   │   ├── franka_ign_ros2_control
+│   │   │   │   ├── include
+│   │   │   │   │   └── ign_ros2_control
+│   │   │   │   ├── src
+│   │   │   │   │   ├── ign_ros2_control_plugin.cpp
+│   │   │   │   │   ├── ign_system.cpp
+│   │   │   │   │   └── model_kdl.cpp
+│   │   │   │   ├── CMakeLists.txt
+│   │   │   │   ├── package.xml
+│   │   │   │   └── README.md
+│   │   │   └── README.md
+│   │   ├── franka_gripper
+│   │   │   ├── config
+│   │   │   │   └── franka_gripper_node.yaml
+│   │   │   ├── franka_gripper
+│   │   │   │   └── __init__.py
+│   │   │   ├── include
+│   │   │   │   └── franka_gripper
+│   │   │   │       └── gripper_action_server.hpp
+│   │   │   ├── launch
+│   │   │   │   └── gripper.launch.py
+│   │   │   ├── scripts
+│   │   │   │   └── fake_gripper_state_publisher.py
+│   │   │   ├── src
+│   │   │   │   └── gripper_action_server.cpp
+│   │   │   ├── CMakeLists.txt
+│   │   │   └── package.xml
+│   │   ├── franka_hardware
+│   │   │   ├── include
+│   │   │   │   └── franka_hardware
+│   │   │   │       ├── franka_action_server.hpp
+│   │   │   │       ├── franka_executor.hpp
+│   │   │   │       ├── franka_hardware_interface.hpp
+│   │   │   │       ├── franka_param_service_server.hpp
+│   │   │   │       ├── model.hpp
+│   │   │   │       ├── robot.hpp
+│   │   │   │       └── ros_libfranka_logger.hpp
+│   │   │   ├── src
+│   │   │   │   ├── franka_action_server.cpp
+│   │   │   │   ├── franka_executor.cpp
+│   │   │   │   ├── franka_hardware_interface.cpp
+│   │   │   │   ├── franka_param_service_server.cpp
+│   │   │   │   ├── robot.cpp
+│   │   │   │   └── ros_libfranka_logger.cpp
+│   │   │   ├── test
+│   │   │   │   ├── CMakeLists.txt
+│   │   │   │   ├── fr3_unsupported_version.urdf
+│   │   │   │   ├── fr3.urdf
+│   │   │   │   ├── franka_action_server_test.cpp
+│   │   │   │   ├── franka_hardware_cartesian_command_interface_test.cpp
+│   │   │   │   ├── franka_hardware_cartesian_command_interface_test.hpp
+│   │   │   │   ├── franka_hardware_interface_test.cpp
+│   │   │   │   ├── franka_robot_test.cpp
+│   │   │   │   ├── franka_robot_test.hpp
+│   │   │   │   └── test_utils.hpp
+│   │   │   ├── CMakeLists.txt
+│   │   │   └── package.xml
+│   │   ├── franka_msgs
+│   │   │   ├── action
+│   │   │   ├── msg
+│   │   │   ├── srv
+│   │   │   ├── CMakeLists.txt
+│   │   │   └── package.xml
+│   │   ├── franka_robot_state_broadcaster
+│   │   │   ├── include
+│   │   │   │   └── franka_robot_state_broadcaster
+│   │   │   │       └── franka_robot_state_broadcaster.hpp
+│   │   │   ├── src
+│   │   │   │   ├── franka_robot_state_broadcaster.cpp
+│   │   │   │   └── franka_robot_state_broadcaster_parameters.yaml
+│   │   │   ├── test
+│   │   │   │   ├── franka_robot_state_broadcaster_parameters.yaml
+│   │   │   │   ├── test_franka_robot_state_broadcaster.cpp
+│   │   │   │   └── test_load_franka_robot_state_broadcaster.cpp
+│   │   │   ├── CMakeLists.txt
+│   │   │   └── package.xml
+│   │   ├── franka_ros2
+│   │   │   ├── CMakeLists.txt
+│   │   │   └── package.xml
+│   │   ├── franka_semantic_components
+│   │   │   ├── include
+│   │   │   │   └── franka_semantic_components
+│   │   │   │       ├── franka_cartesian_pose_interface.hpp
+│   │   │   │       ├── franka_cartesian_velocity_interface.hpp
+│   │   │   │       ├── franka_robot_model.hpp
+│   │   │   │       ├── franka_robot_state.hpp
+│   │   │   │       └── franka_semantic_component_interface.hpp
+│   │   │   ├── src
+│   │   │   │   ├── franka_cartesian_pose_interface.cpp
+│   │   │   │   ├── franka_cartesian_velocity_interface.cpp
+│   │   │   │   ├── franka_robot_model.cpp
+│   │   │   │   ├── franka_robot_state.cpp
+│   │   │   │   ├── franka_semantic_component_interface.cpp
+│   │   │   │   ├── translation_utils.cpp
+│   │   │   │   └── translation_utils.hpp
+│   │   │   ├── test
+│   │   │   │   ├── franka_cartesian_pose_interface_test.cpp
+│   │   │   │   ├── franka_cartesian_pose_interface_test.hpp
+│   │   │   │   ├── franka_cartesian_velocity_interface_test.cpp
+│   │   │   │   ├── franka_cartesian_velocity_interface_test.hpp
+│   │   │   │   ├── franka_robot_model_test.cpp
+│   │   │   │   ├── franka_robot_model_test.hpp
+│   │   │   │   ├── franka_robot_state_test.cpp
+│   │   │   │   ├── franka_robot_state_test.hpp
+│   │   │   │   ├── franka_semantic_interface_test.cpp
+│   │   │   │   └── franka_semantic_interface_test.hpp
+│   │   │   ├── CMakeLists.txt
+│   │   │   └── package.xml
+│   │   ├── integration_launch_testing
+│   │   │   ├── test
+│   │   │   │   ├── test_franka_gripper_position.py
+│   │   │   │   └── test_move_to_start_example_controller.py
+│   │   │   ├── CMakeLists.txt
+│   │   │   └── package.xml
+│   │   ├── CONTRIBUTING.md
+│   │   ├── docker-compose.yml
+│   │   └── README.md
+│   ├── franka_ros2_multimanual
+│   │   ├── franka_mm_control
+│   │   │   ├── config
+│   │   │   │   ├── basic_controllers.yaml
+│   │   │   │   ├── controllers_gazebo.yaml
+│   │   │   │   ├── controllers_ros.yaml
+│   │   │   │   └── controllers.yaml
+│   │   │   ├── include
+│   │   │   │   └── franka_mm_control
+│   │   │   │       ├── pose_reader.hpp
+│   │   │   │       └── position_reader.hpp
+│   │   │   ├── scripts
+│   │   │   │   ├── cart_impedance_test.py
+│   │   │   │   ├── cart_pos_test.py
+│   │   │   │   ├── cart_vel_test.py
+│   │   │   │   ├── effort_test.py
+│   │   │   │   ├── position_test.py
+│   │   │   │   └── velocity_test.py
+│   │   │   ├── src
+│   │   │   │   ├── pose_reader.cpp
+│   │   │   │   └── position_reader.cpp
+│   │   │   ├── CMakeLists.txt
+│   │   │   └── package.xml
+│   │   ├── franka_mm_hardware_interface
+│   │   │   ├── include
+│   │   │   │   └── franka_mm_hardware_interface
+│   │   │   │       ├── control_modes.hpp
+│   │   │   │       ├── franka_mm_hardware_interface.hpp
+│   │   │   │       ├── franka_param_service_server.hpp
+│   │   │   │       ├── franka_wrapper.hpp
+│   │   │   │       ├── interfaces.hpp
+│   │   │   │       ├── lambda_control.hpp
+│   │   │   │       └── mode_switch_plan.hpp
+│   │   │   ├── src
+│   │   │   │   ├── franka_mm_hardware_interface.cpp
+│   │   │   │   ├── franka_param_service_server.cpp
+│   │   │   │   ├── franka_wrapper.cpp
+│   │   │   │   ├── lambda_control.cpp
+│   │   │   │   └── mode_switch_plan.cpp
+│   │   │   ├── CMakeLists.txt
+│   │   │   └── package.xml
+│   │   ├── idra_franka_launch
+│   │   │   ├── launch
+│   │   │   │   ├── bimanual.launch.py
+│   │   │   │   ├── franka1.launch.py
+│   │   │   │   └── franka2.launch.py
+│   │   │   ├── rviz
+│   │   │   ├── scripts
+│   │   │   │   ├── coffee_tray.py
+│   │   │   │   ├── gear_pick.py
+│   │   │   │   ├── gripper_grasp_test.py
+│   │   │   │   ├── gripper_homing_test.py
+│   │   │   │   └── stiffness_test.py
+│   │   │   ├── urdf
+│   │   │   │   └── bimanual.urdf.xacro
+│   │   │   ├── CMakeLists.txt
+│   │   │   └── package.xml
+│   │   ├── webdocs
+│   │   │   ├── images
+│   │   │   ├── static
+│   │   │   │   ├── css
+│   │   │   │   └── js
+│   │   │   └── homepage.md
+│   │   └── README.md -> webdocs/homepage.md
+│   ├── franka_task_orchestrator
+│   │   ├── franka_task_orchestrator
+│   │   │   ├── behaviors
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── perception_mock.py
+│   │   │   │   └── pick_client.py
+│   │   │   ├── __init__.py
+│   │   │   └── main_engine.py
+│   │   ├── resource
+│   │   ├── test
+│   │   │   ├── test_copyright.py
+│   │   │   ├── test_flake8.py
+│   │   │   └── test_pep257.py
+│   │   ├── package.xml
+│   │   └── setup.py
+│   ├── moveit2_tutorials
+│   │   ├── doc
+│   │   │   ├── api
+│   │   │   ├── concepts
+│   │   │   │   └── hybrid_planning
+│   │   │   ├── examples
+│   │   │   │   ├── benchmarking
+│   │   │   │   ├── bullet_collision_checker
+│   │   │   │   │   ├── images
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── collision_environments
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── controller_configuration
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── creating_moveit_plugins
+│   │   │   │   │   └── lerp_motion_planner
+│   │   │   │   ├── custom_constraint_samplers
+│   │   │   │   ├── hand_eye_calibration
+│   │   │   │   │   └── images
+│   │   │   │   ├── hybrid_planning
+│   │   │   │   │   └── images
+│   │   │   │   ├── ikfast
+│   │   │   │   ├── interactivity
+│   │   │   │   │   ├── include
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── kinematics
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── kinematics_configuration
+│   │   │   │   ├── mobile_base_arm
+│   │   │   │   │   └── images
+│   │   │   │   ├── motion_planning_api
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── motion_planning_pipeline
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── move_group_interface
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── moveit_cpp
+│   │   │   │   │   ├── config
+│   │   │   │   │   ├── images
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── moveit_deep_grasps
+│   │   │   │   ├── moveit_grasps
+│   │   │   │   ├── moveit_task_constructor
+│   │   │   │   ├── ompl_interface
+│   │   │   │   ├── perception_pipeline
+│   │   │   │   │   ├── bags
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── persistent_scenes_and_states
+│   │   │   │   │   └── move_group.launch.py
+│   │   │   │   ├── pick_place
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── pilz_industrial_motion_planner
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── planning
+│   │   │   │   │   └── src
+│   │   │   │   ├── planning_adapters
+│   │   │   │   ├── planning_scene
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── planning_scene_monitor
+│   │   │   │   ├── planning_scene_ros_api
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── planning_with_approximated_constraint_manifolds
+│   │   │   │   ├── realtime_servo
+│   │   │   │   │   ├── config
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── robot_model_and_robot_state
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── setup_assistant
+│   │   │   │   ├── state_display
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── stomp_planner
+│   │   │   │   ├── subframes
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── tests
+│   │   │   │   │   ├── test
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── time_parameterization
+│   │   │   │   ├── trac_ik
+│   │   │   │   ├── trajopt_planner
+│   │   │   │   │   ├── launch
+│   │   │   │   │   ├── src
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── urdf_srdf
+│   │   │   │   └── visualizing_collisions
+│   │   │   │       ├── launch
+│   │   │   │       ├── src
+│   │   │   │       └── CMakeLists.txt
+│   │   │   ├── how_to_contribute
+│   │   │   ├── how_to_guides
+│   │   │   │   ├── chomp_planner
+│   │   │   │   │   ├── config
+│   │   │   │   │   ├── launch
+│   │   │   │   │   └── CMakeLists.txt
+│   │   │   │   ├── isaac_panda
+│   │   │   │   └── using_ompl_constrained_planning
+│   │   │   │       ├── config
+│   │   │   │       ├── launch
+│   │   │   │       ├── src
+│   │   │   │       └── CMakeLists.txt
+│   │   │   └── tutorials
+│   │   │       ├── getting_started
+│   │   │       ├── pick_and_place_with_moveit_task_constructor
+│   │   │       │   ├── launch
+│   │   │       │   ├── src
+│   │   │       │   ├── CMakeLists.txt
+│   │   │       │   └── package.xml
+│   │   │       ├── planning_around_objects
+│   │   │       │   └── hello_moveit.cpp
+│   │   │       ├── quickstart_in_rviz
+│   │   │       │   ├── launch
+│   │   │       │   └── CMakeLists.txt
+│   │   │       ├── visualizing_in_rviz
+│   │   │       │   └── hello_moveit.cpp
+│   │   │       └── your_first_project
+│   │   │           └── hello_moveit.cpp
+│   │   ├── _scripts
+│   │   │   └── tutorialformatter.py
+│   │   ├── _static
+│   │   │   ├── css
+│   │   │   ├── images
+│   │   │   └── videos
+│   │   ├── _templates
+│   │   ├── CMakeLists.txt
+│   │   ├── conf.py
+│   │   ├── package.xml
+│   │   ├── README.md
+│   │   ├── rosdoc.yaml
+│   │   └── rosindex.yaml
+│   └── moveit_task_constructor
+│       ├── capabilities
+│       │   ├── src
+│       │   │   ├── execute_task_solution_capability.cpp
+│       │   │   └── execute_task_solution_capability.h
+│       │   ├── test
+│       │   │   ├── CMakeLists.txt
+│       │   │   ├── test_execution.launch.py
+│       │   │   └── test_task_execution.cpp
+│       │   ├── CMakeLists.txt
+│       │   └── package.xml
+│       ├── core
+│       │   ├── cmake
+│       │   ├── doc
+│       │   │   ├── _templates
+│       │   │   ├── tutorials
+│       │   │   └── conf.py
+│       │   ├── include
+│       │   │   └── moveit
+│       │   │       ├── python
+│       │   │       └── task_constructor
+│       │   ├── python
+│       │   │   ├── bindings
+│       │   │   │   ├── src
+│       │   │   │   └── CMakeLists.txt
+│       │   │   ├── moveit
+│       │   │   │   ├── task_constructor
+│       │   │   │   └── __init__.py
+│       │   │   ├── pybind11
+│       │   │   │   ├── docs
+│       │   │   │   ├── include
+│       │   │   │   ├── pybind11
+│       │   │   │   ├── tests
+│       │   │   │   ├── tools
+│       │   │   │   ├── ubench
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   ├── noxfile.py
+│       │   │   │   ├── SECURITY.md
+│       │   │   │   └── setup.py
+│       │   │   ├── test
+│       │   │   │   ├── rostest_mps.py
+│       │   │   │   ├── rostest_mtc.py
+│       │   │   │   ├── rostest_trampoline.py
+│       │   │   │   ├── test.launch.py
+│       │   │   │   └── test_mtc.py
+│       │   │   └── CMakeLists.txt
+│       │   ├── src
+│       │   │   ├── scope_guard
+│       │   │   │   ├── docs
+│       │   │   │   ├── catch_tests.cpp
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   ├── compile_time_tests.cpp
+│       │   │   │   ├── _config.yml
+│       │   │   │   ├── README.md
+│       │   │   │   └── scope_guard.hpp
+│       │   │   ├── solvers
+│       │   │   │   ├── cartesian_path.cpp
+│       │   │   │   ├── joint_interpolation.cpp
+│       │   │   │   ├── multi_planner.cpp
+│       │   │   │   ├── pipeline_planner.cpp
+│       │   │   │   └── planner_interface.cpp
+│       │   │   ├── stages
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   ├── compute_ik.cpp
+│       │   │   │   ├── connect.cpp
+│       │   │   │   ├── current_state.cpp
+│       │   │   │   ├── fix_collision_objects.cpp
+│       │   │   │   ├── fixed_cartesian_poses.cpp
+│       │   │   │   ├── fixed_state.cpp
+│       │   │   │   ├── generate_grasp_pose.cpp
+│       │   │   │   ├── generate_place_pose.cpp
+│       │   │   │   ├── generate_pose.cpp
+│       │   │   │   ├── generate_random_pose.cpp
+│       │   │   │   ├── modify_planning_scene.cpp
+│       │   │   │   ├── move_relative.cpp
+│       │   │   │   ├── move_to.cpp
+│       │   │   │   ├── passthrough.cpp
+│       │   │   │   ├── pick.cpp
+│       │   │   │   ├── plugins.cpp
+│       │   │   │   ├── predicate_filter.cpp
+│       │   │   │   └── simple_grasp.cpp
+│       │   │   ├── CMakeLists.txt
+│       │   │   ├── container.cpp
+│       │   │   ├── cost_terms.cpp
+│       │   │   ├── introspection.cpp
+│       │   │   ├── marker_tools.cpp
+│       │   │   ├── merge.cpp
+│       │   │   ├── properties.cpp
+│       │   │   ├── stage.cpp
+│       │   │   ├── storage.cpp
+│       │   │   ├── task.cpp
+│       │   │   └── utils.cpp
+│       │   ├── test
+│       │   │   ├── CMakeLists.txt
+│       │   │   ├── gtest_value_printers.cpp
+│       │   │   ├── gtest_value_printers.h
+│       │   │   ├── models.cpp
+│       │   │   ├── models.h
+│       │   │   ├── pick_pa10.cpp
+│       │   │   ├── pick_pr2.cpp
+│       │   │   ├── pick_ur5.cpp
+│       │   │   ├── stage_mockups.cpp
+│       │   │   ├── stage_mockups.h
+│       │   │   ├── test_container.cpp
+│       │   │   ├── test_cost_queue.cpp
+│       │   │   ├── test_cost_terms.cpp
+│       │   │   ├── test_fallback.cpp
+│       │   │   ├── test_interface_state.cpp
+│       │   │   ├── test.launch.py
+│       │   │   ├── test_mockups.cpp
+│       │   │   ├── test_move_relative.cpp
+│       │   │   ├── test_move_to.cpp
+│       │   │   ├── test_properties.cpp
+│       │   │   ├── test_pruning.cpp
+│       │   │   ├── test_serial.cpp
+│       │   │   └── test_stage.cpp
+│       │   ├── CMakeLists.txt
+│       │   ├── package.xml
+│       │   ├── rosdoc.yaml
+│       │   └── setup.py
+│       ├── demo
+│       │   ├── config
+│       │   │   └── panda_config.yaml
+│       │   ├── include
+│       │   │   └── moveit_task_constructor_demo
+│       │   │       └── pick_place_task.h
+│       │   ├── launch
+│       │   │   ├── demo.launch.py
+│       │   │   └── run.launch.py
+│       │   ├── scripts
+│       │   │   ├── alternatives.py
+│       │   │   ├── cartesian.py
+│       │   │   ├── compute_ik.py
+│       │   │   ├── constrained.py
+│       │   │   ├── current_state.py
+│       │   │   ├── fallbacks.py
+│       │   │   ├── fix_collision_objects.py
+│       │   │   ├── fixed_state.py
+│       │   │   ├── generate_pose.py
+│       │   │   ├── merger.py
+│       │   │   ├── modify_planning_scene.py
+│       │   │   ├── multi_planner.py
+│       │   │   ├── pickplace.py
+│       │   │   └── properties.py
+│       │   ├── src
+│       │   │   ├── alternative_path_costs.cpp
+│       │   │   ├── cartesian.cpp
+│       │   │   ├── fallbacks_move_to.cpp
+│       │   │   ├── ik_clearance_cost.cpp
+│       │   │   ├── ik_clearance_cost_parameters.yaml
+│       │   │   ├── modular.cpp
+│       │   │   ├── pick_place_demo.cpp
+│       │   │   ├── pick_place_demo_parameters.yaml
+│       │   │   └── pick_place_task.cpp
+│       │   ├── test
+│       │   │   ├── CMakeLists.txt
+│       │   │   └── pick_place_test.cpp
+│       │   ├── CMakeLists.txt
+│       │   ├── package.xml
+│       │   └── README.md
+│       ├── msgs
+│       │   ├── action
+│       │   ├── msg
+│       │   ├── srv
+│       │   ├── CMakeLists.txt
+│       │   └── package.xml
+│       ├── rviz_marker_tools
+│       │   ├── include
+│       │   │   └── rviz_marker_tools
+│       │   │       └── marker_creation.h
+│       │   ├── src
+│       │   │   └── marker_creation.cpp
+│       │   ├── CMakeLists.txt
+│       │   └── package.xml
+│       ├── visualization
+│       │   ├── icons
+│       │   │   └── classes
+│       │   ├── motion_planning_tasks
+│       │   │   ├── properties
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   ├── property_factory.cpp
+│       │   │   │   ├── property_factory.h
+│       │   │   │   └── property_from_yaml.cpp
+│       │   │   ├── src
+│       │   │   │   ├── icons
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   ├── factory_model.cpp
+│       │   │   │   ├── factory_model.h
+│       │   │   │   ├── icons.cpp
+│       │   │   │   ├── icons.h
+│       │   │   │   ├── job_queue.cpp
+│       │   │   │   ├── job_queue.h
+│       │   │   │   ├── local_task_model.cpp
+│       │   │   │   ├── local_task_model.h
+│       │   │   │   ├── meta_task_list_model.cpp
+│       │   │   │   ├── meta_task_list_model.h
+│       │   │   │   ├── plugin_init.cpp
+│       │   │   │   ├── pluginlib_factory.h
+│       │   │   │   ├── remote_task_model.cpp
+│       │   │   │   ├── remote_task_model.h
+│       │   │   │   ├── task_display.cpp
+│       │   │   │   ├── task_display.h
+│       │   │   │   ├── task_list_model.cpp
+│       │   │   │   ├── task_list_model.h
+│       │   │   │   ├── task_panel.cpp
+│       │   │   │   ├── task_panel.h
+│       │   │   │   └── task_panel_p.h
+│       │   │   ├── test
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   ├── test.launch.py
+│       │   │   │   ├── test_merge_models.cpp
+│       │   │   │   ├── test_solution_models.cpp
+│       │   │   │   └── test_task_model.cpp
+│       │   │   ├── utils
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   ├── flat_merge_proxy_model.cpp
+│       │   │   │   ├── flat_merge_proxy_model.h
+│       │   │   │   ├── icon.cpp
+│       │   │   │   ├── icon.h
+│       │   │   │   ├── tree_merge_proxy_model.cpp
+│       │   │   │   └── tree_merge_proxy_model.h
+│       │   │   └── CMakeLists.txt
+│       │   ├── visualization_tools
+│       │   │   ├── include
+│       │   │   │   └── moveit
+│       │   │   ├── src
+│       │   │   │   ├── display_solution.cpp
+│       │   │   │   ├── marker_visualization.cpp
+│       │   │   │   ├── task_solution_panel.cpp
+│       │   │   │   └── task_solution_visualization.cpp
+│       │   │   └── CMakeLists.txt
+│       │   ├── CMakeLists.txt
+│       │   └── package.xml
+│       ├── codecov.yaml
+│       └── README.md
+└── test_gemini.py
 
-335 directories, 492 files
+333 directories, 501 files
