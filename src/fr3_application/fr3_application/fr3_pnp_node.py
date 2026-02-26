@@ -24,23 +24,23 @@ class Fr3PickAndPlaceRigorous(Node):
         
         self.cb_group = MutuallyExclusiveCallbackGroup()
         
-        # Interfacce DDS
+        # DDS Interfaces
         self._action_client = ActionClient(self, MoveGroup, 'move_action', callback_group=self.cb_group)
         self._execute_client = ActionClient(self, ExecuteTrajectory, 'execute_trajectory', callback_group=self.cb_group)
         self._scene_client = self.create_client(ApplyPlanningScene, 'apply_planning_scene', callback_group=self.cb_group)
         self._cartesian_client = self.create_client(GetCartesianPath, 'compute_cartesian_path', callback_group=self.cb_group)
         self._gripper_client = ActionClient(self, GripperCommand, '/gripper_action_controller/gripper_cmd', callback_group=self.cb_group)
 
-        # Parametri Cinematici
+        # Kinematic Parameters
         self.arm_group = "fr3_arm"
         self.base_link = "fr3_link0"
         self.tcp_link = "fr3_hand_tcp"
         self.cube_name = "gazebo_cube"
 
-        # Coordinate nominali target
+        # Nominal target coordinates
         self.target_x = 0.500
         self.target_y = 0.000
-        # Calcolo rigoroso del centroide: base_cube a -0.010, top a 0.040 -> Centro a 0.015
+        # Rigorous centroid calculation: base_cube at -0.010, top at 0.040 -> Center at 0.015
         self.center_z = 0.015 
 
     def _wait_for_future(self, future):
@@ -179,60 +179,60 @@ class Fr3PickAndPlaceRigorous(Node):
         return True
 
     def run_pick_and_place(self):
-        self.get_logger().info("Avvio diagnostica DDS (Timeout 10s per interfaccia)...")
+        self.get_logger().info("Starting DDS diagnostics (10s timeout per interface)...")
         
-        # 1. Validazione rigorosa di tutti i bridge di comunicazione
+        # 1. Rigorous validation of all communication bridges
         if not self._action_client.wait_for_server(timeout_sec=10.0):
-            self.get_logger().fatal("Fallimento: Action Server 'move_action' non raggiungibile.")
+            self.get_logger().fatal("Failure: Action Server 'move_action' not reachable.")
             return
         if not self._execute_client.wait_for_server(timeout_sec=10.0):
-            self.get_logger().fatal("Fallimento: Action Server 'execute_trajectory' non raggiungibile.")
+            self.get_logger().fatal("Failure: Action Server 'execute_trajectory' not reachable.")
             return
         if not self._scene_client.wait_for_service(timeout_sec=10.0):
-            self.get_logger().fatal("Fallimento: Servizio 'apply_planning_scene' non raggiungibile.")
+            self.get_logger().fatal("Failure: Service 'apply_planning_scene' not reachable.")
             return
         if not self._cartesian_client.wait_for_service(timeout_sec=10.0):
-            self.get_logger().fatal("Fallimento: Servizio 'compute_cartesian_path' non raggiungibile.")
+            self.get_logger().fatal("Failure: Service 'compute_cartesian_path' not reachable.")
             return
         if not self._gripper_client.wait_for_server(timeout_sec=10.0):
-            self.get_logger().fatal("Fallimento: Action Server Gripper '/gripper_action_controller/gripper_cmd' non raggiungibile.")
+            self.get_logger().fatal("Failure: Gripper Action Server '/gripper_action_controller/gripper_cmd' not reachable.")
             return
 
-        self.get_logger().info("Topologia DDS validata. Inizializzazione Geometrie...")
+        self.get_logger().info("DDS Topology validated. Initializing Geometries...")
         
         try:
             self._manage_cube_geometry(action="add")
             self.execute_gripper(open_grip=True)
             
-            # --- FASE 1: Approccio OMPL ---
-            self.get_logger().info("FASE 1: Pre-Grasp (OMPL)")
+            # --- PHASE 1: Pre-Grasp (OMPL) ---
+            self.get_logger().info("PHASE 1: Pre-Grasp (OMPL)")
             pre_grasp_pose = self._create_target_pose(self.target_x, self.target_y, self.center_z + 0.15)
             if not self.execute_move_ompl(pre_grasp_pose): return
             
-            # Elusione FCL per consentire la compenetrazione volumetrica
+            # FCL evasion to allow volumetric interpenetration
             self._manage_cube_geometry(action="remove")
             
-            # --- FASE 2: Discesa Z Pura ---
-            self.get_logger().info("FASE 2: Inserzione Cartesiana sul Centro Geometrico")
+            # --- PHASE 2: Pure Z Descent ---
+            self.get_logger().info("PHASE 2: Cartesian Insertion on the Geometric Center")
             grasp_pose = self._create_target_pose(self.target_x, self.target_y, self.center_z)
             if not self.execute_cartesian_path([grasp_pose]): return
             
-            # --- FASE 3: Grasp ---
-            self.get_logger().info("FASE 3: Blocco Dinamico")
+            # --- PHASE 3: Grasp ---
+            self.get_logger().info("PHASE 3: Dynamic Grasp")
             self.execute_gripper(open_grip=False)
             self.set_cube_attachment(True)
             
-            # --- FASE 4: Estrazione Z Pura ---
-            self.get_logger().info("FASE 4: Estrazione Cartesiana")
+            # --- PHASE 4: Pure Z Extraction ---
+            self.get_logger().info("PHASE 4: Cartesian Extraction")
             if not self.execute_cartesian_path([pre_grasp_pose]): return
             
-            # --- FASE 5: Trasferimento OMPL ---
-            self.get_logger().info("FASE 5: Trasferimento (OMPL)")
+            # --- PHASE 5: Transfer (OMPL) ---
+            self.get_logger().info("PHASE 5: Transfer (OMPL)")
             place_pre_pose = self._create_target_pose(0.400, 0.300, self.center_z + 0.15)
             if not self.execute_move_ompl(place_pre_pose): return
             
-            # --- FASE 6: Place Cartesiano ---
-            self.get_logger().info("FASE 6: Discesa Cartesiana e Rilascio")
+            # --- PHASE 6: Cartesian Place ---
+            self.get_logger().info("PHASE 6: Cartesian Descent and Release")
             place_pose = self._create_target_pose(0.400, 0.300, self.center_z + 0.02)
             if not self.execute_cartesian_path([place_pose]): return
             
@@ -240,10 +240,10 @@ class Fr3PickAndPlaceRigorous(Node):
             self.set_cube_attachment(False)
             self.execute_cartesian_path([place_pre_pose])
             
-            self.get_logger().info("Ciclo Concluso con Successo Analitico.")
+            self.get_logger().info("Cycle Completed with Analytical Success.")
 
         except Exception as e:
-            self.get_logger().error(f"Eccezione Runtime nell'albero di esecuzione: {e}")
+            self.get_logger().error(f"Runtime Exception in the execution tree: {e}")
 
 def main(args=None):
     rclpy.init(args=args)

@@ -1,0 +1,14 @@
+# Request / Goal
+sensor_msgs/Image image_raw
+string task_description
+---
+# Result
+bool success
+string target_label
+string action_choice
+string arm_selection
+string reasoning
+float32 handover_height_z
+---
+# Feedback
+string current_state

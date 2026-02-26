@@ -19,3 +19,4 @@ src/*
 .vscode/
 .DS_Store
 *.swp
+.envvlm_node.log

@@ -1,5 +1,5 @@
 {
-    "selected_arm": "right_arm",
+    "selected_arm": "left_arm",
     "action_type": "PICK",
-    "reasoning": "The mug is located in the right half of the image, positioned between the laptop and the potted plant."
+    "reasoning": "The mug is located in the left half of the image, near the center."
 }

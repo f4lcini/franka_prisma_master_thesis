@@ -1,0 +1,111 @@
+# Antigravity Blueprint for mm_ws (IDRA Lab - Dual Franka FR3 + Gemini VLM)
+# Architecture: ROS 2 Humble
+# Paradigm: Behavior Trees (Python) + MoveIt Task Constructor (C++)
+
+architecture:
+  name: "idra_bimanual_franka_vlm_framework"
+  version: "1.2.0"
+  description: "Supervised environment for VLM-driven bimanual manipulation."
+
+settings:
+  mode: "review-driven"
+  strict_compliance: true
+  update_policy: "atomic"
+  log_level: "info"
+
+implementation_standards:
+  high_level_orchestration: "behavior_trees"
+  geometric_task_planning: "moveit_task_constructor"
+
+components:
+  - name: "ros2_humble_core"
+    type: "system_environment"
+    status: "required"
+    validation:
+      ros_domain_id: "0"
+
+  - name: "bimanual_hardware_layer"
+    type: "robotics_driver"
+    packages:
+      - "franka_hardware"
+      - "franka_mm_hardware_interface"
+      - "franka_mm_control"
+      - "franka_gripper"
+      - "franka_msgs"
+    validation:
+      min_firmware_version: "5.0.0"
+      dds_profile: "cyclonedds_optimized" 
+
+  - name: "behavior_orchestration"
+    path: "./src/franka_task_orchestrator"
+    type: "state_machine_framework"
+    runtime: "python3.10"
+    packages:
+      - "franka_task_orchestrator"
+    python_dependencies:
+      - "py_trees"
+      - "py_trees_ros" 
+    validation:
+      executor_type: "MultiThreadedExecutor"
+      require_tick_logging: true
+
+  - name: "motion_planning_core"
+    type: "task_constructor_framework"
+    packages:
+      - "moveit_task_constructor_core"
+      - "moveit_task_constructor_capabilities"
+      - "franka_manipulation_env"
+      - "franka_mtc_cpp_server"
+    validation:
+      enforce_mtc_stages: true
+
+  - name: "custom_interfaces"
+    path: "./src/franka_custom_interfaces"
+    type: "ros2_interfaces"
+    packages:
+      - "franka_custom_interfaces"
+
+  - name: "vlm_application"
+    path: "./src/fr3_application"
+    type: "ai_module"
+    runtime: "python3.10"
+    python_dependencies:
+      - "google-genai"
+      - "rclpy"
+    environment_vars:
+      - "GEMINI_API_KEY"
+
+monitoring:
+  policies:
+    # 1. Validazione Paradigma Architetturale
+    - id: "enforce_bt_mtc_pipeline"
+      type: "architecture_compliance"
+      target: "vlm_application"
+      condition: "must_call_bt_action_server"
+      suggestion_action: "refactor_to_bt_node"
+
+    # 2. Rilevamento Latenza Gemini
+    - id: "vlm_latency_guard"
+      type: "performance_threshold"
+      target: "vlm_application"
+      params:
+        max_response_time: "2.5s"
+      suggestion_action: "recommend_async_bt_action"
+
+    # 3. Controllo Ricompilazione Interfacce
+    - id: "interface_consistency_lock"
+      type: "build_check"
+      trigger: "file_change"
+      target_paths:
+        - "./src/franka_custom_interfaces/msg"
+        - "./src/franka_custom_interfaces/srv"
+        - "./src/franka_custom_interfaces/action"
+      suggestion_action: "force_colcon_rebuild"
+
+    # 4. Sicurezza Lancio Bimanuale
+    - id: "bimanual_launch_safety"
+      type: "launch_validation"
+      target_file: "./src/franka_ros2_multimanual/idra_franka_launch/launch/bimanual.launch.py"
+      params:
+        verify_collision_matrices: true
+      suggestion_action: "halt_and_reconfigure_srdf"
