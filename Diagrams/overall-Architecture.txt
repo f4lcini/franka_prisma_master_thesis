@@ -1,32 +1,51 @@
-graph TD
+%%{init: {'theme': 'base', 'themeVariables': { 'fontFamily': 'Arial, Helvetica, sans-serif', 'fontSize': '16px', 'lineColor': '#2D3748', 'edgeLabelBackground': '#FFFFFF', 'primaryTextColor': '#1A202C'}}}%%
+graph LR
+    %% Definizione Palette Colori e Stili (Stile Formale/Accademico)
+    classDef default fill:#FFFFFF,stroke:#A0AEC0,stroke-width:2px,color:#1A202C,rx:4,ry:4;
+    
+    %% Input: Grigio chiaro neutro
+    classDef input fill:#F7FAFC,stroke:#4A5568,stroke-width:2px,color:#1A202C;
+    
+    %% Hardware/Sensori: Grigio scuro/Antracite
+    classDef hw fill:#FFFFFF,stroke:#718096,stroke-width:2px,color:#2D3748,stroke-dasharray: 5 5;
+    
+    %% VLM / Decision: Toni del Blu Navy
+    classDef vlm fill:#EBF8FF,stroke:#2B6CB0,stroke-width:2px,color:#2A4365;
+    
+    %% Perception / Vision: Toni del Rosso/Bordò scuro
+    classDef perception fill:#FFF5F5,stroke:#C53030,stroke-width:2px,color:#742A2A;
+    
+    %% Motion / Control: Toni del Verde Foresta
+    classDef motion fill:#F0FFF4,stroke:#2F855A,stroke-width:2px,color:#22543D;
+
     %% Inputs
-    TASK([Task Description]) --> VLM
+    TASK([Task Description]):::input --> VLM
     
     subgraph SENSORY [Sensory & State Input]
-        CAM[Raw Camera Stream<br/><i>sensor_msgs/Image</i>]
-        PCL[Depth/PointCloud<br/><i>sensor_msgs/PointCloud2</i>]
-        FB[Robot Proprioception<br/><i>Joint States / Pose</i>]
+        CAM[Raw Camera Stream<br/><i>sensor_msgs/Image</i>]:::hw
+        PCL[Depth/PointCloud<br/><i>sensor_msgs/PointCloud2</i>]:::hw
+        FB[Robot Proprioception<br/><i>Joint States / Pose</i>]:::hw
     end
 
     subgraph VLM_DECISION [High-Level Task Planning]
-        VLM{VLM Client<br/>Gemini-3-flash}
-        DISPATCHER[Action Dispatcher<br/>Task Parameterization]
+        VLM{VLM Client<br/>Gemini-3-flash}:::vlm
+        DISPATCHER[Action Dispatcher<br/>Task Parameterization]:::vlm
         
         VLM -->|Action Choice & Arm Selection| DISPATCHER
     end
 
     subgraph PERCEPTION [Object Localization Pipeline]
-        YOLO[YOLO Detection<br/>Object Localization]
-        REPROJ[3D Deprojection<br/>Pixel to Meters]
+        YOLO[YOLO Detection<br/>Object Localization]:::perception
+        REPROJ[3D Deprojection<br/>Pixel to Meters]:::perception
         
         VLM -->|Target Label| YOLO
         YOLO -->|2D Bounding Box| REPROJ
     end
 
     subgraph MOTION [Motion & Execution]
-        PLANNER[Motion Planner<br/>Bimanual Trajectory Gen]
-        TARGET[Target Pose<br/><i>geometry_msgs/PoseStamped</i>]
-        ACTUATORS((Franka FER<br/>Bimanual Actuators))
+        PLANNER[Motion Planner<br/>Bimanual Trajectory Gen]:::motion
+        TARGET[Target Pose<br/><i>geometry_msgs/PoseStamped</i>]:::motion
+        ACTUATORS((Franka FER<br/>Bimanual Actuators)):::hw
         
         REPROJ --> TARGET
         TARGET --> PLANNER
@@ -42,9 +61,5 @@ graph TD
     FB -.-> VLM
     FB -.-> DISPATCHER
 
-    %% Styling
-    style VLM fill:#f06292,stroke:#333,color:#fff
-    style DISPATCHER fill:#ce93d8,stroke:#333
-    style YOLO fill:#9fa8da,stroke:#333
-    style ACTUATORS fill:#c8e6c9,stroke:#333
-    style SENSORY fill:#f5f5f5,stroke:#999,stroke-dasharray: 5 5
+    %% Regolazione Stile Frecce
+    linkStyle default stroke-width:2px, fill:none;
