@@ -69,9 +69,15 @@ components:
     path: "./src/fr3_application"
     type: "ai_module"
     runtime: "python3.10"
+    packages:
+      - "fr3_application"
     python_dependencies:
       - "google-genai"
       - "rclpy"
+      - "pydantic"
+      - "opencv-python"
+      - "Pillow"
+      - "ultralytics"
     environment_vars:
       - "GEMINI_API_KEY"
 

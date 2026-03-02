@@ -58,7 +58,8 @@ RUN pip3 install --no-cache-dir \
     google-genai \
     pydantic \
     pillow \
-    opencv-python
+    opencv-python \
+    ultralytics
 
 
 # 3. Setup Workspace
