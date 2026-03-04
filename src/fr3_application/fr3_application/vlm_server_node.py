@@ -25,11 +25,11 @@ class VlmDecision(BaseModel):
     selected_arm: str = Field(description="The arm to use for the action. Must be one of: 'left', 'right', 'bimanual'")
     handover_height_z: float = Field(description="The estimated height in meters (relative to the table surface, Z=0.0) at which the robots should safely hand over the object to each other. For example, 0.3 for a safe mid-air pass above obstacles. If the task does not involve a handover, return 0.0.")
 
-class VlmClientNode(Node):
+class VlmServerNode(Node):
     def __init__(self):
-        super().__init__('vlm_client_node')
+        super().__init__('vlm_server_node')
         
-        self.get_logger().info("Initializing VLM Client Node...")
+        self.get_logger().info("Initializing VLM Server Node...")
         
         # Init CvBridge for image conversion
         self.cv_bridge = CvBridge()
@@ -66,7 +66,7 @@ class VlmClientNode(Node):
             cancel_callback=self.cancel_callback
         )
         
-        self.get_logger().info("VLM Client Node Ready. Waiting for goals on /vlm_query action server.")
+        self.get_logger().info("VLM Server Node Ready. Waiting for goals on /vlm_query action server.")
 
     def image_callback(self, msg: Image):
         """Cache the latest image from the camera."""
@@ -177,7 +177,7 @@ class VlmClientNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = VlmClientNode()
+    node = VlmServerNode()
     
     # We use a MultiThreadedExecutor so the image callback can fire while execute_callback is waiting for Gemini
     executor = MultiThreadedExecutor()

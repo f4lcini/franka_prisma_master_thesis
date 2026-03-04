@@ -69,6 +69,7 @@ COPY ros_entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh
 
 # Ensure ROS setup is available in interactive shells (e.g. docker exec bash)
+COPY local_bashrc /root/.bashrc
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc && \
     echo 'if [ -f /mm_ws/install/setup.bash ]; then source /mm_ws/install/setup.bash; fi' >> /root/.bashrc && \
     echo "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp" >> /root/.bashrc

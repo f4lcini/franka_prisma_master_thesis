@@ -21,3 +21,5 @@ src/*
 *.swp
 .env
 Commands.txt
+local_bashrc
+.gitignore

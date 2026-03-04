@@ -29,7 +29,7 @@ class Fr3PickAndPlaceRigorous(Node):
         self._execute_client = ActionClient(self, ExecuteTrajectory, 'execute_trajectory', callback_group=self.cb_group)
         self._scene_client = self.create_client(ApplyPlanningScene, 'apply_planning_scene', callback_group=self.cb_group)
         self._cartesian_client = self.create_client(GetCartesianPath, 'compute_cartesian_path', callback_group=self.cb_group)
-        self._gripper_client = ActionClient(self, GripperCommand, '/gripper_action_controller/gripper_cmd', callback_group=self.cb_group)
+        self._gripper_client = ActionClient(self, GripperCommand, '/franka_gripper/gripper_cmd', callback_group=self.cb_group)
 
         # Kinematic Parameters
         self.arm_group = "fr3_arm"

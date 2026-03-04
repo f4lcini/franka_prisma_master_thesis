@@ -20,3 +20,4 @@ services:
       - ./build:/mm_ws/build:rw
       - ./install:/mm_ws/install:rw
       - ./log:/mm_ws/log:rw
+      
