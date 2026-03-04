@@ -1,3 +1,30 @@
+"""
+================================================================================
+Author: Falco Robotics (with AI Assistant)
+Code Description: 
+This ROS 2 node acts as a cognitive Action Server that integrates Google's Gemini 
+Vision-Language Model (VLM). It takes a live camera image and a natural language 
+task description from the client, queries the VLM engine with rigorous kinematic constraints, 
+and returns a structured JSON payload containing the parsed target object, the 
+inferred primitive action, the selected robotic arm, and the reasoning behind it.
+
+Pipeline: Reasoning
+
+Implementation Steps Summary:
+- NODE INITIALIZATION (Steps 1-2): Setup CvBridge, variable buffers, and the GenAI Client (requires GEMINI_API_KEY).
+- TOPIC SUBSCRIBERS (Step 3): Start listening for the camera's RGB image stream into a reentrant callback group.
+- ACTION SERVER (Step 4): Expose the 'vlm_query' Action Server to accept tasks from the Behavior Tree.
+- IMAGE ACQUISITION (Step 5): Cache the latest image as a PIL object to be sent to Gemini.
+- ACTION LIFECYCLE (Steps 6-7): Manage incoming goal acceptance and cancellations.
+- GOAL EXECUTION (Step 8): Process the accepted goal, updating the feedback state continuously.
+- PROMPT ENGINEERING (Step 9): Assemble the system prompt enforcing kinematic rules and handover dynamics.
+- VLM INFERENCE (Step 10): Execute a blocking call to Gemini via the HTTP client passing the prompt and the captured image.
+- DATA PARSING (Step 11): Use Pydantic to strictly validate the JSON output from Gemini.
+- RESULT FINALIZATION (Step 12): Extract labels, action choices, and arm selection to populate and succeed the Action Result.
+- MAIN LOOP & EXECUTOR (Steps 13-15): Spin the node using a MultiThreadedExecutor to keep callbacks alive during the API call.
+================================================================================
+"""
+
 import os
 import rclpy
 from rclpy.node import Node
@@ -31,7 +58,7 @@ class VlmServerNode(Node):
         
         self.get_logger().info("Initializing VLM Server Node...")
         
-        # Init CvBridge for image conversion
+        # Step 1-2: Setup CvBridge, variable buffers, and the GenAI Client.
         self.cv_bridge = CvBridge()
         self.latest_image = None
         
@@ -42,11 +69,10 @@ class VlmServerNode(Node):
         self.gemini_client = genai.Client(api_key=api_key)
         self.model_name = "gemini-2.5-flash" # Use the fast, multimodal model
         
-        # We need a reentrant callback group so we can receive images while processing an action
         self.cb_group = ReentrantCallbackGroup()
         
+        # Step 3: Start listening for the camera's RGB image stream into a reentrant callback group.
         # Subscriber for the raw camera stream
-        # TODO: Update the topic name to match your actual camera topic
         self.image_sub = self.create_subscription(
             Image,
             '/camera/color/image_raw',
@@ -55,6 +81,7 @@ class VlmServerNode(Node):
             callback_group=self.cb_group
         )
         
+        # Step 4: Expose the 'vlm_query' Action Server to accept tasks from the Behavior Tree.
         # Action Server
         self._action_server = ActionServer(
             self,
@@ -70,6 +97,7 @@ class VlmServerNode(Node):
 
     def image_callback(self, msg: Image):
         """Cache the latest image from the camera."""
+        # Step 5: Cache the latest image as a PIL object to be sent to Gemini.
         try:
             # Convert ROS Image to OpenCV, then to PIL Image for Gemini
             cv_image = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
@@ -79,16 +107,19 @@ class VlmServerNode(Node):
 
     def goal_callback(self, goal_request):
         """Accept or reject a new goal."""
+        # Step 6-7 part 1: Manage incoming goal acceptance.
         self.get_logger().info(f"Received new VLM query: '{goal_request.task_description}'")
         return GoalResponse.ACCEPT
 
     def cancel_callback(self, goal_handle):
         """Accept cancellations."""
+        # Step 6-7 part 2: Manage cancellations.
         self.get_logger().info('Received cancel request for VLM query.')
         return CancelResponse.ACCEPT
 
     async def execute_callback(self, goal_handle):
         """Process the goal using Gemini API."""
+        # Step 8: Process the accepted goal, updating the feedback state continuously.
         self.get_logger().info('Executing VLM Query...')
         
         feedback_msg = VlmQuery.Feedback()
@@ -119,6 +150,7 @@ class VlmServerNode(Node):
         feedback_msg.current_state = "Sending request to Gemini..."
         goal_handle.publish_feedback(feedback_msg)
         
+        # Step 9: Assemble the system prompt enforcing kinematic rules and handover dynamics.
         system_prompt = (
             "You are the high-level cognitive planner for a dual-arm robot (Left Arm and Right Arm). "
             "You receive an image of your workspace and a user command. "
@@ -139,6 +171,8 @@ class VlmServerNode(Node):
             # Note: The new generate_content blocks until completion. 
             # In a ROS 2 async execute_callback, this might block the executor thread marginally, 
             # but since we use a MultiThreadedExecutor, it is acceptable.
+            
+            # Step 10: Execute a blocking call to Gemini via the HTTP client passing the prompt and the captured image.
             response = self.gemini_client.models.generate_content(
                 model=self.model_name,
                 contents=contents,
@@ -153,10 +187,12 @@ class VlmServerNode(Node):
             text_response = response.text
             self.get_logger().info(f"Gemini Raw Output: {text_response}")
             
+            # Step 11: Use Pydantic to strictly validate the JSON output from Gemini.
             # The output is a JSON string matching the Pydantic schema
             # We use Pydantic to validate and parse it back into an object
             decision = VlmDecision.model_validate_json(text_response)
             
+            # Step 12: Extract labels, action choices, and arm selection to populate and succeed the Action Result.
             result.success = True
             result.target_label = decision.target_label
             result.action_choice = decision.action_choice
@@ -179,6 +215,7 @@ def main(args=None):
     rclpy.init(args=args)
     node = VlmServerNode()
     
+    # Step 13-15: Spin the node using a MultiThreadedExecutor to keep callbacks alive during the API call.
     # We use a MultiThreadedExecutor so the image callback can fire while execute_callback is waiting for Gemini
     executor = MultiThreadedExecutor()
     rclpy.spin(node, executor=executor)

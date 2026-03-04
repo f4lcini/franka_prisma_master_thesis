@@ -1,3 +1,29 @@
+"""
+================================================================================
+Author: Falco Robotics 
+Code Description: 
+This ROS 2 node performs highly precise, Cartesian-based Pick and Place (PnP) actions using 
+MoveIt. It breaks down the grasping operation into discrete, rigorous phases: a 
+stochastic OMPL approach for large non-constrained movements, and a purely linear, sub-millimeter 
+Cartesian descent for inserting and extracting the gripper without collision constraints. 
+It interfaces dynamically with the Planning Scene to simulate FCL evasion.
+
+Pipeline: Motion Planning & Execution
+
+Implementation Steps Summary:
+- NODE INITIALIZATION (Steps 1-2): Bringup node and configure a MutuallyExclusiveCallbackGroup to isolate DDS behaviors.
+- INTERFACE SETUP (Steps 3-4): Instantiate multiple Action Clients and Service Clients for MoveIt APIs and Gripper control.
+- KINEMATICS CONFIGURATION (Step 5): Define nominal links (fr3_link0, fr3_hand_tcp), collision objects, and grasp targets.
+- GEOMETRY MANAGEMENT (Steps 6-7): Inject and attach/detach an FCL primitive box to simulate the grasped object within the Planning Scene.
+- PRE-GRASP PLANNING (Step 8): Use OMPL with large constraint tolerances to approach the target spatially.
+- CARTESIAN DESCENT (Step 9): Ask GetCartesianPath for a meticulously precise, sub-millimeter linear Z-drop.
+- GRASP EXECUTION (Step 10): Command to close the Franka gripper with force thresholds.
+- CARTESIAN EXTRACTION (Step 11): Extract along the exactly inverse linear path of the descent.
+- TRANSFER & PLACE (Step 12): Execute OMPL spatial transfer, followed by another linear Cartesian path to place, concluding the cycle.
+- DIAGNOSTICS & MAIN LOOP (Steps 13-14): Systematically check DDS nodes via wait_for_server timeouts and run the multithreaded tree.
+================================================================================
+"""
+
 import rclpy
 import time
 import threading
@@ -20,17 +46,20 @@ from control_msgs.action import GripperCommand
 class Fr3PickAndPlaceRigorous(Node):
     def __init__(self):
         super().__init__('fr3_pnp_rigorous_node')
+        # Step 1-2: Bringup node and configure a MutuallyExclusiveCallbackGroup to isolate DDS behaviors.
         self.get_logger().info("Inizializzazione Sistema PnP FR3 - Controllo Cartesiano Attivo")
         
         self.cb_group = MutuallyExclusiveCallbackGroup()
         
         # DDS Interfaces
+        # Step 3-4: Instantiate multiple Action Clients and Service Clients for MoveIt APIs and Gripper control.
         self._action_client = ActionClient(self, MoveGroup, 'move_action', callback_group=self.cb_group)
         self._execute_client = ActionClient(self, ExecuteTrajectory, 'execute_trajectory', callback_group=self.cb_group)
         self._scene_client = self.create_client(ApplyPlanningScene, 'apply_planning_scene', callback_group=self.cb_group)
         self._cartesian_client = self.create_client(GetCartesianPath, 'compute_cartesian_path', callback_group=self.cb_group)
         self._gripper_client = ActionClient(self, GripperCommand, '/franka_gripper/gripper_cmd', callback_group=self.cb_group)
 
+        # Step 5: Define nominal links (fr3_link0, fr3_hand_tcp), collision objects, and grasp targets.
         # Kinematic Parameters
         self.arm_group = "fr3_arm"
         self.base_link = "fr3_link0"
@@ -59,6 +88,7 @@ class Fr3PickAndPlaceRigorous(Node):
         return p
 
     def _manage_cube_geometry(self, action="add"):
+        # Step 6-7 part 1: Inject and attach/detach an FCL primitive box to simulate the grasped object within the Planning Scene.
         obj = CollisionObject()
         obj.header.frame_id = self.base_link
         obj.id = self.cube_name
@@ -77,6 +107,7 @@ class Fr3PickAndPlaceRigorous(Node):
         self._wait_for_future(self._scene_client.call_async(req))
 
     def set_cube_attachment(self, attach: bool):
+        # Step 6-7 part 2: Dynamic link attachment.
         att = AttachedCollisionObject()
         att.link_name = self.tcp_link
         att.object.header.frame_id = self.base_link
@@ -181,7 +212,7 @@ class Fr3PickAndPlaceRigorous(Node):
     def run_pick_and_place(self):
         self.get_logger().info("Starting DDS diagnostics (10s timeout per interface)...")
         
-        # 1. Rigorous validation of all communication bridges
+        # Step 13-14 part 1: Systematically check DDS nodes via wait_for_server timeouts.
         if not self._action_client.wait_for_server(timeout_sec=10.0):
             self.get_logger().fatal("Failure: Action Server 'move_action' not reachable.")
             return
@@ -206,6 +237,7 @@ class Fr3PickAndPlaceRigorous(Node):
             
             # --- PHASE 1: Pre-Grasp (OMPL) ---
             self.get_logger().info("PHASE 1: Pre-Grasp (OMPL)")
+            # Step 8: Use OMPL with large constraint tolerances to approach the target spatially.
             pre_grasp_pose = self._create_target_pose(self.target_x, self.target_y, self.center_z + 0.15)
             if not self.execute_move_ompl(pre_grasp_pose): return
             
@@ -214,25 +246,30 @@ class Fr3PickAndPlaceRigorous(Node):
             
             # --- PHASE 2: Pure Z Descent ---
             self.get_logger().info("PHASE 2: Cartesian Insertion on the Geometric Center")
+            # Step 9: Ask GetCartesianPath for a meticulously precise, sub-millimeter linear Z-drop.
             grasp_pose = self._create_target_pose(self.target_x, self.target_y, self.center_z)
             if not self.execute_cartesian_path([grasp_pose]): return
             
             # --- PHASE 3: Grasp ---
             self.get_logger().info("PHASE 3: Dynamic Grasp")
+            # Step 10: Command to close the Franka gripper with force thresholds.
             self.execute_gripper(open_grip=False)
             self.set_cube_attachment(True)
             
             # --- PHASE 4: Pure Z Extraction ---
             self.get_logger().info("PHASE 4: Cartesian Extraction")
+            # Step 11: Extract along the exactly inverse linear path of the descent.
             if not self.execute_cartesian_path([pre_grasp_pose]): return
             
             # --- PHASE 5: Transfer (OMPL) ---
             self.get_logger().info("PHASE 5: Transfer (OMPL)")
+            # Step 12 part 1: Execute OMPL spatial transfer.
             place_pre_pose = self._create_target_pose(0.400, 0.300, self.center_z + 0.15)
             if not self.execute_move_ompl(place_pre_pose): return
             
             # --- PHASE 6: Cartesian Place ---
             self.get_logger().info("PHASE 6: Cartesian Descent and Release")
+            # Step 12 part 2: Followed by another linear Cartesian path to place, concluding the cycle.
             place_pose = self._create_target_pose(0.400, 0.300, self.center_z + 0.02)
             if not self.execute_cartesian_path([place_pose]): return
             
@@ -248,6 +285,7 @@ class Fr3PickAndPlaceRigorous(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = Fr3PickAndPlaceRigorous()
+    # Step 13-14 part 2: Run the multithreaded tree.
     executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
     

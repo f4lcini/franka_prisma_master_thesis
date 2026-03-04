@@ -6,6 +6,27 @@ from launch_ros.actions import Node
 from launch.substitutions import Command, FindExecutable
 from launch_ros.parameter_descriptions import ParameterValue
 
+"""
+================================================================================
+Author: Falco Robotics
+Code Description: 
+This file exclusively handles the launch and parameter resolution for the MoveGroup 
+node and its companion RViz interface. It dynamically compiles the robot's URDF/SRDF 
+files and loads MoveIt kinematics, controllers, and OMPL overrides.
+
+Pipeline: High-Level Path Planning (MoveIt)
+
+Implementation Steps Summary:
+- NODE INITIALIZATION (Step 1): Resolve required package directories.
+- ROBOT DESCRIPTION (Step 2): Execute xacro to generate URDF and SRDF semantic representations dynamically.
+- CONFIGURATION INGESTION (Step 3): Load core kinematics and basic controller YAML parameters.
+- OMPL OVERRIDE MERGE (Step 4): Combine base OMPL parameters with custom environment overrides via dictionary updates.
+- MoveGroup METADATA (Step 5): Package trajectory execution, planning pipelines, and MoveIt capabilities into objects.
+- NODE DEFINITIONS (Step 6): Declare the MoveGroup node and the RViz2 UI node with their mapped arguments.
+- LAUNCH EXECUTION (Step 7): Return the bundled node list to the ROS 2 Launch process.
+================================================================================
+"""
+
 def load_yaml(package_name, file_path):
     package_path = get_package_share_directory(package_name)
     try:
@@ -15,37 +36,36 @@ def load_yaml(package_name, file_path):
         return None
 
 def generate_launch_description():
+    # Step 1: Resolve required package directories.
     pkg_env = get_package_share_directory('franka_manipulation_env')
     pkg_moveit = get_package_share_directory('franka_fr3_moveit_config')
 
-    # 1. URDF e SRDF
+    # Step 2: Execute xacro to generate URDF and SRDF semantic representations dynamically.
     xacro_file = os.path.join(pkg_env, 'urdf', 'system.urdf.xacro')
     robot_description = {"robot_description": ParameterValue(Command([FindExecutable(name="xacro"), " ", xacro_file]), value_type=str)}
 
     srdf_file = os.path.join(pkg_env, 'srdf', 'fr3_sim_srdf.xacro')
     robot_description_semantic = {"robot_description_semantic": ParameterValue(Command([FindExecutable(name="xacro"), " ", srdf_file, " name:=fr3 hand:=true"]), value_type=str)}
 
-    # 2. Parametri di Cinematica e Traiettoria
+    # Step 3: Load core kinematics and basic controller YAML parameters.
     kinematics_yaml = load_yaml('franka_fr3_moveit_config', 'config/kinematics.yaml')
     moveit_controllers_yaml = load_yaml('franka_manipulation_env', 'config/moveit_controllers.yaml')
 
-    
-    
-    # CARICAMENTO COMBINATO OMPL (Base + Override)
+    # Step 4: Combine base OMPL parameters with custom environment overrides via dictionary updates.
     ompl_base_yaml = load_yaml('franka_fr3_moveit_config', 'config/ompl_planning.yaml')
     ompl_override_yaml = load_yaml('franka_manipulation_env', 'config/ompl_planning_override.yaml')
 
     if ompl_base_yaml is None or ompl_override_yaml is None:
         raise FileNotFoundError("Errore fatale: impossibile localizzare i file di configurazione OMPL base o override.")
 
-    # Unione dei dizionari (l'override sovrascrive o aggiunge chiavi al base)
     ompl_combined = ompl_base_yaml.copy()
     ompl_combined.update(ompl_override_yaml)
 
+    # Step 5: Package trajectory execution, planning pipelines, and MoveIt capabilities into objects.
     planning_pipeline_parameters = {
         "planning_pipelines": ["ompl"],
         "default_planning_pipeline": "ompl",
-        "ompl": ompl_combined, # <--- Passiamo il dizionario fuso
+        "ompl": ompl_combined,
     }
 
     moveit_controller_parameters = {
@@ -65,7 +85,7 @@ def generate_launch_description():
         "capabilities": "move_group/ExecuteTaskSolutionCapability"
     }
 
-    # 3. Nodo Move Group
+    # Step 6: Declare the MoveGroup node and the RViz2 UI node with their mapped arguments.
     move_group_node = Node(
         package="moveit_ros_move_group",
         executable="move_group",
@@ -82,7 +102,6 @@ def generate_launch_description():
         ],
     )
 
-    # 4. Nodo RViz2
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",
@@ -90,4 +109,5 @@ def generate_launch_description():
         parameters=[robot_description, robot_description_semantic, kinematics_yaml, {"use_sim_time": True}],
     )
 
+    # Step 7: Return the bundled node list to the ROS 2 Launch process.
     return LaunchDescription([move_group_node, rviz_node])

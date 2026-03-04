@@ -43,7 +43,16 @@ RUN apt-get update && apt-get install -y \
 # Inizializza rosdep (gestore dipendenze ROS)
 RUN rosdep init || true
 
-# Copiamo I file sorgente (momentaneamente) per far capire a rosdep cosa manca!
+# 2. Installazione dipendenze Python per VLM e YOLO (Piazzato in ALTO per ottimizzare la CACHE)
+RUN pip3 install --no-cache-dir \
+    google-genai \
+    pydantic \
+    pillow \
+    opencv-python \
+    "numpy<2" \
+    ultralytics
+
+# Copiamo I file sorgente per far capire a rosdep cosa manca
 WORKDIR /mm_ws
 COPY src /mm_ws/src
 
@@ -51,15 +60,6 @@ RUN apt-get update && rosdep update && \
     rosdep install --from-paths src --ignore-src -y --rosdistro humble \
     && rm -rf /mm_ws/src/* \
     && rm -rf /var/lib/apt/lists/*
-
-
-# 2. Installazione dipendenze Python per VLM (Gemini)
-RUN pip3 install --no-cache-dir \
-    google-genai \
-    pydantic \
-    pillow \
-    opencv-python \
-    ultralytics
 
 
 # 3. Setup Workspace

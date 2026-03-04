@@ -4,41 +4,48 @@ from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
-from launch.substitutions import Command, FindExecutable
-from launch_ros.parameter_descriptions import ParameterValue
+
+"""
+================================================================================
+Author: Falco Robotics
+Code Description: 
+This launch file acts as a mid-level wrapper. It takes the specific joint starting 
+pose for the FR3 robot and delegates the actual spawning of Gazebo entities to 
+`sim_objects.launch.py`. It also injects a static TF publisher to bridge the camera.
+
+Pipeline: Simulation Wrapper
+
+Implementation Steps Summary:
+- NODE INITIALIZATION (Step 1): Specify the initial configuration `MY_ROBOT_POSE` as an environment string.
+- OBJECT SPAWN DELEGATION (Step 2): Include the hardware simulation launch file passing the initial pose parameter.
+- CAMERA TF INJECTION (Step 3): Declare a static TF publisher for the camera_link to correctly anchor depth tracking.
+- LAUNCH EXECUTION (Step 4): Return the combined launch description.
+================================================================================
+"""
 
 def generate_launch_description():
     pkg_env = get_package_share_directory('franka_manipulation_env')
+    
+    # Step 1: Specify the initial configuration `MY_ROBOT_POSE` as an environment string.
     MY_ROBOT_POSE = "j1:=0.0 j2:=-0.785 j3:=0.0 j4:=-2.356 j5:=0.0 j6:=1.571 j7:=0.785"
 
-    # 1. Elaborazione URDF
-    xacro_file = os.path.join(pkg_env, 'urdf', 'system.urdf.xacro')
-    robot_description_content = Command([FindExecutable(name="xacro"), " ", xacro_file, " ", MY_ROBOT_POSE])
-    robot_description = {"robot_description": ParameterValue(robot_description_content, value_type=str)}
 
-    # 2. Robot State Publisher (TF)
-    rsp_node = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        output='both',
-        parameters=[robot_description, {"use_sim_time": True}]
-    )
-
-    # 3. Inclusione Simulatore Gazebo e Spawner Interni
+    # Step 2: Include the hardware simulation launch file passing the initial pose parameter.
     sim_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_env, 'launch', 'sim_objects.launch.py')),
         launch_arguments={'initial_pose': MY_ROBOT_POSE}.items(),
     )
 
+    # Step 3: Declare a static TF publisher for the camera_link to correctly anchor depth tracking.
     camera_tf_node = Node(
-    package='tf2_ros',
-    executable='static_transform_publisher',
-    name='camera_tf_bridge',
-    arguments=['0', '0', '0', '0', '0', '0', 'camera_link', 'fr3_system/camera_link/camera']
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='camera_tf_bridge',
+        arguments=['0', '0', '0', '0', '0', '0', 'camera_link', 'fr3_system/camera_link/camera']
     )
 
+    # Step 4: Return the combined launch description.
     return LaunchDescription([
-        rsp_node,
         sim_launch,
         camera_tf_node,
     ])

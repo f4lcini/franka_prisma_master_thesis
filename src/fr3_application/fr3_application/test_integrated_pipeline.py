@@ -1,5 +1,28 @@
 #!/usr/bin/env python3
 
+"""
+================================================================================
+Author: Falco Robotics 
+Code Description: 
+This CLI-based ROS 2 testing node verifies the integration and handshaking between 
+the High-Level VLM task planner (vlm_server_node) and the Mid-Level 3D Object 
+Localization module (object_localization_node). It sends an asynchronous text/image 
+query to the VLM Action Server, parses the VLM's string output, and immediately feeds 
+the target object name into the Object Localization Action Server to test End-To-End extraction.
+
+Pipeline: End-To-End Testing
+
+Implementation Steps Summary:
+- NODE INITIALIZATION (Steps 1-2): Setup testing node and the respective ActionClients for the 'vlm_query' and 'detect_object' servers.
+- STEP 1 (VLM INITIATION) (Steps 3-4): Format the testing prompt and trigger the Gemini VLM goal asymptomatically.
+- VLM CALLBACK (Steps 5-6): Wait for the goal to be accepted, process the reasoning feedback, and extract the JSON validation struct.
+- STEP 2 (LOCALIZATION CALL) (Steps 7-8): If a valid target_label is returned by the VLM, pass it as the target name to the localization pipeline.
+- LOCALIZATION CALLBACK (Steps 9-10): Wait for the depth-projected coordinates of the bounding box.
+- TEST SUMMARY (Step 11): Intercept the final Z, Y, X pose from the payload and format a user-friendly console dashboard logging all pipeline outcomes.
+- MAIN EXECUTION (Steps 12-13): Hardcode the testing prompt and run the unified asynchronous sequence.
+================================================================================
+"""
+
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
@@ -14,18 +37,16 @@ class IntegratedPerceptionTest(Node):
         super().__init__('integrated_perception_test')
         self.get_logger().info("Initiating Test Node for VLM and Localization...")
         
-        # Clients for both action servers
+        # Step 1-2: Setup testing node and the respective ActionClients for the 'vlm_query' and 'detect_object' servers.
         self.vlm_client = ActionClient(self, VlmQuery, 'vlm_query')
         self.loc_client = ActionClient(self, DetectObject, 'detect_object')
         self.cv_bridge = CvBridge()
-        # Definisco i client per la vlm e la localization
+        
         # We store partial results here
         self.vlm_result = None
 
     def start_test(self, task_description, image_path=None):
-        """
-        Step 1: Ask VLM what to do.
-        """
+        # Step 3-4: Format the testing prompt and trigger the Gemini VLM goal asymptomatically.
         self.get_logger().info("--- STEP 1: Sending Task to VLM ---")
         self.get_logger().info(f"Task: '{task_description}'")
         
@@ -44,6 +65,7 @@ class IntegratedPerceptionTest(Node):
         future.add_done_callback(self.vlm_goal_response_callback)
 
     def vlm_goal_response_callback(self, future):
+        # Step 5-6 part 1: Wait for the goal to be accepted...
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().error("VLM Goal rejected.")
@@ -56,6 +78,7 @@ class IntegratedPerceptionTest(Node):
         res_future.add_done_callback(self.vlm_result_callback)
 
     def vlm_result_callback(self, future):
+        # Step 5-6 part 2: ...process the reasoning feedback, and extract the JSON validation struct.
         result = future.result().result
         self.vlm_result = result
         
@@ -66,17 +89,14 @@ class IntegratedPerceptionTest(Node):
         self.get_logger().info(f"Reasoning:\n{result.reasoning}")
         self.get_logger().info("-----------------------------")
 
+        # Step 7-8: If a valid target_label is returned by the VLM, pass it as the target name to the localization pipeline.
         if result.success and result.target_label.lower() != "none":
-            # Proceed to Step 2
             self.locate_target(result.target_label)
         else:
             self.get_logger().warn("VLM returned 'none' as target or failed. Test finished.")
             rclpy.shutdown()
 
     def locate_target(self, target_label):
-        """
-        Step 2: Ask Object Localization for X, Y, Z coordinates.
-        """
         self.get_logger().info(f"\n--- STEP 2: Asking YOLO + Depth to locate '{target_label}' ---")
         self.loc_client.wait_for_server()
         
@@ -87,6 +107,7 @@ class IntegratedPerceptionTest(Node):
         future.add_done_callback(self.loc_goal_response_callback)
 
     def loc_goal_response_callback(self, future):
+        # Step 9-10 part 1: Wait for the depth-projected coordinates...
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().error("Localization Goal rejected.")
@@ -98,10 +119,12 @@ class IntegratedPerceptionTest(Node):
         res_future.add_done_callback(self.loc_result_callback)
 
     def loc_result_callback(self, future):
+        # Step 9-10 part 2: ...of the bounding box.
         result = future.result().result
         
         self.get_logger().info("--- LOCALIZATION RESULT RECEIVED ---")
         if result.success:
+            # Step 11: Intercept the final Z, Y, X pose from the payload and format a user-friendly console dashboard logging all pipeline outcomes.
             p = result.target_pose.pose.position
             self.get_logger().info(f"SUCCESS! Target found.")
             self.get_logger().info(f"World Coordinates (frame: {result.target_pose.header.frame_id}):")
@@ -125,6 +148,7 @@ def main(args=None):
     rclpy.init(args=args)
     test_node = IntegratedPerceptionTest()
     
+    # Step 12-13: Hardcode the testing prompt and run the unified asynchronous sequence.
     # You can change the command here or pass an image path if the camera is off
     command = "Pick up the red cube and pass it to the other arm."
     image = None # E.g., "Images/Workspace.jpg"
