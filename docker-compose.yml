@@ -7,7 +7,7 @@ services:
     network_mode: host
     ipc: host
     privileged: true
-   
+
     tty: true
     stdin_open: true
     # --------------------------------
@@ -16,8 +16,10 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ./src:/mm_ws/src:rw    
+      - /dev:/dev:rw
+      - /dev/bus/usb:/dev/bus/usb:rw
+      - /run/udev:/run/udev:ro
+      - ./src:/mm_ws/src:rw
       - ./build:/mm_ws/build:rw
       - ./install:/mm_ws/install:rw
       - ./log:/mm_ws/log:rw
-      

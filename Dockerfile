@@ -32,11 +32,8 @@ RUN apt-get update && apt-get install -y \
     ros-humble-ros-gz-bridge \
     ros-humble-rosidl-default-generators \
     ros-humble-ament-cmake-clang-format \
-    # libfranka è solitamente disponibile come binario
     ros-humble-libfranka \
-    # Aggiungi questa riga specifica per il networking del Franka FR3
     ros-humble-rmw-cyclonedds-cpp \
-    # Per risoluzione automatica delle dipendenze
     python3-rosdep \
     && rm -rf /var/lib/apt/lists/*
 
@@ -73,6 +70,13 @@ COPY local_bashrc /root/.bashrc
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc && \
     echo 'if [ -f /mm_ws/install/setup.bash ]; then source /mm_ws/install/setup.bash; fi' >> /root/.bashrc && \
     echo "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp" >> /root/.bashrc
+
+# 4. RealSense drivers — layer separato per sfruttare la cache Docker
+# Per aggiornare solo questa parte: docker compose build (2 min invece di 20)
+RUN apt-get update && apt-get install -y \
+    ros-humble-realsense2-camera \
+    ros-humble-realsense2-description \
+    && rm -rf /var/lib/apt/lists/*
 
 ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD ["bash"]

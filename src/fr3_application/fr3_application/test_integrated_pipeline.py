@@ -146,14 +146,22 @@ class IntegratedPerceptionTest(Node):
 
 def main(args=None):
     rclpy.init(args=args)
+    
+    import argparse
+    import sys
+    
+    parser = argparse.ArgumentParser(description='Test Integrated Perception Pipeline')
+    parser.add_argument('command', type=str, nargs='?', default="Pick up the red cube and pass it to the other arm.", help='The task description for the VLM')
+    parser.add_argument('--image', type=str, default=None, help='Path to an offline image (optional, uses camera if omitted)')
+    
+    # Parse args, removing ROS 2 specific args
+    args_without_ros = rclpy.utilities.remove_ros_args(args=sys.argv)
+    parsed_args = parser.parse_args(args_without_ros[1:])
+    
     test_node = IntegratedPerceptionTest()
     
-    # Step 12-13: Hardcode the testing prompt and run the unified asynchronous sequence.
-    # You can change the command here or pass an image path if the camera is off
-    command = "Pick up the red cube and pass it to the other arm."
-    image = None # E.g., "Images/Workspace.jpg"
-    
-    test_node.start_test(task_description=command, image_path=image)
+    # Use the parsed command and image path
+    test_node.start_test(task_description=parsed_args.command, image_path=parsed_args.image)
     rclpy.spin(test_node)
 
 if __name__ == '__main__':
