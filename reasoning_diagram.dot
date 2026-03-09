@@ -1,0 +1,27 @@
+digraph G {
+    fontname="Helvetica";
+    node [fontname="Helvetica", shape=box, style="filled,rounded", color="#6c757d", fillcolor="#f8f9fa"];
+    edge [fontname="Helvetica", fontsize=10, color="#495057"];
+    
+    User [label="User / Behavior Tree\nCommand: 'Pick the apple'", shape=ellipse, fillcolor="#ffffff"];
+    Cam [label="Sensor\nRealSense D435", shape=cylinder, fillcolor="#e9ecef"];
+    
+    VLM [label="Cognitive Node (Action Dispatcher)\nvlm_server_node", shape=Mrecord, fillcolor="#e2e3e5"];
+    Gemini [label="Google Gemini\n2.5 Flash API", shape=box, style="filled,rounded,dashed", fillcolor="#ffffff"];
+    
+    Loc [label="Perception Node\nobject_localization_node", shape=Mrecord, fillcolor="#e2e3e5"];
+    MoveIt [label="Motion Planning\nMoveIt2 / Physical Robot", shape=box3d, fillcolor="#e9ecef"];
+    
+    User -> VLM [label="  task_description \n  + image "];
+    Cam -> VLM [label="  RGB Stream  "];
+    
+    VLM -> Gemini [label="  System Prompt + Image  ", dir=forward];
+    Gemini -> VLM [label="  Structured JSON \n  (Target, Action, Arm)  ", dir=forward];
+    
+    VLM -> User [label="  VlmQuery.Result  "];
+    
+    VLM -> Loc [label="   target_label   \n('apple')", style=bold, color="#000000"];
+    Loc -> MoveIt [label="   PoseStamped   \n(X, Y, Z, Quat)", style=bold, color="#000000"];
+    
+    VLM -> MoveIt [label="   action_choice ('pick')\narm_selection ('right')   ", style=bold, color="#000000"];
+}

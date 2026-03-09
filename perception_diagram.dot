@@ -1,0 +1,29 @@
+digraph G {
+    fontname="Helvetica";
+    node [fontname="Helvetica", shape=box, style="filled,rounded", color="#6c757d", fillcolor="#f8f9fa"];
+    edge [fontname="Helvetica", fontsize=10, color="#495057"];
+    
+    RS [label="Sensor: RealSense D435", shape=cylinder, fillcolor="#e9ecef"];
+    
+    RGB [label="RGB Stream\n/camera/.../image_raw", shape=note, fillcolor="#ffffff"];
+    Depth [label="Depth Stream\n/camera/.../depth_to_color...", shape=note, fillcolor="#ffffff"];
+    Info [label="Intrinsics\n/camera/.../camera_info", shape=note, fillcolor="#ffffff"];
+    
+    RS -> RGB;
+    RS -> Depth;
+    RS -> Info;
+    
+    PercNode [label="Perception Node:\nobject_localization_node", shape=Mrecord, fillcolor="#e2e3e5"];
+    Goal [label="Action Goal\n'bottle'", shape=ellipse, fillcolor="#ffffff"];
+    
+    RGB -> PercNode;
+    Depth -> PercNode;
+    Info -> PercNode;
+    Goal -> PercNode;
+    
+    Pose [label="PoseStamped (6DoF)\nPosition X,Y,Z + Orientation", shape=note, fillcolor="#ffffff"];
+    Img [label="Debug Image (JPG)\n/mm_ws/yolo_detection_result.jpg", shape=note, fillcolor="#ffffff"];
+    
+    PercNode -> Pose;
+    PercNode -> Img;
+}
