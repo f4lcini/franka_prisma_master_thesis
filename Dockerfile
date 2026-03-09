@@ -47,7 +47,8 @@ RUN pip3 install --no-cache-dir \
     pillow \
     opencv-python \
     "numpy<2" \
-    ultralytics
+    ultralytics \
+    scipy
 
 # Copiamo I file sorgente per far capire a rosdep cosa manca
 WORKDIR /mm_ws
