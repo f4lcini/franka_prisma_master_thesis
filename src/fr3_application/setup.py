@@ -32,9 +32,7 @@ setup(
             # This defines the executable 'fr3_pnp_node' invoked in run_pnp.launch.py
             'fr3_pnp_node = fr3_application.fr3_pnp_node:main',
             'vlm_server_node = fr3_application.vlm_server_node:main',
-            'object_localization_node = fr3_application.object_localization_node:main',
-            'test_localization_client = fr3_application.test_localization_client:main',
-            'test_integrated_pipeline = fr3_application.test_integrated_pipeline:main'
+            'object_localization_node = fr3_application.object_localization_node:main'
         ],
     },
 )

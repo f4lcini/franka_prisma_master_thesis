@@ -2,17 +2,20 @@
 ================================================================================
 Author: Falco Robotics 
 Code Description:
+[ROLE]: ACTION SERVER (Provides: /detect_object)
+
 This ROS 2 node performs 3D object localization by fusing 2D visual object 
 detection (using YOLOv8) with 3D depth data (from an aligned depth image). 
-It exposes a ROS 2 Action Server that listens for a target object name, locates 
-it in the camera's RGB stream, deprojects the 2D bounding box center to a 3D 
-point using the depth image and camera intrinsics, estimates the object's 
-orientation via PCA on the local depth region, and returns the full 6DoF pose.
+It exposes a ROS 2 Action Server that listens for a target object name from a 
+client (e.g., the Behavior Tree), locates it in the camera's RGB stream, 
+deprojects the 2D bounding box center to a 3D point using the depth image and 
+camera intrinsics, estimates the object's orientation via PCA on the local depth 
+region, and returns the full 6DoF pose.
 
 A debug image is saved to /mm_ws/yolo_detection_result.jpg on each detection 
 for manual verification of position and orientation accuracy.
 
-Pipeline: Perception
+Pipeline: Perception -> Action Server
 ================================================================================
 """
 
@@ -339,7 +342,7 @@ class ObjectLocalizationNode(Node):
                 cv2.arrowedLine(img, (cu, cv_pt), (eu, ev), colors[i], 2, tipLength=0.2)
                 cv2.putText(img, labels[i], (eu + 5, ev + 5), font, 0.4, colors[i], 1)
         
-        path = '/mm_ws/yolo_detection_result.jpg'
+        path = '/mm_ws/yolo_detection_resulted.jpg'
         cv2.imwrite(path, img)
         self.get_logger().info(f'Debug image saved: {path}')
 

@@ -2,13 +2,16 @@
 ================================================================================
 Author: Falco Robotics (with AI Assistant)
 Code Description: 
+[ROLE]: ACTION SERVER (Provides: /vlm_query)
+
 This ROS 2 node acts as a cognitive Action Server that integrates Google's Gemini 
 Vision-Language Model (VLM). It takes a live camera image and a natural language 
-task description from the client, queries the VLM engine with rigorous kinematic constraints, 
-and returns a structured JSON payload containing the parsed target object, the 
-inferred primitive action, the selected robotic arm, and the reasoning behind it.
+task description from the client (e.g., the Behavior Tree), queries the VLM engine 
+with rigorous kinematic constraints, and returns a structured JSON payload containing 
+the parsed target object, the inferred primitive action, the selected robotic arm, 
+and the reasoning behind it.
 
-Pipeline: Reasoning
+Pipeline: Reasoning -> Action Server
 
 Implementation Steps Summary:
 - NODE INITIALIZATION (Steps 1-2): Setup CvBridge, variable buffers, and the GenAI Client (requires GEMINI_API_KEY).
@@ -68,6 +71,7 @@ class VlmServerNode(Node):
             self.get_logger().error("GEMINI_API_KEY environment variable not set. Node will fail to process requests.")
         self.gemini_client = genai.Client(api_key=api_key)
         self.model_name = "gemini-2.5-flash" # Use the fast, multimodal model
+        
         
         self.cb_group = ReentrantCallbackGroup()
         

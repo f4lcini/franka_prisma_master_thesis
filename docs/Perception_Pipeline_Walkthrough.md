@@ -15,7 +15,7 @@ To validate the **perception pipeline** of the Franka FR3 bimanual system, speci
 
 The core file is [object_localization_node.py](file:///home/falco_robotics/mm_ws/src/fr3_application/fr3_application/object_localization_node.py).
 
-![Perception Architecture Diagram](./perception_diagram.png)
+![Perception Architecture Diagram](./assets/perception_diagram.png)
 
 The node utilizes a ROS 2 **Action Server**: it does not process frames continuously, but only when a client sends a goal containing the target object name.
 

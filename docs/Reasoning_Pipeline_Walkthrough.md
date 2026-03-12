@@ -8,7 +8,7 @@ The **reasoning pipeline** acts as the cognitive layer of the system: it receive
 
 ## System Architecture
 
-![Reasoning End-to-End Architecture Diagram](./reasoning_diagram.png)
+![Reasoning End-to-End Architecture Diagram](./assets/reasoning_diagram.png)
 
 The end-to-end flow demonstrates how the VLM functions as an **Action Dispatcher**:
 1. The client sends a text command (+ optional image) to the `vlm_server_node`.

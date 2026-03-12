@@ -34,6 +34,7 @@ RUN apt-get update && apt-get install -y \
     ros-humble-ament-cmake-clang-format \
     ros-humble-libfranka \
     ros-humble-rmw-cyclonedds-cpp \
+    ros-humble-py-trees-ros-viewer \
     python3-rosdep \
     && rm -rf /var/lib/apt/lists/*
 
