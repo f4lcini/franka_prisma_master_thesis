@@ -74,17 +74,17 @@ class ObjectLocalizationNode(Node):
         
         # ---- Subscribers ----
         self.create_subscription(
-            Image, '/camera/camera/color/image_raw',
+            Image, '/camera/image_raw',
             self.image_callback, qos,
             callback_group=self.sensor_cb_group
         )
         self.create_subscription(
-            Image, '/camera/camera/aligned_depth_to_color/image_raw',
+            Image, '/camera/depth',
             self.depth_callback, qos,
             callback_group=self.sensor_cb_group
         )
         self.create_subscription(
-            CameraInfo, '/camera/camera/color/camera_info',
+            CameraInfo, '/camera/camera_info',
             self.camera_info_callback, qos,
             callback_group=self.sensor_cb_group
         )
@@ -194,6 +194,21 @@ class ObjectLocalizationNode(Node):
         object_name = goal_handle.request.object_name
         self.get_logger().info(f'Searching for: "{object_name}"')
         
+        # --- Semantic Label Mapping ---
+        # Maps user/task-layer names to standard YOLOv8 COCO classes
+        LABEL_MAP = {
+            "green_ball": ["sports ball", "apple", "orange"],
+            "green ball": ["sports ball", "apple", "orange"],
+            "open_box": ["suitcase", "bowl", "book", "box"],
+            "open box": ["suitcase", "bowl", "book", "box"],
+            "table": ["dining table", "desk"]
+        }
+        
+        # Determine which YOLO labels we should look for
+        search_targets = [object_name]
+        if object_name.lower() in LABEL_MAP:
+            search_targets.extend(LABEL_MAP[object_name.lower()])
+        
         # --- YOLO Inference ---
         try:
             cv_image = self.cv_bridge.imgmsg_to_cv2(self.latest_image, 'bgr8').copy()
@@ -213,13 +228,15 @@ class ObjectLocalizationNode(Node):
             label = self.model.names[cls_id]
             conf = float(box.conf[0].item())
             all_labels.append(f'{label}({conf:.0%})')
-            if label == object_name and conf > best_conf:
+            
+            # Match if the label is exactly the target or in the semantic mapping
+            if (label == object_name or label in search_targets) and conf > best_conf:
                 best_box, best_conf = box, conf
         
         self.get_logger().info(f'All detections: {", ".join(all_labels) if all_labels else "NONE"}')
         
         if best_box is None:
-            self.get_logger().error(f'"{object_name}" not found in frame.')
+            self.get_logger().error(f'"{object_name}" (mapped to {search_targets}) not found in frame.')
             result.success = False
             goal_handle.abort()
             return result

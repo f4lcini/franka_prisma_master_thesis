@@ -1,0 +1,47 @@
+controller_names:
+  - franka1_arm_controller
+  - franka2_arm_controller
+  - franka1_gripper
+  - franka2_gripper
+
+franka1_arm_controller:
+  action_ns: follow_joint_trajectory
+  type: FollowJointTrajectory
+  default: true
+  joints:
+    - franka1_fr3_joint1
+    - franka1_fr3_joint2
+    - franka1_fr3_joint3
+    - franka1_fr3_joint4
+    - franka1_fr3_joint5
+    - franka1_fr3_joint6
+    - franka1_fr3_joint7
+
+franka2_arm_controller:
+  action_ns: follow_joint_trajectory
+  type: FollowJointTrajectory
+  default: true
+  joints:
+    - franka2_fr3_joint1
+    - franka2_fr3_joint2
+    - franka2_fr3_joint3
+    - franka2_fr3_joint4
+    - franka2_fr3_joint5
+    - franka2_fr3_joint6
+    - franka2_fr3_joint7
+
+franka1_gripper:
+  action_ns: gripper_cmd
+  type: GripperCommand
+  default: true
+  joints:
+    - franka1_fr3_finger_joint1
+    - franka1_fr3_finger_joint2
+
+franka2_gripper:
+  action_ns: gripper_cmd
+  type: GripperCommand
+  default: true
+  joints:
+    - franka2_fr3_finger_joint1
+    - franka2_fr3_finger_joint2

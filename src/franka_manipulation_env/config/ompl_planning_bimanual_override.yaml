@@ -1,0 +1,45 @@
+# File: franka_manipulation_env/config/ompl_planning_bimanual_override.yaml
+
+planning_plugin: ompl_interface/OMPLPlanner
+request_adapters: >-
+  default_planner_request_adapters/AddTimeOptimalParameterization
+  default_planner_request_adapters/FixWorkspaceBounds
+  default_planner_request_adapters/FixStartStateBounds
+  default_planner_request_adapters/FixStartStateCollision
+  default_planner_request_adapters/FixStartStatePathConstraints
+
+franka1_arm:
+  default_planner_config: RRTConnectkConfigDefault
+  planner_configs:
+    - RRTConnectkConfigDefault
+    - RRTstarkConfigDefault
+
+franka2_arm:
+  default_planner_config: RRTConnectkConfigDefault
+  planner_configs:
+    - RRTConnectkConfigDefault
+    - RRTstarkConfigDefault
+
+franka1_manipulator:
+  default_planner_config: RRTConnectkConfigDefault
+  planner_configs:
+    - RRTConnectkConfigDefault
+    - RRTstarkConfigDefault
+
+franka2_manipulator:
+  default_planner_config: RRTConnectkConfigDefault
+  planner_configs:
+    - RRTConnectkConfigDefault
+    - RRTstarkConfigDefault
+
+bimanual:
+  default_planner_config: RRTConnectkConfigDefault
+  planner_configs:
+    - RRTConnectkConfigDefault
+    - RRTstarkConfigDefault
+
+bimanual_manipulator:
+  default_planner_config: RRTConnectkConfigDefault
+  planner_configs:
+    - RRTConnectkConfigDefault
+    - RRTstarkConfigDefault

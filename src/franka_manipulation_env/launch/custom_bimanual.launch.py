@@ -394,6 +394,17 @@ def generate_launch_description():
             condition=IfCondition(use_rviz)
         ),
 
+        # Camera Bridge
+        Node(
+            package='ros_gz_bridge',
+            executable='parameter_bridge',
+            arguments=[
+                '/camera/image_raw@sensor_msgs/msg/Image[gz.msgs.Image'
+            ],
+            output='screen',
+            condition=IfCondition(use_gazebo)
+        ),
+
         # Spawn
         spawn,
 

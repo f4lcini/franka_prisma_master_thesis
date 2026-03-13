@@ -25,6 +25,7 @@ install(DIRECTORY
   config  # <--- Fondamentale per il .yaml dei controller
   urdf    # <--- Fondamentale per il system.urdf.xacro
   worlds  # (Se hai cartelle worlds)
+  rviz    # <--- Aggiunto per l'interfaccia MoveIt
   DESTINATION share/${PROJECT_NAME}
 )
 

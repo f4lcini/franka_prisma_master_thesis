@@ -18,6 +18,7 @@ Pipeline: BT Orchestration -> Reasoning Client
 
 import py_trees
 import rclpy
+import json
 from rclpy.action import ActionClient
 from franka_custom_interfaces.action import VlmQuery
 
@@ -33,10 +34,8 @@ class VlmActionClient(py_trees.behaviour.Behaviour):
         self.get_result_future = None
 
         self.blackboard = py_trees.blackboard.Client(name=name)
-        self.blackboard.register_key(key="target_label", access=py_trees.common.Access.WRITE)
-        self.blackboard.register_key(key="action_choice", access=py_trees.common.Access.WRITE)
-        self.blackboard.register_key(key="selected_arm", access=py_trees.common.Access.WRITE)
-        self.blackboard.register_key(key="handover_height_z", access=py_trees.common.Access.WRITE)
+        # We now store the entire sequence plan for the iterator to process
+        self.blackboard.register_key(key="vlm_plan", access=py_trees.common.Access.WRITE)
 
     def setup(self, **kwargs):
         try:
@@ -45,12 +44,15 @@ class VlmActionClient(py_trees.behaviour.Behaviour):
             raise KeyError("The ROS 2 node was not passed to the setup() method by the py_trees runner.")
 
         self.action_client = ActionClient(self.node, VlmQuery, self.action_name)
-        self.node.get_logger().info(f"[{self.name}] Waiting for Action Server {self.action_name}...")
+        self.node.get_logger().info(f"[{self.name}] Waiting for VLM Action Server {self.action_name}...")
         self.action_client.wait_for_server(timeout_sec=15.0)
 
     def initialise(self):
         goal_msg = VlmQuery.Goal()
         goal_msg.task_description = self.task_description
+        # Clear previous plan
+        self.blackboard.vlm_plan = None
+        
         self.node.get_logger().info(f"[{self.name}] Transmitting VLM Task: '{self.task_description}'")
         self.send_goal_future = self.action_client.send_goal_async(goal_msg)
         self.get_result_future = None
@@ -73,15 +75,27 @@ class VlmActionClient(py_trees.behaviour.Behaviour):
 
         if self.get_result_future and self.get_result_future.done():
             result = self.get_result_future.result().result
-            if result.success and result.target_label.lower() != "none":
-                self.node.get_logger().info(f"[{self.name}] VLM Success! Found target: '{result.target_label}'")
-                self.blackboard.target_label = result.target_label
-                self.blackboard.action_choice = result.action_choice
-                self.blackboard.selected_arm = result.arm_selection
-                self.blackboard.handover_height_z = result.handover_height_z
-                return py_trees.common.Status.SUCCESS
+            if result.success:
+                try:
+                    # Deserialize JSON plan
+                    plan_data = json.loads(result.vlm_plan_json)
+                    sequence = plan_data.get("sequence", [])
+                    reasoning = plan_data.get("reasoning", "No reasoning provided.")
+                    
+                    self.node.get_logger().info(f"[{self.name}] VLM Success!\nReasoning: {reasoning}")
+                    self.node.get_logger().info(f"[{self.name}] Plan Sequence: {[s['action'] for s in sequence]}")
+                    
+                    # Store sequence in blackboard
+                    self.blackboard.vlm_plan = sequence
+                    return py_trees.common.Status.SUCCESS
+                except Exception as e:
+                    self.node.get_logger().error(f"[{self.name}] Failed to parse JSON plan: {e}")
+                    return py_trees.common.Status.FAILURE
             else:
+                self.node.get_logger().error(f"[{self.name}] VLM Server returned failure: {result.message}")
                 return py_trees.common.Status.FAILURE
+
+        return py_trees.common.Status.FAILURE
 
         return py_trees.common.Status.FAILURE
 
