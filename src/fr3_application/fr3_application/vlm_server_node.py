@@ -61,7 +61,7 @@ class VlmServerNode(Node):
         if not api_key:
             self.get_logger().error("GEMINI_API_KEY environment variable not set. Node will fail to process requests.")
         self.gemini_client = genai.Client(api_key=api_key)
-        self.model_name = "gemini-1.5-flash" # Use stable flash model with separate quota
+        self.model_name = "gemini-2.5-flash" # Use stable flash model with separate quota
         
         self.cb_group = ReentrantCallbackGroup()
         

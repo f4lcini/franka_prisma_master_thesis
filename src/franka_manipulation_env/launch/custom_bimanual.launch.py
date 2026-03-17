@@ -399,7 +399,13 @@ def generate_launch_description():
             package='ros_gz_bridge',
             executable='parameter_bridge',
             arguments=[
-                '/camera/image_raw@sensor_msgs/msg/Image[gz.msgs.Image'
+                '/camera/image@sensor_msgs/msg/Image[gz.msgs.Image',
+                '/camera/depth_image@sensor_msgs/msg/Image[gz.msgs.Image',
+                '/camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo'
+            ],
+            remappings=[
+                ('/camera/image', '/camera/image_raw'),
+                ('/camera/depth_image', '/camera/depth')
             ],
             output='screen',
             condition=IfCondition(use_gazebo)

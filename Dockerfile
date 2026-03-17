@@ -35,11 +35,43 @@ RUN apt-get update && apt-get install -y \
     ros-humble-libfranka \
     ros-humble-rmw-cyclonedds-cpp \
     ros-humble-py-trees-ros-viewer \
-    python3-rosdep \
+    ros-humble-tf2-ros \
+    ros-humble-tf2-geometry-msgs \
+    ros-humble-tf2-eigen \
+    ros-humble-moveit-ros-planning-interface \
+    ros-humble-moveit-core \
+    ros-humble-moveit-msgs \
+    ros-humble-eigen3-cmake-module \
+    ros-humble-py-trees \
+    ros-humble-py-trees-ros \
+    ros-humble-shape-msgs \
+    ros-humble-franka-msgs \
+    ros-humble-franka-hardware \
+    ros-humble-franka-gripper \
+    ros-humble-franka-bringup \
+    ros-humble-franka-example-controllers \
+    ros-humble-franka-semantic-components \
+    ros-humble-realtime-tools \
+    ros-humble-control-msgs \
+    ros-humble-std-msgs \
+    ros-humble-std-srvs \
+    ros-humble-geometry-msgs \
+    ros-humble-sensor-msgs \
+    ros-humble-visualization-msgs \
+    ros-humble-action-msgs \
+    ros-humble-tf2-msgs \
+    ros-humble-pinocchio \
+    ros-humble-generate-parameter-library \
+    ros-humble-joint-state-publisher \
+    ros-humble-joint-state-publisher-gui \
+    ros-humble-robot-state-publisher \
+    ros-humble-controller-manager \
+    ros-humble-ros2controlcli \
+    ros-humble-urdf \
+    ros-humble-xacro \
+    ros-humble-rviz2 \
+    ros-humble-rviz-marker-tools \
     && rm -rf /var/lib/apt/lists/*
-
-# Inizializza rosdep (gestore dipendenze ROS)
-RUN rosdep init || true
 
 # 2. Installazione dipendenze Python per VLM e YOLO (Piazzato in ALTO per ottimizzare la CACHE)
 RUN pip3 install --no-cache-dir \
@@ -50,16 +82,6 @@ RUN pip3 install --no-cache-dir \
     "numpy<2" \
     ultralytics \
     scipy
-
-# Copiamo I file sorgente per far capire a rosdep cosa manca
-WORKDIR /mm_ws
-COPY src /mm_ws/src
-
-RUN apt-get update && rosdep update && \
-    rosdep install --from-paths src --ignore-src -y --rosdistro humble \
-    && rm -rf /mm_ws/src/* \
-    && rm -rf /var/lib/apt/lists/*
-
 
 # 3. Setup Workspace
 WORKDIR /mm_ws
