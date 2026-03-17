@@ -8,6 +8,9 @@ ENV PYTHONUNBUFFERED=1
 # 1. Installazione strumenti di sistema e dipendenze ROS 2 STABILI
 RUN apt-get update && apt-get install -y \
     git \
+    nano \
+    tree \
+    net-tools \
     build-essential \
     cmake \
     python3-pip \
@@ -89,11 +92,19 @@ WORKDIR /mm_ws
 COPY ros_entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh
 
-# Ensure ROS setup is available in interactive shells (e.g. docker exec bash)
-COPY local_bashrc /root/.bashrc
-RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc && \
+# Automate .bashrc configuration with aliases and ROS sourcing
+RUN echo 'source /opt/ros/humble/setup.bash' >> /root/.bashrc && \
     echo 'if [ -f /mm_ws/install/setup.bash ]; then source /mm_ws/install/setup.bash; fi' >> /root/.bashrc && \
-    echo "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp" >> /root/.bashrc
+    echo 'export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' >> /root/.bashrc && \
+    echo 'export LC_NUMERIC=en_US.UTF-8' >> /root/.bashrc && \
+    echo 'export QTWEBENGINE_DISABLE_SANDBOX=1' >> /root/.bashrc && \
+    echo 'export XDG_RUNTIME_DIR=/tmp/runtime-root' >> /root/.bashrc && \
+    echo 'alias cbp="colcon build --symlink-install --packages-select"' >> /root/.bashrc && \
+    echo 'cbsp() { local PKG_NAME=$1; if [ -z "$PKG_NAME" ]; then echo "Usage: cbsp <package_name>"; return 1; fi; if colcon build --symlink-install --packages-select "$PKG_NAME"; then source install/setup.bash; echo -e "\033[1;32m$PKG_NAME built and sourced.\033[0m"; fi; }' >> /root/.bashrc && \
+    echo 'alias ll="ls -alF"' >> /root/.bashrc && \
+    echo 'alias la="ls -A"' >> /root/.bashrc && \
+    echo 'alias l="ls -CF"' >> /root/.bashrc && \
+    echo 'alias ros_source="source /opt/ros/humble/setup.bash && source install/setup.bash"' >> /root/.bashrc
 
 # 4. RealSense drivers — layer separato per sfruttare la cache Docker
 # Per aggiornare solo questa parte: docker compose build (2 min invece di 20)
