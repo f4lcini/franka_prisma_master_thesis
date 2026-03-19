@@ -195,12 +195,13 @@ class ObjectLocalizationNode(Node):
         self.get_logger().info(f'Searching for: "{object_name}"')
         
         # --- Semantic Label Mapping ---
-        # Maps user/task-layer names to standard YOLOv8 COCO classes
         LABEL_MAP = {
             "green_ball": ["sports ball", "apple", "orange"],
             "green ball": ["sports ball", "apple", "orange"],
             "open_box": ["suitcase", "bowl", "book", "box"],
             "open box": ["suitcase", "bowl", "book", "box"],
+            "red_cube": ["traffic light", "stop sign", "suitcase", "book", "apple", "refrigerator"],
+            "red cube": ["traffic light", "stop sign", "suitcase", "book", "apple", "refrigerator"],
             "table": ["dining table", "desk"]
         }
         

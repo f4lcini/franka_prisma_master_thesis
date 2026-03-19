@@ -1,0 +1,25 @@
+================================================================================
+FUTURE EXPANSIONS & OPTIMIZATIONS FOR VLM TASK ORCHESTRATOR
+================================================================================
+
+1. DYNAMIC TARGET LOCALIZATION (Advanced VLM Logic)
+- Goal: Enable the robot to place objects into movable containers (e.g., "put the red cube inside the green bowl") rather than just fixed locations.
+- Implementation: Update the 'reasoning' prompt in 'skills_repertoire.py' to instruct the VLM to perform a 'FIND_OBJECT' on the dynamic target receptacle BEFORE executing a 'PLACE' action. If the target is a known fixed area (e.g., 'shared_workspace'), it can skip the search.
+
+2. REAL MTC ACTION SERVER MIGRATION (Hardware Step)
+- Goal: Connect the simulated Python BT clients ('pick_client.py', 'place_client.py', 'move_home_client.py') to real MoveIt Task Constructor (MTC) execution.
+- Implementation: 
+  - Refactor 'fr3_pnp_node.py' in 'fr3_application' into distinct ROS 2 Action Servers (Server_Pick, Server_Place, Server_MoveHome).
+  - Update the Behavior Tree leaf nodes to wrap actual 'rclpy.action.ActionClient' instances instead of 'time.sleep()'.
+
+3. DIRECT BIMANUAL HANDOVER (Mid-Air Pass)
+- Goal: Enable mid-air handover between the two Franka arms instead of relying exclusively on the 'shared_workspace' table passing (indirect handover).
+- Implementation: 
+  - Add a new 'HandoverSkill' to the Pydantic schema in 'skills_repertoire.py'.
+  - Create a new BT node that synchronizes two MTC action servers simultaneously (Arm 1 approaches and yields, Arm 2 grasps).
+
+4. FALLBACK & ERROR RECOVERY SCENARIOS
+- Goal: Make the Behavior Tree resilient to visual or manipulation failures.
+- Implementation: 
+  - Use PyTrees Fallback nodes (Selector) wrapping the Action Clients.
+  - If 'FIND_OBJECT' fails due to occlusion, trigger a 'Move_Arm_Away' recovery behavior to clear the camera view before retrying the search sequence automatically.

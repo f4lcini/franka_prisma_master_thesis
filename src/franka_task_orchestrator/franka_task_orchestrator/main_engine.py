@@ -32,13 +32,29 @@ import operator
 from franka_task_orchestrator.behaviors.vlm_client import VlmActionClient
 from franka_task_orchestrator.behaviors.object_localization_client import ObjectLocalizationClient
 from franka_task_orchestrator.behaviors.pick_client import MtcPickActionClient
+from franka_task_orchestrator.behaviors.place_client import MtcPlaceActionClient
+from franka_task_orchestrator.behaviors.move_home_client import MoveHomeClient
 from franka_task_orchestrator.behaviors.planner_utils import DynamicActionIterator, PlanPopper
 
 def create_tree(task_description="Default Task"):
     """Constructs a dynamic Behavior Tree for Dual-Arm Orchestration."""
     
-    # Root: Orchestrates Planning then Execution
-    root = py_trees.composites.Sequence(name="VLM_Orchestrator", memory=True)
+    # --- Top Level Logic: One-Shot Execution ---
+    # This selector ensures that once the task is finished, we don't restart it.
+    root = py_trees.composites.Selector(name="Root_Guard", memory=True)
+
+    # A. Check if mission is already accomplished
+    mission_done = py_trees.behaviours.CheckBlackboardVariableValue(
+        name="Mission_Completed?",
+        check=py_trees.common.ComparisonExpression(
+            variable="mission_completed",
+            value=True,
+            operator=operator.eq
+        )
+    )
+
+    # B. Main Orchestrator (The original logic)
+    main_sequence = py_trees.composites.Sequence(name="VLM_Orchestrator", memory=True)
 
     # 1. PLANNING PHASE
     vlm_planner = VlmActionClient(name="Gemini_Planner", task_description=task_description)
@@ -71,40 +87,46 @@ def create_tree(task_description="Default Task"):
     # B. Action Dispatcher
     dispatcher = py_trees.composites.Selector(name="Skill_Dispatcher", memory=False)
     
-    # Skill: FIND_OBJECT
-    search_sequence = py_trees.composites.Sequence(name="Search_Sequence", memory=True)
-    is_search = py_trees.behaviours.CheckBlackboardVariableValue(
-        name="Is_Search?",
-        check=py_trees.common.ComparisonExpression(
-            variable="active_action",
-            value="FIND_OBJECT",
-            operator=operator.eq
-        )
-    )
-    yolo_client = ObjectLocalizationClient(name="YOLO_Localization")
-    search_sequence.add_children([is_search, yolo_client])
-    
-    # Skill: PICK
-    pick_sequence = py_trees.composites.Sequence(name="Pick_Sequence", memory=True)
-    is_pick = py_trees.behaviours.CheckBlackboardVariableValue(
-        name="Is_Pick?",
-        check=py_trees.common.ComparisonExpression(
-            variable="active_action",
-            value="PICK",
-            operator=operator.eq
-        )
-    )
-    pick_client = MtcPickActionClient(name="MTC_Pick_Execution")
-    pick_sequence.add_children([is_pick, pick_client])
+    # === SKILL REPERTOIRE (REGISTRY) ===
+    # Map the action string from VLM to the corresponding Action Client Behavior
+    available_skills = {
+        "FIND_OBJECT": ObjectLocalizationClient(name="YOLO_Localization"),
+        "PICK": MtcPickActionClient(name="MTC_Pick_Execution"),
+        "PLACE": MtcPlaceActionClient(name="MTC_Place_Execution"),
+        "MOVE_HOME": MoveHomeClient(name="Move_Home_Execution")
+    }
 
-    dispatcher.add_children([search_sequence, pick_sequence])
+    # Dynamically build the dispatcher routing based on the available skills
+    for skill_name, client_node in available_skills.items():
+        skill_sequence = py_trees.composites.Sequence(name=f"{skill_name}_Sequence", memory=True)
+        is_active = py_trees.behaviours.CheckBlackboardVariableValue(
+            name=f"Is_{skill_name}?",
+            check=py_trees.common.ComparisonExpression(
+                variable="active_action",
+                value=skill_name,
+                operator=operator.eq
+            )
+        )
+        skill_sequence.add_children([is_active, client_node])
+        dispatcher.add_child(skill_sequence)
     
     # C. Housekeeping
     popper = PlanPopper(name="Complete_Step")
     
     execution_step.add_children([plan_not_empty, iterator, dispatcher, popper])
     
-    root.add_children([vlm_planner, execution_loop])
+    # D. Finalize Mission
+    # This node sets a flag on the blackboard to signal completion
+    mark_done = py_trees.behaviours.SetBlackboardVariable(
+        name="Mark_Mission_Done",
+        variable_name="mission_completed",
+        variable_value=True,
+        overwrite=True
+    )
+
+    main_sequence.add_children([vlm_planner, execution_loop, mark_done])
+    
+    root.add_children([mission_done, main_sequence])
     
     return root
 
@@ -123,6 +145,9 @@ def main():
     # Wrap in py_trees_ros
     tree = py_trees_ros.trees.BehaviourTree(root=root, unicode_tree_debug=True)
     
+    # Add a visitor for better logging (it will print the tree state every tick)
+    tree.visitors.append(py_trees.visitors.DisplaySnapshotVisitor())
+    
     try:
         # 15 seconds timeout for action servers
         tree.setup(node_name="task_orchestrator_engine", timeout=15.0)
@@ -132,11 +157,15 @@ def main():
         rclpy.try_shutdown()
         sys.exit(1)
 
+    # Initialize Blackboard variable
+    blackboard = py_trees.blackboard.Client(name="Main_Engine")
+    blackboard.register_key(key="mission_completed", access=py_trees.common.Access.WRITE)
+    blackboard.mission_completed = False
+
     print("\n--- Dynamic Orchestrator Initialized ---")
-    print(py_trees.display.unicode_tree(root=tree.root, show_status=True))
     
     try:
-        tree.tick_tock(period_ms=500)
+        tree.tick_tock(period_ms=1000) # Throttled to 1s for cleaner logging
         rclpy.spin(tree.node)
     except KeyboardInterrupt:
         pass
