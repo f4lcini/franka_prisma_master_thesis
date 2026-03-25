@@ -1,0 +1,127 @@
+# ARCHITETTURA TECNICA OMNICOMPRENSIVA: ECOSISTEMA FRANKA BIMANUALE BT-MTC
+
+QUESTO DOCUMENTO RAPPRESENTA IL MANUALE TECNICO DEFINITIVO CHE INTEGRA IL RAGIONAMENTO LOGICO, L'ORCHESTRAZIONE DELLE MISSIONI E LA STRUTTURA DEI PACCHETTI DEL WORKSPACE.
+
+---
+
+1. PANORAMICA DETTAGLIATA DEI PACCHETTI CUSTOM (L'ECOSISTEMA)
+IL SISTEMA E DIVISO IN MODULI FUNZIONALI PER GARANTIRE SCALABILITA E MANUTENIBILITÀ.
+
+A. FR3_APPLICATION (STRATO DI VISIONE):
+- Ruolo: Percezione e localizzazione 3D.
+- Componente Core: 'object_localization_node.py'.
+- Pipeline: Riceve ROI (Region of Interest) da YOLO, elabora la nuvola di punti (PointCloud2), esegue la deproiezione 3D e calcola l'orientamento 
+PCA (Principal Component Analysis).
+- Output: Pubblica 'PoseStamped' nel TF Tree sincronizzato col frame 'world'.
+
+B. FR3_MTC_EXECUTOR (MOTORE DI PIANIFICAZIONE C++):
+- Ruolo: Calcolo cinematico e gestione traiettorie tramite MoveIt Task Constructor.
+- Componente Core: 'mtc_action_servers_node.cpp'.
+- Funzionalità: Implementa il Server bimanuale. Utilizza una 'TaskFactory' modulare per generare i task. Supporta la modalità "Pose-Only" per 
+bypassare la necessità di oggetti collisionabili modellati nella scena simulata.
+
+C. FRANKA_TASK_ORCHESTRATOR (L'INTELLIGENZA CENTRALE):
+- Ruolo: Orchestrazione missioni e ragionamento di alto livello.
+- Componente Core: 'main_engine.py' (Behavior Tree).
+- Funzionalità: Utilizza 'py_trees' per gestire la logica. Include il 'VlmActionClient' che comunica con Gemini per trasformare prompt naturali in piani d'azione.
+
+D. FRANKA_CUSTOM_INTERFACES (IL LINGUAGGIO COMUNE):
+- Ruolo: Definizione di tutte le interfacce ROS 2 del progetto.
+- Contenuto: Actions (MtcPickObject, MtcPlaceObject, MtcMoveHome, VlmQuery), Services e messaggi custom (.msg). Garantisce che i nodi Python e C++ parlino lo stesso linguaggio.
+
+E. FRANKA_MANIPULATION_ENV (AMBIENTE E CONFIGURAZIONE):
+- Ruolo: Asset di simulazione e parametri di cella.
+- Contenuto: Modelli Ignition-Gazebo, file World (.sdf) e l'SRDF custom ('bimanual_sim_srdf.xacro') necessario per mappare correttamente i giunti bimanuali ('_fr3_').
+
+F. IDRA_FRANKA_LAUNCH (STARTUP DI SISTEMA):
+- Ruolo: Entry point del software.
+- Funzionalità: Contiene i launch file principali che attivano simultaneamente Gazebo, MoveIt2, i server MTC e il Behavior Tree Engine coordinando i parametri di setup.
+
+G. FRANKA_ROS2_MULTIMANUAL:
+- Ruolo: Interfacce hardware e controllo bimanuale.
+- Contenuto: 'franka_mm_control' e 'franka_mm_hardware_interface' per la gestione a basso livello dei bracci e dei gripper.
+
+---
+
+2. ISTRUZIONE VLM E PROMPT ENGINEERING (IL CERVELLO COGNITIVO)
+L'IA (GEMINI) VIENE ISTRUITA TRAMITE PROMPT RIGIDI E SCHEMI DATI STRUTTURATI.
+
+A. SYSTEM PROMPT (REGOLE DI COMPORTAMENTO):
+- Ruolo: Definisce l'identità del robot e le regole di sicurezza aerea.
+- Regola Critica 1: Ogni macro-task deve terminare rigorosamente con un 'MOVE_HOME'.
+- Regola Critica 2: Dopo ogni 'PLACE' (specialmente in zone di condivisione), il braccio deve tornare a 'HOME' per evitare collisioni col secondo braccio.
+- Analisi Visiva: L'IA deve analizzare l'immagine della camera per determinare la raggiungibilità spaziale.
+
+B. SCHEMA DATI (PYDANTIC - SKILLS REPERTOIRE):
+- File: 'src/fr3_application/fr3_application/skills_repertoire.py'.
+- Vincoli Imposti:
+    * 'PICK' deve essere preceduto da 'FIND_OBJECT'.
+    * 'PLACE' deve riferirsi allo stesso braccio che ha eseguito il 'PICK'.
+    * 'FIND_OBJECT' deve includere il colore per evitare ambiguità.
+    * 'TaskPlan' richiede un campo 'reasoning' dove l'IA deve giustificare la scelta del braccio singolo o del bimanual handover.
+
+C. ANALISI DELLE CRITICITÀ (OVER-PROMPTING):
+- Indirizzamento Eccessivo: L'obbligo del 'MOVE_HOME' continuo limita la fluidità del movimento ("naturalness"). 
+Il robot appare rigido e meno efficiente temporalmente (movimenti extra).
+- Vantaggio: Questa "iper-direzione" garantisce sicurezza deterministica in un ambiente bimanuale complesso dove 
+il calcolo delle collisioni aeree in tempo reale e computazionalmente oneroso.
+- Rigidità Percezione: L'obbligo di 'FIND_OBJECT' pre-azione ignora la persistenza temporale dell'oggetto 
+(se e gia stato visto, viene comunque ricreata la ricerca), aggiungendo latenza.
+
+---
+
+3. GESTIONE DELLA CONCORRENZA BIMANUALE (MULTIPLE MOVEIT GROUPS)
+IL SISTEMA NON UTILIZZA DUE ISTANZE DI MOVEIT, MA UN'UNICA ISTANZA CHE GESTISCE DUE GRUPPI IN PARALLELO.
+
+- NODO MOVE_GROUP: Esiste un unico nodo 'move_group' che carica l'intero URDF (entrambi i bracci) e l'SRDF bimanuale.
+- PLANNING GROUPS: MoveIt vede due gruppi indipendenti ('franka1_arm' e 'franka2_arm') e un gruppo combinato ('bimanual').
+- MULTI-THREADING NEL SERVER MTC: Il server C++ esegue ogni richiesta di Action in un thread separato (std::thread).
+- ISOLAMENTO DEI CONTROLLER: Ogni braccio e collegato a un controller hardware/simulato distinto, permettendo movimenti simultanei senza conflitti.
+
+---
+
+4. MECCANISMO DI REASONING E COMPOSIZIONE MISSIONI (VLM -> BT)
+IL RAGIONAMENTO TRASFORMA INPUT NATURALI IN PIANI ESECUTIVI DINAMICI.
+
+A. GENERAZIONE DEL PIANO (GEMINI / VLM):
+- Input: Stringa naturale (es. "Put the red cube in the box").
+- VLM Server: Elabora l'input e restituisce un JSON strutturato con una lista di azioni ('sequence').
+- Blackboard: Il piano viene salvato come 'vlm_plan' nella memoria condivisa del BT.
+
+B. ESECUZIONE ITERATIVA (ITERATOR + DISPATCHER + POPPER):
+- Tick Rate: 10 Hz.
+- Fasi del Tick Loop:
+    1. DynamicActionIterator: Estrae l'azione corrente e popola la Blackboard.
+    2. Is_SKILL_Check: Nodo di condizione per attivare la skill corretta.
+    3. Skill_Dispatcher: Selettore verso il nodo ActionClient specifico.
+    4. PlanPopper: Rimuove l'azione completata.
+
+---
+
+5. IL REPERTORIO DELLE SKILL E REPERTORIO MTC (C++)
+- REGISTRO SKILL (PYTHON): Dizionario 'available_skills' in 'main_engine.py'.
+- TASK COMPOSITION (C++): Ogni skill corrisponde a un metodo della 'TaskFactory'. Scompone il goal in stadi MTC atomici (Approach, Connect, MoveTo, CloseHand, Lift).
+- VANTAGGIO: MTC pianifica l'intera sequenza come un unico task. Se uno stadio fallisce, il robot non inizia nemmeno il movimento.
+
+---
+
+6. GESTIONE BLACKBOARD E ABORT
+- BLACKBOARD: Repository thread-safe globale. Disaccoppia visione e azione.
+- RECUPERO ERRORI (RECOVERY GUARD): Se un nodo fallisce, la 'Execution_Recovery_Guard' scarta il piano e avvia la sequenza 'Abort_Mission_Sequence'.
+- CANCELLAZIONE: Il server MTC C++ interrompe istantaneamente il calcolo o l'esecuzione alla ricezione del segnale 'Cancel'.
+
+---
+
+7. INTEGRAZIONE HARDWARE E SINCRONIZZAZIONE GIUNTI
+- PROBLEMA: Setup bimanuale con nomi giunti prefissati.
+- SOLUZIONE: SRDF Custom ('bimanual_sim_srdf.xacro'). Allineati i nomi URDF/SRDF con il suffisso '_fr3_'.
+
+---
+
+8. BLOCCHI TECNICI E PROBLEMI DEL PLANNER (STATO ATTUALE)
+- ERRORE IDENTIFICATO: 'Time between points 0 and 1 is not strictly increasing'.
+- ANALISI TECNICA: Il planner genera traiettorie con timestamp duplicati o nulli al punto di avvio. I controller Ignition-Gazebo rifiutano il Goal.
+- POSSIBILI SOLUZIONI: TOPP-RA, inserimento micro-dwell times (0.05s) iniziali, riduzione Velocity Scaling.
+
+---
+FINE DOCUMENTAZIONE TECNICA OMNICOMPRENSIVA - SESSIONE 25/03/2026

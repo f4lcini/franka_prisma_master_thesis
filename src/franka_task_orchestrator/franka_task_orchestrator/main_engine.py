@@ -115,8 +115,32 @@ def create_tree(task_description="Default Task"):
     
     execution_step.add_children([plan_not_empty, iterator, dispatcher, popper])
     
+    # --- RECOVERY GUARD (UNIVERSAL FALLBACK) ---
+    # This selector acts as a safety net. If ANY skill in the execution_loop 
+    # returns FAILURE (e.g. YOLO can't find object), the loop fails, and 
+    # control falls to the second child (Abort_Mission_Sequence).
+    recovery_guard = py_trees.composites.Selector(name="Execution_Recovery_Guard", memory=False)
+    
+    abort_sequence = py_trees.composites.Sequence(name="Abort_Mission_Sequence", memory=True)
+    
+    # If we fall back here, we mark mission completed=True so the Root Guard doesn't endlessly restart Gemini
+    mark_failed_stop_loop = py_trees.behaviours.SetBlackboardVariable(
+        name="Mark_Mission_Failed_Stop_VLM",
+        variable_name="mission_completed",
+        variable_value=True, 
+        overwrite=True
+    )
+    
+    # EMERGENZA FISICA: Comando il braccio che ha fallito (ancora in blackboard active_action["arm"]) di tornare immediatamente a Home
+    emergency_move_home = MoveHomeClient(name="Emergency_Move_Home")
+    
+    abort_sequence.add_children([emergency_move_home, mark_failed_stop_loop])
+    
+    # The guard first tries the normal loop, if it breaks/fails, it runs the abort sequence
+    recovery_guard.add_children([execution_loop, abort_sequence])
+    
     # D. Finalize Mission
-    # This node sets a flag on the blackboard to signal completion
+    # This node sets a flag on the blackboard to signal normal completion
     mark_done = py_trees.behaviours.SetBlackboardVariable(
         name="Mark_Mission_Done",
         variable_name="mission_completed",
@@ -124,7 +148,7 @@ def create_tree(task_description="Default Task"):
         overwrite=True
     )
 
-    main_sequence.add_children([vlm_planner, execution_loop, mark_done])
+    main_sequence.add_children([vlm_planner, recovery_guard, mark_done])
     
     root.add_children([mission_done, main_sequence])
     
@@ -143,9 +167,10 @@ def main():
     root = create_tree(task_description=parsed_args.task)
     
     # Wrap in py_trees_ros
-    tree = py_trees_ros.trees.BehaviourTree(root=root, unicode_tree_debug=True)
+    tree = py_trees_ros.trees.BehaviourTree(root=root, unicode_tree_debug=False)
     
-    # Add a visitor for better logging (it will print the tree state every tick)
+    # We disable the loud ASCII terminal printouts to keep the console clean.
+    # To view the tree dynamically, use the ROS 2 py-tree-viewer GUI on the side.
     tree.visitors.append(py_trees.visitors.DisplaySnapshotVisitor())
     
     try:

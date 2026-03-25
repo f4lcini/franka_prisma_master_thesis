@@ -32,10 +32,12 @@ class PickSkill(BaseModel):
     )
 
 class PlaceSkill(BaseModel):
-    """Releases the currently held object at a specified target location."""
+    """Releases the currently held object at a specified target location.
+    WARNING: If the target_location is a physical object (e.g., 'blue box', 'tray'), this action 
+    MUST be immediately preceded by a FIND_OBJECT action for that specific container."""
     action: Literal["PLACE"] = "PLACE"
     target_location: str = Field(
-        description="The name of the container (e.g., 'blue box') or area (e.g., 'shared_workspace', 'table_corner') where the object should be released."
+        description="The name of the container (e.g., 'blue box') or static area (e.g., 'shared_workspace', 'home') where the object should be released."
     )
     arm: ArmSelection = Field(
         description="Which arm is releasing the object. THIS MUST BE THE SAME ARM that performed the corresponding PICK action."
@@ -63,10 +65,11 @@ class TaskPlan(BaseModel):
     """The sequential action plan to complete the user request in a Dual-Arm setup."""
     reasoning: str = Field(
         description="Provide a step-by-step logical explanation for the chosen plan. "
-                    "DUAL-ARM RULES: If an object needs to be moved to an area out of reach from the arm currently closest to the object, "
-                    "you MUST plan an indirect transfer sequence: "
-                    "1) PICK with the first arm, 2) PLACE in the 'shared_workspace', 3) MOVE_HOME the first arm to make room, "
-                    "4) FIND_OBJECT on the newly moved object, 5) PICK with the second arm, 6) PLACE at the final destination."
+                    "Evaluate spatial reachability based on the starting object and final destination. "
+                    "If a single arm can reach both locations comfortably, explicitly state this and plan a direct single-arm PICK and PLACE sequence. "
+                    "If they are out of the kinematic reach of a single arm, explicitly reason that a bimanual handover is required, "
+                    "and ONLY THEN plan an indirect transfer sequence (e.g., Arm 1 Picks and Places in the 'shared_workspace', "
+                    "Arm 1 Moves Home, Arm 2 Finds the new object, Arm 2 Picks and Places at destination, Arm 2 Moves Home)."
     )
     sequence: List[RobotSkill] = Field(
         description="The ordered list of robotic actions to strictly execute. Do not invent new actions."

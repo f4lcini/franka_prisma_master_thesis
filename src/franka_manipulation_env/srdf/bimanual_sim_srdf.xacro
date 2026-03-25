@@ -24,6 +24,26 @@
     <chain base_link="franka1_fr3_link0" tip_link="franka1_fr3_hand_tcp" />
   </group>
 
+  <group_state name="ready" group="franka1_arm">
+    <joint name="franka1_fr3_joint1" value="0" />
+    <joint name="franka1_fr3_joint2" value="${-pi/4}" />
+    <joint name="franka1_fr3_joint3" value="0" />
+    <joint name="franka1_fr3_joint4" value="${-3*pi/4}" />
+    <joint name="franka1_fr3_joint5" value="0" />
+    <joint name="franka1_fr3_joint6" value="${pi/2}" />
+    <joint name="franka1_fr3_joint7" value="${pi/4}" />
+  </group_state>
+
+  <group_state name="extended" group="franka1_arm">
+    <joint name="franka1_fr3_joint1" value="0" />
+    <joint name="franka1_fr3_joint2" value="0" />
+    <joint name="franka1_fr3_joint3" value="0" />
+    <joint name="franka1_fr3_joint4" value="-0.1" />
+    <joint name="franka1_fr3_joint5" value="0" />
+    <joint name="franka1_fr3_joint6" value="${pi/2}" />
+    <joint name="franka1_fr3_joint7" value="${pi/4}" />
+  </group_state>
+
   <group_state name="open" group="franka1_hand">
     <joint name="franka1_fr3_finger_joint1" value="0.035" />
     <joint name="franka1_fr3_finger_joint2" value="0.035" />
@@ -54,6 +74,26 @@
   <group name="franka2_manipulator">
     <chain base_link="franka2_fr3_link0" tip_link="franka2_fr3_hand_tcp" />
   </group>
+
+  <group_state name="ready" group="franka2_arm">
+    <joint name="franka2_fr3_joint1" value="0" />
+    <joint name="franka2_fr3_joint2" value="${-pi/4}" />
+    <joint name="franka2_fr3_joint3" value="0" />
+    <joint name="franka2_fr3_joint4" value="${-3*pi/4}" />
+    <joint name="franka2_fr3_joint5" value="0" />
+    <joint name="franka2_fr3_joint6" value="${pi/2}" />
+    <joint name="franka2_fr3_joint7" value="${pi/4}" />
+  </group_state>
+
+  <group_state name="extended" group="franka2_arm">
+    <joint name="franka2_fr3_joint1" value="0" />
+    <joint name="franka2_fr3_joint2" value="0" />
+    <joint name="franka2_fr3_joint3" value="0" />
+    <joint name="franka2_fr3_joint4" value="-0.1" />
+    <joint name="franka2_fr3_joint5" value="0" />
+    <joint name="franka2_fr3_joint6" value="${pi/2}" />
+    <joint name="franka2_fr3_joint7" value="${pi/4}" />
+  </group_state>
 
   <group name="bimanual_manipulator">
     <chain base_link="franka1_fr3_link0" tip_link="franka1_fr3_hand_tcp" />

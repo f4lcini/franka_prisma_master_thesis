@@ -45,13 +45,43 @@ class ObjectLocalizationNode(Node):
     def __init__(self):
         super().__init__('object_localization_node')
         self.get_logger().info('Object Localization Node Initializing...')
-        
+
         # ---- Core ----
         self.cv_bridge = CvBridge()
         self.latest_image = None
         self.latest_image_time = None
         self.latest_depth = None
         self.camera_intrinsics = None
+
+        # ---- Camera Extrinsics (TF-Free world-frame output) -------------------------
+        # These parameters MUST match the camera <pose> in bimanual_custom.world.
+        # They are declared as ROS parameters so they can be overridden at launch time
+        # without modifying this file (e.g. ros2 run ... --ros-args -p camera_x:=0.7).
+        #
+        # SDF pose: <pose>0.6 1.0 1.0  roll=0  pitch=0.785  yaw=-1.57</pose>
+        # The SDF RPY uses extrinsic XYZ convention (roll around world X, then pitch
+        # around world Y, then yaw around world Z).
+        #
+        # Gazebo IGN RGBD sensor: the sensor frame (camera/link/rgb_camera) is
+        # rotated from the body link by Rx(-pi/2) Rz(-pi/2), converting the body
+        # convention (X=right, Y=up, Z=back) to ROS optical
+        # (X=right, Y=down, Z=into scene).
+        #
+        # R_optical_to_world = R_body_to_world @ R_body_to_optical.T
+        # P_world = R_optical_to_world @ P_optical + cam_pos
+        # -------------------------------------------------------------------------------
+        self.declare_parameter('camera_x',     0.6)
+        self.declare_parameter('camera_y',     1.0)
+        self.declare_parameter('camera_z',     1.0)
+        self.declare_parameter('camera_roll',  0.0)
+        self.declare_parameter('camera_pitch', 0.785)   # pi/4 -> 45 deg tilt down
+        self.declare_parameter('camera_yaw',  -1.57)    # -pi/2 -> rotated 90 deg CW
+
+        self._cam_pos, self._R_optical_to_world = self._build_camera_transform()
+        self.get_logger().info(
+            f'Camera TF-Free: pos={self._cam_pos.tolist()}, '
+            f'R_opt_to_world=\n{np.round(self._R_optical_to_world, 4)}'
+        )
 
         # ---- YOLO ----
         if YOLO is None:
@@ -60,18 +90,18 @@ class ObjectLocalizationNode(Node):
         else:
             self.model = YOLO('yolov8n.pt')
             self.get_logger().info('YOLOv8n loaded successfully.')
-        
-        # ---- QoS (Best Effort to match RealSense) ----
+
+        # ---- QoS (Reliable to match Gazebo's ros_gz_bridge) ----
         qos = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
+            reliability=ReliabilityPolicy.RELIABLE,
             history=HistoryPolicy.KEEP_LAST,
             depth=10
         )
-        
+
         # ---- Callback Groups ----
         self.sensor_cb_group = ReentrantCallbackGroup()
         self.action_cb_group = ReentrantCallbackGroup()
-        
+
         # ---- Subscribers ----
         self.create_subscription(
             Image, '/camera/image_raw',
@@ -88,7 +118,7 @@ class ObjectLocalizationNode(Node):
             self.camera_info_callback, qos,
             callback_group=self.sensor_cb_group
         )
-        
+
         # ---- Action Server ----
         self.detect_object_server = ActionServer(
             self, DetectObject, 'detect_object',
@@ -97,8 +127,40 @@ class ObjectLocalizationNode(Node):
             cancel_callback=self.cancel_callback,
             callback_group=self.action_cb_group
         )
-        
+
         self.get_logger().info('Node ready. Waiting for sensor data...')
+
+    # ===================== CAMERA TRANSFORM (TF-FREE) =====================
+
+    def _build_camera_transform(self):
+        """Build the optical-frame -> world rotation matrix from SDF parameters.
+
+        Returns
+        -------
+        cam_pos : np.ndarray shape (3,)
+            Camera position in world frame.
+        R_opt_to_world : np.ndarray shape (3,3)
+            Rotation matrix: P_world_rel = R_opt_to_world @ P_optical
+        """
+        cam_pos = np.array([
+            self.get_parameter('camera_x').value,
+            self.get_parameter('camera_y').value,
+            self.get_parameter('camera_z').value,
+        ])
+        roll  = self.get_parameter('camera_roll').value
+        pitch = self.get_parameter('camera_pitch').value
+        yaw   = self.get_parameter('camera_yaw').value
+
+        # Body -> world  (extrinsic RPY: Rx(roll) * Ry(pitch) * Rz(yaw) applied in world axes)
+        R_body_to_world = Rotation.from_euler('xyz', [roll, pitch, yaw]).as_matrix()
+
+        # Body -> optical  (intrinsic xz: Rx(-pi/2) then Rz(-pi/2))
+        # Equivalently in extrinsic form: Rz(-pi/2) @ Rx(-pi/2)
+        R_body_to_optical = Rotation.from_euler('xz', [-np.pi / 2, -np.pi / 2]).as_matrix()
+
+        # optical -> world
+        R_opt_to_world = R_body_to_world @ R_body_to_optical.T
+        return cam_pos, R_opt_to_world
 
     # ===================== SENSOR CALLBACKS =====================
 
@@ -128,12 +190,13 @@ class ObjectLocalizationNode(Node):
         cx, cy = self.camera_intrinsics['cx'], self.camera_intrinsics['cy']
         
         pts = []
+        is_metric = depth_image.dtype in (np.float32, np.float64)
         for vp in range(y1, y2):
             for up in range(x1, x2):
                 if 0 <= vp < depth_image.shape[0] and 0 <= up < depth_image.shape[1]:
                     d = float(depth_image[vp, up])
-                    if d > 0.0 and not np.isnan(d):
-                        z = d / 1000.0
+                    if d > 0.001 and not np.isnan(d):
+                        z = d if is_metric else d / 1000.0
                         pts.append([(up - cx) * z / fx, (vp - cy) * z / fy, z])
         
         if len(pts) < 10:
@@ -267,8 +330,15 @@ class ObjectLocalizationNode(Node):
             f'shape:{depth_image.shape}'
         )
         
-        if depth_value <= 0.0 or np.isnan(depth_value):
-            self.get_logger().warn('Center depth invalid, searching neighborhood...')
+        # Detect encoding: Gazebo IGN outputs 32FC1 (float32, in meters).
+        # Real RealSense cameras output 16UC1 (uint16, in mm).
+        is_metric = self.latest_depth.encoding in ('32FC1', '64FC1') or depth_image.dtype in (np.float32, np.float64)
+        
+        # Validity threshold adapts to encoding
+        invalid_threshold = 0.001 if is_metric else 1.0  # <1mm in meters, or <1 raw unit
+        
+        if depth_value <= invalid_threshold or np.isnan(depth_value):
+            self.get_logger().warn(f'Center depth invalid ({depth_value}, is_metric={is_metric}), searching neighborhood...')
             depth_value = self._search_valid_depth(depth_image, u, v, radius=15)
             if depth_value is None:
                 self.get_logger().error('No valid depth in neighborhood.')
@@ -277,37 +347,56 @@ class ObjectLocalizationNode(Node):
                 goal_handle.abort()
                 return result
         
-        # --- 3D Deprojection ---
-        Z = depth_value / 1000.0
+        # --- 3D Deprojection (optical frame) ---
+        Z_opt = depth_value if is_metric else depth_value / 1000.0
         fx, fy = self.camera_intrinsics['fx'], self.camera_intrinsics['fy']
         cx, cy = self.camera_intrinsics['cx'], self.camera_intrinsics['cy']
-        X = (u - cx) * Z / fx
-        Y = (v - cy) * Z / fy
-        self.get_logger().info(f'3D Position: X={X:.3f} Y={Y:.3f} Z={Z:.3f}m (depth={depth_value:.0f}mm)')
-        
-        # --- Orientation (PCA) ---
-        quat = self.estimate_orientation(depth_image, [x1, y1, x2, y2])
-        
-        # --- Debug Image (saved to disk for manual inspection) ---
-        self._save_debug_image(cv_image, [x1, y1, x2, y2], (X, Y, Z), quat, best_conf, object_name)
-        
-        # --- Result ---
+        X_opt = (u - cx) * Z_opt / fx
+        Y_opt = (v - cy) * Z_opt / fy
+        self.get_logger().info(
+            f'[CAM-FRAME]   X={X_opt:.3f}  Y={Y_opt:.3f}  Z={Z_opt:.3f} m'
+        )
+
+        # --- TF-Free transform to world frame ----------------------------------
+        # P_world = R_optical_to_world @ P_optical + cam_position
+        # No TF tree lookup needed: uses hardcoded (but ROS-parameter-overridable)
+        # camera extrinsics built from bimanual_custom.world SDF pose.
+        P_optical = np.array([X_opt, Y_opt, Z_opt])
+        P_world   = self._R_optical_to_world @ P_optical + self._cam_pos
+        X_w, Y_w, Z_w = P_world
+        self.get_logger().info(
+            f'[WORLD-FRAME] X={X_w:.3f}  Y={Y_w:.3f}  Z={Z_w:.3f} m'
+        )
+        # -----------------------------------------------------------------------
+
+        # --- Orientation (PCA, rotated to world frame) ---
+        q_opt = self.estimate_orientation(depth_image, [x1, y1, x2, y2])  # [x,y,z,w]
+        q_world = (
+            Rotation.from_matrix(self._R_optical_to_world)
+            * Rotation.from_quat(q_opt)
+        ).as_quat()  # [x,y,z,w]
+
+        # --- Debug Image ---
+        self._save_debug_image(cv_image, [x1, y1, x2, y2], (X_w, Y_w, Z_w), q_world.tolist(), best_conf, object_name)
+
+        # --- Result (always in 'world' frame — no downstream TF lookup needed) ---
         pose = PoseStamped()
-        pose.header.frame_id = self.latest_depth.header.frame_id
+        pose.header.frame_id = 'world'
         pose.header.stamp = self.latest_image_time
-        pose.pose.position.x = X
-        pose.pose.position.y = Y
-        pose.pose.position.z = Z
-        pose.pose.orientation.x = quat[0]
-        pose.pose.orientation.y = quat[1]
-        pose.pose.orientation.z = quat[2]
-        pose.pose.orientation.w = quat[3]
+        pose.pose.position.x = X_w
+        pose.pose.position.y = Y_w
+        pose.pose.position.z = Z_w
+        pose.pose.orientation.x = float(q_world[0])
+        pose.pose.orientation.y = float(q_world[1])
+        pose.pose.orientation.z = float(q_world[2])
+        pose.pose.orientation.w = float(q_world[3])
         
         result.success = True
         result.target_pose = pose
         result.message = (
-            f"Localized '{object_name}': Pos({X:.3f},{Y:.3f},{Z:.3f}) "
-            f"Quat({quat[0]:.3f},{quat[1]:.3f},{quat[2]:.3f},{quat[3]:.3f})"
+            f"Localized '{object_name}' [world]: "
+            f"Pos({X_w:.3f},{Y_w:.3f},{Z_w:.3f}) "
+            f"Quat({q_world[0]:.3f},{q_world[1]:.3f},{q_world[2]:.3f},{q_world[3]:.3f})"
         )
         self.get_logger().info(result.message)
         goal_handle.succeed()

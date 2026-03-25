@@ -1,0 +1,10 @@
+# Goal
+string arm # e.g. 'left_arm', 'right_arm'
+---
+# Result
+bool success
+string message
+---
+# Feedback
+string status
+float64 completion_percentage

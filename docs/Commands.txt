@@ -111,10 +111,14 @@ ros2 launch fr3_application perception.launch.py
 cd /mm_ws && source install/setup.bash
 ros2 launch fr3_application reasoning.launch.py
 
-# Terminal 4: Behavior Tree Visualizer (Live View)
+# Terminal 4: MTC Action Servers (The Muscles - C++ Node we created!)
+cd /mm_ws && source install/setup.bash
+ros2 launch fr3_mtc_executor mtc_executor.launch.py
+
+# Terminal 5: Behavior Tree Visualizer (Live View)
 /opt/ros/humble/bin/py-trees-tree-viewer
 
-# Terminal 5: Natural Language Command (User Input & BT Engine)
+# Terminal 6: Natural Language Command (User Input & BT Engine)
 cd /mm_ws && source install/setup.bash
 ros2 run franka_task_orchestrator main_engine "Put the red cube in the box"
 

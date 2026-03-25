@@ -1,0 +1,39 @@
+# Session Notes — 2026-03-25
+
+## Obiettivo della sessione
+Risolvere i crash del server MTC bimanuale (`bad_weak_ptr`) e i fallimenti di inizializzazione dei task (`InitStageException`). Refactoring del server da monolitico a modulare/factory-based.
+
+---
+
+## Fix applicati oggi
+
+### 1. `MtcMonolithicServer` — Crash all'avvio (`bad_weak_ptr`)
+**File:** `src/fr3_mtc_executor/src/mtc_action_servers_node.cpp`
+**Bug:** Doppia ereditarietà da `std::enable_shared_from_this`. `rclcpp::Node` lo eredita già, causandone il fallimento se aggiunto manualmente.
+**Fix:** Rimossa l'ereditarietà esplicita e spostata l'inizializzazione dei `MoveGroupInterface` in un metodo `initialize()` chiamato *dopo* la creazione dello `shared_ptr` del nodo.
+
+### 2. SRDF Joint Names — "Unknown joint pose: ready"
+**File:** `src/franka_manipulation_env/srdf/bimanual_sim_srdf.xacro`
+**Bug:** L'SRDF cercava giunti chiamati `franka1_joint1`, ma l'URDF (multimanual setup) li definisce come `franka1_fr3_joint1`.
+**Fix:** Aggiornato il file SRDF custom (senza toccare le librerie Franka originali) per includere il suffisso `_fr3_`. Le pose `ready` ed `extended` sono ora correttamente mappate sui giunti reali.
+
+### 3. MTC Initialization — "monitored stage undefined"
+**Bug:** La stage `GenerateGraspPose` richiede un collegamento esplicito all'inizio della sequenza temporale.
+**Fix (C++):** Aggiunto `generator->setMonitoredStage(current_state_ptr)` passando il puntatore alla stage `CurrentState`.
+
+### 4. Bypassing Collision World — "object not in scene"
+**Bug:** `GenerateGraspPose` (campionatore) falliva se `target_object` non era presente nel Collision World di MoveIt.
+**Fix:** Architettura **"Pose-Only"**. Sostituito `GenerateGraspPose` con una sequenza di `MoveTo` verso la posa target YOLO. Il sistema ora è puramente geometrico e più robusto per il pick-and-place senza modelli 3D predefiniti.
+
+---
+
+## Stato attuale e blocchi
+- **MTC Server:** Inizializzazione 100% riuscita. Pianificazione OMPL attiva.
+- **Gazebo Execution:** Alcune traiettorie vengono abortite dai controller Ign-Gazebo con l'errore `Time between points 0 and 1 is not strictly increasing`. Questo indica che il robot è già molto vicino alla posa di partenza o che TOPP (Time Optimal Path Parameterization) genera segmenti a 0-duration.
+- **Soluzione proposta:** Ridurre la velocità o aggiungere un offset minimo tra le pose per forzare traiettorie più "morbide".
+
+---
+
+## File modificati
+- `src/fr3_mtc_executor/src/mtc_action_servers_node.cpp` (Refactory modulare + fix monitored stage)
+- `src/franka_manipulation_env/srdf/bimanual_sim_srdf.xacro` (Aggiornamento pose ready/extended per bimanual)

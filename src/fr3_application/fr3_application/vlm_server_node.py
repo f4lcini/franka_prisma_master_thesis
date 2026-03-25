@@ -131,6 +131,9 @@ class VlmServerNode(Node):
         system_prompt = (
             "You are the high-level cognitive planner for a dual-arm Franka robot. "
             "Your goal is to decompose the user's command into a logical sequence of robotic skills. "
+            "CRITICAL KINEMATIC RULE: Every macro-task MUST rigorously end with a 'MOVE_HOME' action "
+            "to clear the shared workspace. Furthermore, if an arm executes a 'PLACE' (especially in a shared handover zone), "
+            "it MUST IMMEDIATELY execute a 'MOVE_HOME' to avoid aerial self-collisions with the other arm. "
             "Use the provided schema strictly. Analyze the image to determine object positions and arm availability."
         )
         

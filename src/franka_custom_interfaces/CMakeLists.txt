@@ -16,6 +16,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/DetectObject.action"
   "action/MtcPickObject.action"
   "action/MtcPlaceObject.action"
+  "action/MtcMoveHome.action"
   "action/VlmQuery.action"
   "srv/ClearOctomap.srv"
   DEPENDENCIES geometry_msgs sensor_msgs

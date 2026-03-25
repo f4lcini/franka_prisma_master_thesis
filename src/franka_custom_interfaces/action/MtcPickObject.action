@@ -1,4 +1,5 @@
 # Goal (From BT to Server MTC)
+string arm # e.g. 'left_arm', 'right_arm'
 geometry_msgs/PoseStamped target_pose
 float64 approach_distance  # pregrasp distance
 ---
