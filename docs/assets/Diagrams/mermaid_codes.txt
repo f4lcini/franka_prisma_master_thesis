@@ -1,0 +1,229 @@
+# Robotic Architecture - Mermaid Diagrams for Presentation (English Version)
+
+This collection contains all the final Mermaid diagrams for the project, translated into English.
+
+## 1. Behavior Tree and Blackboard Architecture
+Explains the hierarchy of the main BT and how data flows through the Blackboard.
+
+```mermaid
+graph TD
+    subgraph Blackboard
+        B1[mission_completed: bool]
+        B2[vlm_plan: list]
+        B3[active_action: string]
+        B4[target_pose: PoseStamped]
+        B5[active_arm: string]
+    end
+
+    Root{Root Guard: Selector} -->|Check| M_Done[Mission_Completed?]
+    Root -->|Execute| OS[VLM_Orchestrator: Sequence]
+
+    OS --> VLM[Gemini_Planner: VlmActionClient]
+    OS --> RG{Recovery_Guard: Selector}
+    OS --> MD[Mark_Mission_Done: SetBlackboard]
+
+    RG --> Loop((Plan_Execution_Loop: Repeat))
+    RG --> Abort[Abort_Mission_Sequence]
+
+    Loop --> ES[Execution_Step: Sequence]
+
+    ES --> NE[Plan_Not_Empty?]
+    ES --> Iter[Fetch_Next_Action: Iterator]
+    ES --> Disp{Skill_Dispatcher: Selector}
+    ES --> Pop[Complete_Step: PlanPopper]
+
+    Disp --> S1[FIND_OBJECT_Seq]
+    Disp --> S2[PICK_Seq]
+    Disp --> S3[PLACE_Seq]
+    Disp --> S4[MOVE_HOME_Seq]
+
+    Iter -.->|Write| B3
+    Iter -.->|Write| B5
+    VLM -.->|Write| B2
+    S1 -.->|Read/Write| B4
+    S2 -.->|Read| B4
+```
+
+## 2. Repertoire and Sequence Logic
+Focuses on the "Repertoire" (Python behaviors) and the Iterator-Dispatcher-Popper loop.
+
+```mermaid
+sequenceDiagram
+    participant P as Plan (Blackboard)
+    participant I as DynamicActionIterator
+    participant D as SkillDispatcher
+    participant S as Skills (Python Behaviors)
+    participant K as PlanPopper
+
+    Note over P: vlm_plan = [Action1, Action2, ...]
+    
+    rect rgb(200, 220, 240)
+        Note right of I: Loop for each action
+        I->>P: Read plan[0]
+        I->>P: Write active_action, target, arm...
+        I-->>D: SUCCESS
+        
+        D->>S: Execute Behavior (e.g. MtcPickActionClient)
+        S-->>D: SUCCESS / FAILURE
+        
+        alt SUCCESS
+            D-->>K: Proceed
+            K->>P: pop(0) - Remove completed action
+        else FAILURE
+            D-->>K: Skip Popper -> Loop Failure
+        end
+    end
+```
+
+## 3. BT <-> MTC Communication
+Illustrates the bridge between the high-level Python orchestrator and the C++ MTC executor via ROS 2 Actions.
+
+```mermaid
+graph LR
+    BT[Python: BT Node]
+    
+    subgraph FC [franka_custom_interfaces]
+        direction TB
+        G["<b>Goal:</b> arm, pose, dist"]
+        R["<b>Result:</b> success, msg"]
+    end
+
+    MTC[C++: MTC Server]
+
+    BT -->|Send| G
+    G --> MTC
+    MTC --> R
+    R -->|Return| BT
+
+    style FC fill:#fff3e0,stroke:#ff9800
+```
+
+## 4. MTC Status and Roadmap
+Overview of implemented modules and missing features.
+
+```mermaid
+mindmap
+  root((MTC Status))
+    Implemented
+      MtcPickObject Server
+        OMPL Planning
+        Spawn Collision Objects
+        Open Gripper
+      Action Interfaces
+        MtcMoveHome
+        MtcPickObject
+        MtcPlaceObject
+    Missing
+      MtcPlaceObject Server
+        Coordinated release logic
+      MtcMoveHome Server
+        Return to safe configuration
+      Real-time Integration
+        Synchronization with YOLO/TF
+        (Currently in TEST_MODE)
+      Dynamic Obstacle Management
+        Full scene mapping
+      Dual-Arm Coordination
+        Reciprocal collision prevention
+```
+
+## 5. System Components (Compact Overview)
+Optimized two-column version to save space in slides.
+
+```mermaid
+graph LR
+    subgraph Column_A [Intelligence and Logic]
+        R1[<b>Reasoning (VLM)</b><br/>Task Analysis]
+        D1[<b>Decision (BT)</b><br/>Orchestration]
+    end
+    
+    subgraph Column_B [Perception and Action]
+        V1[<b>Vision (YOLO)</b><br/>Localization]
+        P1[<b>Planning (MTC)</b><br/>Trajectories]
+        E1[<b>Execution (HW)</b><br/>Robot Control]
+    end
+
+    %% Visual Styling
+    style R1 fill:#fff9c4,stroke:#fbc02d
+    style V1 fill:#c8e6c9,stroke:#2e7d32
+    style D1 fill:#ffe0b2,stroke:#ef6c00
+    style P1 fill:#f8bbd0,stroke:#c2185b
+    style E1 fill:#ffccbc,stroke:#d84315
+```
+
+## 6. Action Plan Structure (Input to JSON)
+Shows how natural language input is transformed into the structured `TaskPlan` object.
+
+```mermaid
+graph TD
+    Input["<b>User Input (Natural Language)</b><br/>'Move the red cube into the blue box'"] --> VLM["<b>VLM (Gemini)</b><br/>Reasoning and Mapping"]
+    VLM --> JSON["<b>TaskPlan (JSON)</b>"]
+
+    subgraph "TaskPlan Structure"
+        JSON --> Reasoning["reasoning: string"]
+        JSON --> Sequence["sequence: List&lt;RobotSkill&gt;"]
+    end
+
+    subgraph "Skill Details"
+        Sequence --> S1["FIND_OBJECT<br/>(target_name)"]
+        Sequence --> S2["PICK<br/>(target_name, arm, grasp)"]
+        Sequence --> S3["PLACE<br/>(target_location, arm)"]
+    end
+```
+
+### Pydantic Class Details:
+```mermaid
+classDiagram
+    class TaskPlan {
+        +string reasoning
+        +List~RobotSkill~ sequence
+    }
+
+    class RobotSkill {
+        <<enumeration>>
+        FIND_OBJECT
+        PICK
+        PLACE
+        MOVE_HOME
+    }
+
+    class FindObject {
+        +string action: "FIND_OBJECT"
+        +string target_name
+    }
+
+    class Pick {
+        +string action: "PICK"
+        +string target_name
+        +string arm: "left_arm | right_arm"
+        +string grasp_type: "top | side"
+    }
+
+    class Place {
+        +string action: "PLACE"
+        +string target_location
+        +string arm: "left_arm | right_arm"
+    }
+
+    class MoveHome {
+        +string action: "MOVE_HOME"
+        +string arm: "left_arm | right_arm"
+    }
+
+    TaskPlan "1" *-- "many" RobotSkill : contains
+    RobotSkill <|-- FindObject : implements
+    RobotSkill <|-- Pick : implements
+    RobotSkill <|-- Place : implements
+    RobotSkill <|-- MoveHome : implements
+```
+
+## 7. Project Roadmap
+Timeline for simulation and hardware demonstration.
+
+```mermaid
+timeline
+    title Development Roadmap (March - April)
+    March 26 (Today) : BT-VLM Orchestration OK : MTC Server Development : Trajectory Error Analysis
+    March 31 : <b>Simulation Completed</b> : Timing Error Fix : Place/MoveHome Implementation : Vision Integration (TF/YOLO)
+    April 16 : <b>Hardware Demo (Real Arms)</b> : Spatial Calibration : Safety Testing : Final Bimanual Demo
+```
