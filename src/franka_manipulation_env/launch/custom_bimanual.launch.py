@@ -92,13 +92,13 @@ def robot_description_dependent_nodes_spawner(
     right_ip_str = context.perform_substitution(right_ip)
 
     franka_xacro_filepath = os.path.join(
-        get_package_share_directory('idra_franka_launch'), 'urdf', 'bimanual.urdf.xacro'
+        get_package_share_directory('franka_manipulation_env'), 'urdf', 'bimanual_custom.urdf.xacro'
     )
 
-    franka_controllers = PathJoinSubstitution(
-        [FindPackageShare('franka_mm_control'), 'config', 'basic_controllers.yaml']
+    franka_controllers = os.path.join(
+        get_package_share_directory('franka_manipulation_env'), 'config', 'basic_controllers_custom.yaml'
     )
-    franka_controllers_str =  franka_controllers.perform(context)
+    franka_controllers_str =  franka_controllers
 
     p = '\t' # Padding
     robot_description = xacro.process_file(
@@ -289,6 +289,29 @@ def generate_launch_description():
         condition=IfCondition(use_gazebo)
     )
 
+    gripper_sim_params = os.path.join(
+        get_package_share_directory('franka_manipulation_env'),
+        'config', 'gripper_sim_params.yaml'
+    )
+
+    gazebo_gripper_left = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['franka2_gripper', '--controller-manager', '/controller_manager',
+                   '--param-file', gripper_sim_params],
+        output='screen',
+        condition=IfCondition(use_gazebo)
+    )
+
+    gazebo_gripper_right = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['franka1_gripper', '--controller-manager', '/controller_manager',
+                   '--param-file', gripper_sim_params],
+        output='screen',
+        condition=IfCondition(use_gazebo)
+    )
+
     on_shutdown = RegisterEventHandler(
         OnShutdown(
             on_shutdown=[
@@ -358,6 +381,11 @@ def generate_launch_description():
             default_value='192.168.0.2'
         ),
 
+        DeclareLaunchArgument(
+            'ros2_control',
+            description='Is the robot being controlled with ros2_control?',
+            default_value='false'
+        ),
         robot_description_dependent_nodes_spawner_opaque_function,
         
         # WARN: Gripper works but introduces delays in controls
@@ -425,7 +453,11 @@ def generate_launch_description():
         RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=load_joint_state_broadcaster,
-                on_exit=[controller_left, controller_right, gazebo_controller_left, gazebo_controller_right],
+                on_exit=[
+                    controller_left, controller_right, 
+                    gazebo_controller_left, gazebo_controller_right,
+                    gazebo_gripper_left, gazebo_gripper_right
+                ],
             )
         ),
 

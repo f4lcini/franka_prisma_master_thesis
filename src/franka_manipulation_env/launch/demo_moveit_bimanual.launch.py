@@ -17,14 +17,16 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(os.path.join(pkg_env, 'launch', 'custom_bimanual.launch.py')),
         launch_arguments={
             'use_gazebo': use_gazebo,
-            'use_rviz': 'false'
+            'use_rviz': 'false',
         }.items(),
     )
 
     # 2. Include the bimanual MoveIt configuration
     moveit_bimanual_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_env, 'launch', 'moveit_bimanual.launch.py')),
-        launch_arguments={'use_rviz': use_rviz}.items(),
+        launch_arguments={
+            'use_rviz': use_rviz,
+        }.items(),
     )
 
     # 3. Delay MoveIt execution

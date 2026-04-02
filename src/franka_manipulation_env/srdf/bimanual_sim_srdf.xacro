@@ -221,6 +221,14 @@
   <disable_collisions link1="franka1_fr3_link1" link2="table" reason="Never" />
   <disable_collisions link1="franka2_fr3_link1" link2="table" reason="Never" />
 
+  <disable_collisions link1="franka1_fr3_hand" link2="table" reason="UserRequest" />
+  <disable_collisions link1="franka1_fr3_leftfinger" link2="table" reason="UserRequest" />
+  <disable_collisions link1="franka1_fr3_rightfinger" link2="table" reason="UserRequest" />
+
+  <disable_collisions link1="franka2_fr3_hand" link2="table" reason="UserRequest" />
+  <disable_collisions link1="franka2_fr3_leftfinger" link2="table" reason="UserRequest" />
+  <disable_collisions link1="franka2_fr3_rightfinger" link2="table" reason="UserRequest" />
+
   <disable_collisions link1="franka1_fr3_link0" link2="franka2_fr3_link0" reason="Adjacent" />
 
 </robot>

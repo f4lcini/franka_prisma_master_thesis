@@ -1,0 +1,46 @@
+===============================================================================
+SESSION LOG: 2026-04-01 / 2026-04-02
+OBJECTIVE: Bimanual Franka Pick & Place Optimization (Pilz & Python Orchestration)
+===============================================================================
+
+KEY ACHIEVEMENTS:
+-----------------
+1.  ARCHITECTURE SHIFT:
+    - Transitioned from C++ MTC (MoveIt Task Constructor) to a Python-native Action Server
+      (SimpleMoveItServer) for better transparency, debugging, and flexibility.
+    - Successfully advertised 'mtc_move_home', 'mtc_pick_object', and 'mtc_place_object' actions.
+
+2.  PILZ INDUSTRIAL MOTION PLANNER INTEGRATION:
+    - Enabled the 'pilz_industrial_motion_planner' pipeline in the bimanual launch.
+    - Configured PTP (Point-to-Point) for approach moves and LIN (Linear) for vertical pick/place segments.
+    - Created 'joint_limits_bimanual.yaml' to provide the mandatory acceleration and Cartesian 
+      limits required by the Pilz planner.
+
+3.  PRECISION GRASPING (THE GOLDEN RATIO):
+    - Optimized the grasp height to Z=0.240 (world coordinates).
+    - This height ensures the finger tips reach the cube center (Z=0.225) while keeping the 
+      hand body safe from colliding with the URDF table link (Z=0.200).
+    - Enforced a strict Top-Down orientation (Quaternion [1, 0, 0, 0]) for all moves.
+
+4.  SYSTEM ROBUSTNESS:
+    - Implemented global safety guards for velocity and acceleration scaling factors.
+    - Unified the 'MoveHome' skill to reset both grippers to full aperture (open).
+    - Expanded the 'Place' skill into a deterministic 4-step vertical sequence.
+
+CURRENT STATUS & ISSUES:
+------------------------
+- Individual skills (Home, Pick, Place) have been implemented and verified.
+- GAZEBO SYNC ISSUE: The simulation RTF is often very low (< 0.5), causing synchronization
+  lag between the gripper controllers and the arm trajectory execution.
+- REVERTED: The simulation-aware sleep (sim_sleep) was tested but reverted to standard 
+  time.sleep for better stability in the current environment.
+
+NEXT STEPS:
+-----------
+- Modular validation: Continue testing 'test_skills.py' for each arm independently.
+- Full cycle: Once individual skills are 100% reliable, verify the full bimanual pipeline 
+  through the Behavior Tree.
+
+===============================================================================
+END OF SESSION LOG
+===============================================================================

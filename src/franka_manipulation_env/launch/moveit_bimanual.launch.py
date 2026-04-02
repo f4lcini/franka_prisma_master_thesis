@@ -11,7 +11,14 @@ from launch_ros.parameter_descriptions import ParameterValue
 def load_yaml(package_name, file_path):
     package_path = get_package_share_directory(package_name)
     try:
-        with open(os.path.join(package_path, file_path), 'r') as file:
+        # First try the installation directory
+        full_path = os.path.join(package_path, file_path)
+        if not os.path.exists(full_path):
+            # Fallback to source directory if env variable or standard workspace structure exists
+            ws_root = os.getcwd() # Assumes mm_ws
+            full_path = os.path.join(ws_root, 'src', package_name, file_path)
+            
+        with open(full_path, 'r') as file:
             return yaml.safe_load(file)
     except Exception:
         return None
@@ -22,9 +29,13 @@ def generate_launch_description():
     
     use_rviz_arg = LaunchConfiguration('use_rviz', default='true')
 
-    # Bimanual Robot Description (URDF)
-    xacro_file_urdf = os.path.join(pkg_idra_share, 'urdf', 'bimanual.urdf.xacro')
-    robot_description_config = Command(['xacro', ' ', xacro_file_urdf, ' ', 'hand:=true', ' ', 'gazebo:=true', ' ', 'ros2_control:=false'])
+    # Bimanual Robot Description (URDF) - CUSTOM VERSION WITH SYMMETRIC GRIPPER
+    xacro_file_urdf = os.path.join(pkg_env_share, 'urdf', 'bimanual_custom.urdf.xacro')
+    
+    # CUSTOM CONTROLLER PATH
+    custom_controller_path = os.path.join(pkg_env_share, 'config', 'basic_controllers_custom.yaml')
+    
+    robot_description_config = Command(['xacro', ' ', xacro_file_urdf, ' ', 'hand:=true', ' ', 'gazebo:=true', ' ', 'ros2_control:=false', ' ', 'controller_path:=', custom_controller_path])
     robot_description = {"robot_description": ParameterValue(robot_description_config, value_type=str)}
 
     # Bimanual SRDF
@@ -48,9 +59,16 @@ def generate_launch_description():
         ompl_combined.update(ompl_override_yaml)
 
     planning_pipeline_parameters = {
-        "planning_pipelines": ["ompl"],
+        "planning_pipelines": ["ompl", "pilz_industrial_motion_planner"],
         "default_planning_pipeline": "ompl",
         "ompl": ompl_combined,
+        "pilz_industrial_motion_planner": {
+            "planning_plugin": "pilz_industrial_motion_planner/CommandPlanner",
+            "request_adapters": "", # No adapters for Pilz to avoid CHOMP interference
+            "start_state_max_bounds_error": 0.1,
+            "default_acceleration_scaling_factor": 0.1,
+            "default_velocity_scaling_factor": 0.1,
+        }
     }
 
     moveit_controller_parameters = {
@@ -61,20 +79,23 @@ def generate_launch_description():
 
     trajectory_execution_parameters = {
         "moveit_manage_controllers": True,
-        "trajectory_execution.allowed_execution_duration_scaling": 2.0,
-        "trajectory_execution.allowed_goal_duration_margin": 0.5,
-        "trajectory_execution.allowed_start_tolerance": 0.05,
+        "trajectory_execution.allowed_execution_duration_scaling": 10.0,
+        "trajectory_execution.allowed_goal_duration_margin": 5.0,
+        "trajectory_execution.allowed_start_tolerance": 0.1,
     }
 
     moveit_capabilities = {
         "capabilities": "move_group/ExecuteTaskSolutionCapability"
     }
 
+    joint_limits_yaml = load_yaml('franka_manipulation_env', 'config/joint_limits_bimanual.yaml')
+
     # Filter out None parameters
     valid_params = [p for p in [
         robot_description,
         robot_description_semantic,
         kinematics_yaml,
+        {"robot_description_planning": joint_limits_yaml} if joint_limits_yaml else None,
         moveit_capabilities,
         {"use_sim_time": True},
         trajectory_execution_parameters,
@@ -89,6 +110,17 @@ def generate_launch_description():
         namespace="",
         emulate_tty=True,
         parameters=valid_params,
+    )
+
+    # Gazebo Sim Robot spawner
+    gazebo_robot_spawner = Node(
+        package='ros_gz_sim',
+        executable='create',
+        output='screen',
+        arguments=['-file', PathJoinSubstitution([pkg_env_share, 'urdf', 'bimanual_custom.urdf.xacro']),
+                   '-name', 'idra_bimanual_setup',
+                   '-allow_renaming', 'true',
+                   '-x', '0.0', '-y', '0.0', '-z', '0.0'],
     )
 
     pkg_env = get_package_share_directory('franka_manipulation_env')

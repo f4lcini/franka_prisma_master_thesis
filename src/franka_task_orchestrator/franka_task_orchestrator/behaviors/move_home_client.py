@@ -33,9 +33,14 @@ class MoveHomeClient(py_trees.behaviour.Behaviour):
         self.send_goal_future = None
         self.get_result_future = None
         
-        target_arm = "any" # default
+        target_arm = "left_arm" # default fallback
         if hasattr(self.blackboard, "active_arm"):
             target_arm = self.blackboard.active_arm
+        
+        # Server only accepts 'left_arm' or 'right_arm'
+        if target_arm not in ("left_arm", "right_arm"):
+            self.logger.warning(f"[{self.name}] active_arm='{target_arm}' is not valid. Falling back to 'left_arm'.")
+            target_arm = "left_arm"
 
         goal_msg = MtcMoveHome.Goal()
         goal_msg.arm = target_arm

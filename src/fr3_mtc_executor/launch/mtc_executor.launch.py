@@ -2,6 +2,7 @@ import os
 import yaml
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from launch.actions import SetEnvironmentVariable
 from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
@@ -59,9 +60,9 @@ def generate_launch_description():
 
     trajectory_execution_parameters = {
         "moveit_manage_controllers": True,
-        "trajectory_execution.allowed_execution_duration_scaling": 2.0,
-        "trajectory_execution.allowed_goal_duration_margin": 0.5,
-        "trajectory_execution.allowed_start_tolerance": 0.05,
+        "trajectory_execution.allowed_execution_duration_scaling": 10.0,
+        "trajectory_execution.allowed_goal_duration_margin": 5.0,
+        "trajectory_execution.allowed_start_tolerance": 0.1,
     }
 
     # Joint Limits
@@ -79,21 +80,14 @@ def generate_launch_description():
     ] if p is not None]
 
     mtc_node = Node(
-        package="fr3_mtc_executor",
-        executable="mtc_action_servers_node",
-        name="mtc_monolithic_server",
+        package="franka_task_orchestrator",
+        executable="simple_moveit_server",
+        name="python_moveit_server",
         output="screen",
         parameters=valid_params
     )
 
     # ── Static Transform Publishers (RViz visualization only) ──────────────────
-    # These transforms are NO LONGER required for the localization pipeline.
-    # object_localization_node now computes world-frame poses internally using
-    # its own TF-free extrinsic math (camera_x/y/z/roll/pitch/yaw parameters).
-    #
-    # They are kept here ONLY to correctly display the camera frame in RViz.
-    # Remove them if you find they conflict with Gazebo bridge TF publishing.
-    #
     # Chain: world → camera/link (SDF body pose)
     #               → camera/link/rgb_camera (ROS optical rotation Rx(-π/2)Rz(-π/2))
     # ────────────────────────────────────────────────────────────────────────────
@@ -104,7 +98,7 @@ def generate_launch_description():
         executable='static_transform_publisher',
         name='camera_body_broadcaster',
         arguments=[
-            '--x', '0.6', '--y', '1.0', '--z', '1.0',
+            '--x', '0.6', '--y', '1.0', '--z', '1.3',
             '--roll', '0', '--pitch', '0.785', '--yaw', '-1.57',
             '--frame-id', 'world',
             '--child-frame-id', 'camera/link'
@@ -112,7 +106,6 @@ def generate_launch_description():
     )
 
     # 2) camera/link → camera/link/rgb_camera  (ROS optical frame rotation)
-    # Rx(-π/2) Rz(-π/2)  →  RPY = (-1.5708, 0, -1.5708)
     static_tf_optical = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
@@ -125,5 +118,9 @@ def generate_launch_description():
         ]
     )
 
-    return LaunchDescription([mtc_node, static_tf_body, static_tf_optical])
+    return LaunchDescription([
+        mtc_node, 
+        static_tf_body, 
+        static_tf_optical
+    ])
 

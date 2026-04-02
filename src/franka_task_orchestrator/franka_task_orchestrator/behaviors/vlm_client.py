@@ -97,8 +97,6 @@ class VlmActionClient(py_trees.behaviour.Behaviour):
 
         return py_trees.common.Status.FAILURE
 
-        return py_trees.common.Status.FAILURE
-
     def terminate(self, new_status):
         self.send_goal_future = None
         self.get_result_future = None

@@ -95,32 +95,32 @@ docker system prune -a --volumes      # WARNING: Cleans ALL unused cache, images
 
 
 # ------------------------------------------
-# 10. MODULAR BIMANUAL PIPELINE - SIMULATION (5 Terminals)
+# 10. MODULAR BIMANUAL PIPELINE - SIMULATION (3 Terminals)
 # ------------------------------------------
-# Note: Ensure every terminal is inside the container (/mm_ws)
+# Note: demo_moveit_bimanual is a wrapper that lancia Gazebo AND MoveGroup.
+# NON lanciare MoveGroup separatamente per evitare il doppio RViz.
 
-# Terminal 1: Simulation (Gazebo + MoveIt)
+# Terminal 1: Simulation (Gazebo + MoveGroup + RViz)
+# Aspetta ~12 secondi dopo l'avvio: MoveGroup parte in ritardo per dare tempo a Gazebo.
 cd /mm_ws && source install/setup.bash
 ros2 launch franka_manipulation_env demo_moveit_bimanual.launch.py use_gazebo:=true
 
-# Terminal 2: YOLO Perception (The Eye)
+# Terminal 2: Python MoveIt Server & Skills (The Muscles)
 cd /mm_ws && source install/setup.bash
-ros2 launch fr3_application perception.launch.py
+ros2 launch fr3_mtc_executor mtc_executor.launch.py ros2_control:=true
 
-# Terminal 3: VLM Reasoning (The Brain - Requires API Key)
+
+# Terminal 3: Test individual skills (Home, Pick, Place)
+# Questo bypassa VLM/YOLO e invia comandi diretti al server.
 cd /mm_ws && source install/setup.bash
-ros2 launch fr3_application reasoning.launch.py
+python3 src/fr3_mtc_executor/scripts/test_skills.py home left_arm
+python3 src/fr3_mtc_executor/scripts/test_skills.py pick left_arm
 
-# Terminal 4: MTC Action Servers (The Muscles - C++ Node we created!)
-cd /mm_ws && source install/setup.bash
-ros2 launch fr3_mtc_executor mtc_executor.launch.py
+# Terminal 4: (Opzionale) Behavior Tree Completo con VLM
+# T3: ros2 launch fr3_application perception.launch.py
+# T4: ros2 launch fr3_application reasoning.launch.py
+# T5: ros2 run franka_task_orchestrator main_engine "Pick the red cube"
 
-# Terminal 5: Behavior Tree Visualizer (Live View)
-/opt/ros/humble/bin/py-trees-tree-viewer
-
-# Terminal 6: Natural Language Command (User Input & BT Engine)
-cd /mm_ws && source install/setup.bash
-ros2 run franka_task_orchestrator main_engine "Put the red cube in the box"
 
 
 # ==========================================

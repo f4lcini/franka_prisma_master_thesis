@@ -10,10 +10,10 @@ from geometry_msgs.msg import PoseStamped
 
 # -----------------------------------------------------------------
 # TEST_MODE: bypass YOLO/blackboard and send a hardcoded world-frame
-# pose directly to the MTC server.  Set to False when TF is correct.
+# pose directly to the MTC server.
+# Controlled at runtime via ROS parameter 'test_mode' (default: False).
 # -----------------------------------------------------------------
-TEST_MODE = True
-TEST_POSE_WORLD = (1.1, 0.2, 0.225)   # red_cube position from bimanual_custom.world
+TEST_POSE_WORLD = (0.50, 0.00, 0.026)   # red_cube position (updated to match test_skills.py)
 
 class MtcPickActionClient(py_trees.behaviour.Behaviour):
     def __init__(self, name="Execute MTC Pick", action_name="/mtc_pick_object"):
@@ -37,6 +37,10 @@ class MtcPickActionClient(py_trees.behaviour.Behaviour):
             self.logger.error(f"[{self.name}] ROS 2 node not found in setup kwargs. Cannot create Action Client!")
             return False
 
+        # Declare test_mode parameter (can be set via launch file)
+        if not self.node.has_parameter('test_mode'):
+            self.node.declare_parameter('test_mode', False)
+
         self.action_client = ActionClient(self.node, MtcPickObject, self.action_name)
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self.node)
@@ -51,7 +55,9 @@ class MtcPickActionClient(py_trees.behaviour.Behaviour):
 
         target_arm = "left_arm"  # default
 
-        if TEST_MODE:
+        test_mode = self.node.get_parameter('test_mode').get_parameter_value().bool_value
+
+        if test_mode:
             # ── TEST MODE ───────────────────────────────────────────────
             # Bypass YOLO + TF pipeline. Send the red_cube world-frame pose
             # directly so we can validate MTC/IK independently.
@@ -59,9 +65,9 @@ class MtcPickActionClient(py_trees.behaviour.Behaviour):
             target_pose = PoseStamped()
             target_pose.header.frame_id = 'world'
             target_pose.header.stamp = self.node.get_clock().now().to_msg()
-            target_pose.pose.position.x = TEST_POSE_WORLD[0]
-            target_pose.pose.position.y = TEST_POSE_WORLD[1]
-            target_pose.pose.position.z = TEST_POSE_WORLD[2]
+            target_pose.pose.position.x = 1.10
+            target_pose.pose.position.y = 0.20
+            target_pose.pose.position.z = 0.225
             # Top-down orientation: gripper pointing down (180° around X)
             target_pose.pose.orientation.w = 0.0
             target_pose.pose.orientation.x = 1.0

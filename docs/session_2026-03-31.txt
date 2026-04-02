@@ -1,0 +1,237 @@
+================================================================================
+ SESSION RECAP — 31 Marzo 2026
+================================================================================
+
+OBIETTIVO DELLA SESSIONE
+------------------------
+Stabilizzare il pipeline bimanuale di pick-and-place eliminando deadlock e
+timeout, e migrare completamente dall'architettura C++ MTC a una Python-native.
+
+
+================================================================================
+ARCHITETTURA DEL SISTEMA (Overview)
+================================================================================
+
+Il sistema è composto da 5 terminali che devono girare in parallelo:
+
+  TERMINAL 1 — Simulazione (Gazebo + ROS2 Control + MoveGroup)
+    Comando: ros2 launch franka_manipulation_env custom_bimanual.launch.py use_gazebo:=true
+    Nodi avviati:
+      - robot_state_publisher
+      - gz_ros2_control (controller_manager)
+      - joint_state_broadcaster
+      - franka1_arm_controller, franka2_arm_controller  (JointTrajectoryController)
+      - franka1_gripper, franka2_gripper                (GripperActionController)
+      - ros_gz_bridge (camera)
+
+  TERMINAL 2 — MoveIt (move_group node + RViz)
+    Comando: ros2 launch franka_manipulation_env moveit_bimanual.launch.py
+    Nodi avviati:
+      - move_group (pubblica /move_action)
+      - rviz2_moveit
+
+  TERMINAL 3 — Esecutore MTC (Python MoveIt Server)
+    Comando: ros2 launch fr3_mtc_executor mtc_executor.launch.py
+    Nodi avviati:
+      - python_moveit_server (simple_moveit_server.py)
+      - camera static transform publishers
+
+  TERMINAL 4 — Perception (YOLO + Localizzazione)
+    Comando: ros2 run idra_perception object_localization_node
+
+  TERMINAL 5 — Brain (Behavior Tree)
+    Comando: ros2 run franka_task_orchestrator main_engine "Put the red cube in the box"
+
+FLUSSO DATI:
+  main_engine (BT)
+    → mtc_pick_object action → python_moveit_server
+      → /move_action (MoveGroup) → franka1_arm_controller → Gazebo
+      → /franka1_gripper/gripper_cmd → franka1_gripper controller → Gazebo
+
+
+================================================================================
+CAMBIAMENTI EFFETTUATI OGGI
+================================================================================
+
+1. ROLLBACK A GIT BASELINE
+   - Ripristinato lo stato al commit "Branch Principale" (27 marzo)
+   - Rimossi tutti i file non tracciati della sessione precedente
+
+2. ELIMINAZIONE DEL C++ MTC
+   - Eliminato: src/fr3_mtc_executor/src/mtc_action_servers_node.cpp
+   - Pulito: CMakeLists.txt (rimossi tutti i target e dependency C++)
+   - Pulito: package.xml (rimossi rclcpp, moveit_task_constructor, ecc.)
+
+3. CONFIGURAZIONE LAUNCH PYTHON (fr3_mtc_executor/launch/mtc_executor.launch.py)
+   - Rimpiazzato il nodo C++ con il server Python:
+       package: franka_task_orchestrator
+       executable: simple_moveit_server
+   - Aumentato trajectory_execution.allowed_execution_duration_scaling: 10.0
+   - Aumentato allowed_goal_duration_margin: 5.0
+   - RIMOSSO override CycloneDDS (era causa di incompatibilità DDS)
+
+4. CONFIGURAZIONE MOVEIT (moveit_bimanual.launch.py)
+   - Aumentato allowed_execution_duration_scaling: 10.0 (default era 2.0)
+   - Questo evita TIMED_OUT (-6) in Gazebo che è lento
+
+5. AGGIORNAMENTO setup.py (franka_task_orchestrator)
+   - Aggiunto entry point: 'simple_moveit_server = ...simple_moveit_server:main'
+
+6. REFACTORING simple_moveit_server.py
+   - Aggiunta separazione Callback Groups: _server_cb_group / _client_cb_group
+     (Prevenzione deadlock nested-action in rclpy Humble)
+   - super().__init__('simple_moveit_server') — ripristinato dopo regressione
+   - wait_for_server() spostato in __init__ (bloccante OK lì, non in async)
+   - Rimossi TUTTI asyncio.wait_for() — incompatibili con MultiThreadedExecutor
+   - Gripper: pattern threading.Event per timeout 1.5s (fire-and-continue)
+
+7. AGGIUNTA GRIPPER SPAWNER (custom_bimanual.launch.py)
+   - Aggiunti gazebo_gripper_left e gazebo_gripper_right
+   - Usano --param-file con gripper_sim_params.yaml
+
+8. NUOVO FILE: gripper_sim_params.yaml
+   - Path: src/franka_manipulation_env/config/gripper_sim_params.yaml
+   - Contiene parametri stall detection per GripperActionController in Gazebo
+
+9. RIMOZIONE CycloneDDS dal container Docker
+   - Rimossa riga 'export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' da ~/.bashrc
+
+10. TEST SUITE
+    - Creato: src/fr3_mtc_executor/scripts/test_skills.py
+    - Utilizzo: python3 test_skills.py [home|pick|place] [left_arm|right_arm]
+
+
+================================================================================
+STATO ATTUALE DEI BUG
+================================================================================
+
+BUG RISOLTI
+-----------
+[✓] Deadlock nested-action (rclpy): risolto con ReentrantCallbackGroup separati
+[✓] TIMED_OUT (-6) MoveIt: risolto aumentando duration_scaling a 10x
+[✓] "no running event loop": rimosso asyncio.wait_for incompatibile
+[✓] "StopIteration" (entry point): aggiunto simple_moveit_server in setup.py
+[✓] "AttributeError _Node__node": aggiunto super().__init__()
+[✓] Import NameError SetEnvironmentVariable: corretti import launch file
+[✓] CycloneDDS mismatch: rimosso da bashrc e launch file
+[✓] Gripper NOT READY (0 servers): aggiunti spawner in custom_bimanual.launch.py
+
+BUG APERTI (dove ci siamo fermati)
+-----------------------------------
+[!] GripperActionController in Gazebo non manda mai il risultato dell'azione.
+    Il goal viene ACCETTATO ma get_result_async() non ritorna mai.
+    
+    CAUSA PROBABILE:
+    - GripperActionController (position_controllers) in Gazebo non ha
+      un meccanismo di force/stall detection.
+    - Il controller muove il giunto ma non sa quando "ha finito" perché
+      in Gazebo non c'è feedback di forza reale.
+    
+    SOLUZIONE TEMPORANEA APPLICATA:
+    - threading.Event timeout 1.5s: manda il goal e continua dopo 1.5s
+    - Emette warning: "Gripper result timeout (simulation stall). Continuing..."
+    
+    SOLUZIONE DEFINITIVA (da implementare):
+    - Opzione A: usare direttamente JointTrajectory per il gripper
+      (topic /franka1_gripper/commands di tipo Float64MultiArray)
+    - Opzione B: configurare stall_velocity_threshold nel controller
+      (richiede che Gazebo pubblichi velocity state per i finger joint)
+    - Opzione C: usare un SimpleActionServer custom per il gripper
+
+[!] Braccio non si muove dopo il gripper timeout (non ancora verificato)
+    
+    STATO: La fix threading.Event è appena stata applicata. L'utente deve
+    riavviare l'executor e verificare se dopo il warning del gripper il
+    braccio esegue la Fase 1 (Approach Move).
+    
+    COSA ASPETTARSI nel log se funziona:
+      ⚠️ Gripper result timeout (simulation stall). Continuing anyway...
+      🛠️ Phase 1/3: Approach Move
+      📍 Requesting Cartesian Move for franka1_arm...
+      ⏳ Goal accepted! Planning/Moving in progress...
+    
+    SE NON SI VEDE Phase 1 nel log, il problema è a monte del gripper.
+
+
+================================================================================
+POSSIBILI PROBLEMI FUTURI
+================================================================================
+
+1. TIMING DELLA SIMULAZIONE
+   - Gazebo con 2 robot è CPU-intensive. Se la macchina è sotto carico,
+     MoveIt può andare in TIMED_OUT anche con scaling 10x.
+   - Monitor: htop durante il test, ridurre update_rate controller se necessario.
+
+2. NAMESPACE GRIPPER
+   - Il mapping "left_arm" → franka1_arm (non franka2!) è deliberato ma
+     controintuitivo. Verificare sempre con:
+       ros2 action list | grep gripper
+       ros2 action info /franka1_gripper/gripper_cmd
+
+3. ORIENTAMENTO TCP
+   - La posa di grasp usa orientation (1,0,0,0) che orienta il TCP verso il basso.
+   - In RViz verificare che franka1_fr3_hand_tcp sia effettivamente verso il basso.
+
+4. COORDINATE HARDCODED NEL TEST
+   - test_skills.py usa x=0.5, y=0.0, z=0.026 per il cubo rosso.
+   - Aggiornare queste coordinate se il cubo è spostato nella scena.
+
+5. RMW CONSISTENCY
+   - Nessun terminale deve avere RMW_IMPLEMENTATION configurato.
+   - Verificare con: echo $RMW_IMPLEMENTATION (deve essere vuoto)
+
+6. BUILD NECESSARI PRIMA DEL PROSSIMO TEST
+   - franka_manipulation_env: FATTO (gripper_sim_params.yaml installato)
+   - franka_task_orchestrator: NON NECESSARIO (symlink-install attivo)
+   - fr3_mtc_executor: NON NECESSARIO (solo file launch)
+
+
+================================================================================
+PROSSIMI PASSI
+================================================================================
+
+IMMEDIATI (prossima sessione):
+  1. Riavviare executor e verificare che dopo il gripper warning
+     il braccio esegua Phase 1 (Approach)
+  2. Se Phase 1 funziona, testare la sequenza completa pick
+  3. Se Phase 1 non parte, loggare cosa stampa il server e condividere
+
+MEDIO TERMINE:
+  4. Risolvere definitivamente il gripper (Opzione A: JointTrajectory diretto)
+  5. Testare test_skills.py home per verificare MoveHome
+  6. Integrare le skill testate con main_engine.py (Behavior Tree)
+
+LUNGO TERMINE:
+  7. Testare la sequenza completa "Put the red cube in the box"
+  8. Calibrare le coordinate del cubo con le uscite della percezione YOLO
+
+
+================================================================================
+FILE CHIAVE DA RICORDARE
+================================================================================
+
+  src/franka_task_orchestrator/franka_task_orchestrator/simple_moveit_server.py
+    → Server Python principale (Pick, Place, Home, Gripper)
+
+  src/fr3_mtc_executor/launch/mtc_executor.launch.py
+    → Launch del server Python (Terminal 3)
+
+  src/franka_manipulation_env/launch/moveit_bimanual.launch.py
+    → Parametri MoveGroup (scaling 10x) (Terminal 2)
+
+  src/franka_manipulation_env/launch/custom_bimanual.launch.py
+    → Simulazione Gazebo + Gripper Spawners (Terminal 1)
+
+  src/franka_manipulation_env/config/gripper_sim_params.yaml
+    → Override stall detection per i controller gripper in Gazebo
+
+  src/fr3_mtc_executor/scripts/test_skills.py
+    → Script test per ogni skill (home/pick/place) in modo isolato
+
+  src/franka_task_orchestrator/franka_task_orchestrator/main_engine.py
+    → Behavior Tree orchestrator (NON ancora integrato con le fix di oggi)
+
+  docs/Commands.txt
+    → Riferimento completo comandi per avviare i 5 terminali
+
+================================================================================

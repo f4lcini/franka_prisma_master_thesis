@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'main_engine = franka_task_orchestrator.main_engine:main',
+            'simple_moveit_server = franka_task_orchestrator.simple_moveit_server:main',
         ],
     },
 )

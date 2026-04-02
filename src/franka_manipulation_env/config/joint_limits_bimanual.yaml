@@ -1,0 +1,96 @@
+# Joint limits for Bimanual Setup (Franka 1 and Franka 2)
+# Required by Pilz Industrial Motion Planner for PTP and LIN motions
+
+joint_limits:
+  franka1_fr3_joint1:
+    has_velocity_limits: true
+    max_velocity: 2.62
+    has_acceleration_limits: true
+    max_acceleration: 5.0
+    has_jerk_limits: false
+  franka1_fr3_joint2:
+    has_velocity_limits: true
+    max_velocity: 2.62
+    has_acceleration_limits: true
+    max_acceleration: 5.0
+    has_jerk_limits: false
+  franka1_fr3_joint3:
+    has_velocity_limits: true
+    max_velocity: 2.62
+    has_acceleration_limits: true
+    max_acceleration: 5.0
+    has_jerk_limits: false
+  franka1_fr3_joint4:
+    has_velocity_limits: true
+    max_velocity: 2.62
+    has_acceleration_limits: true
+    max_acceleration: 5.0
+    has_jerk_limits: false
+  franka1_fr3_joint5:
+    has_velocity_limits: true
+    max_velocity: 5.26
+    has_acceleration_limits: true
+    max_acceleration: 10.0
+    has_jerk_limits: false
+  franka1_fr3_joint6:
+    has_velocity_limits: true
+    max_velocity: 4.18
+    has_acceleration_limits: true
+    max_acceleration: 10.0
+    has_jerk_limits: false
+  franka1_fr3_joint7:
+    has_velocity_limits: true
+    max_velocity: 5.26
+    has_acceleration_limits: true
+    max_acceleration: 10.0
+    has_jerk_limits: false
+
+  franka2_fr3_joint1:
+    has_velocity_limits: true
+    max_velocity: 2.62
+    has_acceleration_limits: true
+    max_acceleration: 5.0
+    has_jerk_limits: false
+  franka2_fr3_joint2:
+    has_velocity_limits: true
+    max_velocity: 2.62
+    has_acceleration_limits: true
+    max_acceleration: 5.0
+    has_jerk_limits: false
+  franka2_fr3_joint3:
+    has_velocity_limits: true
+    max_velocity: 2.62
+    has_acceleration_limits: true
+    max_acceleration: 5.0
+    has_jerk_limits: false
+  franka2_fr3_joint4:
+    has_velocity_limits: true
+    max_velocity: 2.62
+    has_acceleration_limits: true
+    max_acceleration: 5.0
+    has_jerk_limits: false
+  franka2_fr3_joint5:
+    has_velocity_limits: true
+    max_velocity: 5.26
+    has_acceleration_limits: true
+    max_acceleration: 10.0
+    has_jerk_limits: false
+  franka2_fr3_joint6:
+    has_velocity_limits: true
+    max_velocity: 4.18
+    has_acceleration_limits: true
+    max_acceleration: 10.0
+    has_jerk_limits: false
+  franka2_fr3_joint7:
+    has_velocity_limits: true
+    max_velocity: 5.26
+    has_acceleration_limits: true
+    max_acceleration: 10.0
+    has_jerk_limits: false
+
+# Cartesian limits for LIN motions
+cartesian_limits:
+  max_trans_vel: 1.0
+  max_trans_acc: 2.0
+  max_trans_dec: -2.0
+  max_rot_vel: 1.57
