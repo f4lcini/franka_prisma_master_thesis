@@ -97,6 +97,16 @@ class SimpleMoveItServer(Node):
             
         self.get_logger().info("✅ Python Servers (MoveHome, Pick, Place) Advertised!")
 
+        # --- PICK & PLACE PARAMETERS ---
+        self.declare_parameter('approach_clearance', 0.1)
+        self.declare_parameter('pick_z_offset', 0.105) # Centroid(0.225) + 10.5cm = 0.33m
+        self.declare_parameter('place_z_offset', 0.055)   # Direct target at 0.3m (as requested)
+        self.declare_parameter('gripper_open_width', 0.08)
+        self.declare_parameter('gripper_grasp_width', 0.048)
+        self.declare_parameter('safety_pause_short', 0.5)
+        self.declare_parameter('safety_pause_long', 1.0)
+
+
 
     def parse_error_code(self, code_val):
         return MOVEIT_ERROR_CODES.get(code_val, f"UNKNOWN_ERROR_CODE_{code_val}")
@@ -118,7 +128,15 @@ class SimpleMoveItServer(Node):
             req.max_acceleration_scaling_factor = 0.2
 
 
+    def _apply_top_down_orientation(self, pose):
+        """Forces the TCP to point straight down (180deg rotation around X)."""
+        pose.orientation.x = 1.0
+        pose.orientation.y = 0.0
+        pose.orientation.z = 0.0
+        pose.orientation.w = 0.0
+
     async def send_gripper_goal(self, arm_group, width, max_effort=20.0):
+
         self.get_logger().info(f"🦾 Requesting Symmetrical Gripper Action for {arm_group} (width: {width})...")
         client = self.gripper1_client if arm_group == "franka1_arm" else self.gripper2_client
             
@@ -132,14 +150,14 @@ class SimpleMoveItServer(Node):
         # Each finger moves half the width
         pos = width / 2.0
         point.positions = [pos, pos]
-        point.time_from_start.sec = 1
+        point.time_from_start.sec = 2
         point.time_from_start.nanosec = 0
         
         goal_msg.trajectory.points = [point]
         
         try:
             # We must use wait_for_server to be safe
-            if not client.wait_for_server(timeout_sec=2.0):
+            if not client.wait_for_server(timeout_sec=5.0):
                 self.get_logger().error("Gripper Action Server not available")
                 return False
 
@@ -159,11 +177,17 @@ class SimpleMoveItServer(Node):
             self.get_logger().info("Gripper Goal Accepted, waiting for result...")
             result_future = goal_handle.get_result_async()
             
+            
             start_t = time.time()
-            while not result_future.done() and (time.time() - start_t < 5.0):
-                time.sleep(0.05)
+            # Wait for execution to finish
+            while not result_future.done() and (time.time() - start_t < 10.0):
+                time.sleep(0.1)
                 
-            self.get_logger().info("Gripper Goal Completed (Wait finished)")
+            if result_future.done():
+                self.get_logger().info("Gripper Goal Completed SUCCESSFULLY")
+            else:
+                self.get_logger().warn("Gripper Goal Timeout (Continuing anyway)")
+                
             return True
         except Exception as e:
             self.get_logger().error(f"Error in send_gripper_goal: {e}")
@@ -413,10 +437,8 @@ class SimpleMoveItServer(Node):
         goal_handle.publish_feedback(feedback)
         
         if success:
-            self.get_logger().info(f"👐 Opening BOTH grippers (Full Reset)...")
-            # Open both regardless of which arm moved home
-            await self.send_gripper_goal("franka1_arm", width=0.08, max_effort=10.0)
-            await self.send_gripper_goal("franka2_arm", width=0.08, max_effort=10.0)
+            self.get_logger().info(f"👐 Opening gripper for {arm_group}...")
+            await self.send_gripper_goal(arm_group, width=0.08, max_effort=10.0)
             goal_handle.succeed()
         else:
             goal_handle.abort()
@@ -428,6 +450,14 @@ class SimpleMoveItServer(Node):
         result = MtcPickObject.Result()
         feedback = MtcPickObject.Feedback()
         
+        # Load Parameters
+        clearance = self.get_parameter('approach_clearance').value
+        z_offset = self.get_parameter('pick_z_offset').value
+        open_w = self.get_parameter('gripper_open_width').value
+        grasp_w = self.get_parameter('gripper_grasp_width').value
+        pause_s = self.get_parameter('safety_pause_short').value
+        pause_l = self.get_parameter('safety_pause_long').value
+
         arm_group, tcp_frame = self.get_arm_config(req_arm)
         if not arm_group:
             goal_handle.abort()
@@ -437,30 +467,27 @@ class SimpleMoveItServer(Node):
         
         req = goal_handle.request
         target_pose = req.target_pose.pose
+        self._apply_top_down_orientation(target_pose)
         
-        # FORCE TOP-DOWN ORIENTATION (Quaternion for 180 deg rotation around X)
-        target_pose.orientation.x = 1.0
-        target_pose.orientation.y = 0.0
-        target_pose.orientation.z = 0.0
-        target_pose.orientation.w = 0.0
+        # Final Z based on Request + Offset
+        grasp_z = target_pose.position.z + z_offset
+        pre_grasp_z = grasp_z + clearance
         
-        self.get_logger().info(f"🎯 Target Poses (Forced Top-Down): [X={target_pose.position.x:.3f}, Y={target_pose.position.y:.3f}, Z={target_pose.position.z:.3f}]")
+        self.get_logger().info(f"🎯 Pick Target (Base Z={target_pose.position.z:.3f}, Final Z={grasp_z:.3f})")
 
-        # PRE-STEP: Ensure gripper is wide open (0.08 = Fully Open)
-        feedback.status = "Pre-Step: Opening Gripper fully"
+        # PRE-STEP: Ensure gripper is wide open
+        feedback.status = f"Pre-Step: Opening Gripper fully ({open_w}m)"
         goal_handle.publish_feedback(feedback)
-        await self.send_gripper_goal(arm_group, width=0.08, max_effort=10.0)
+        await self.send_gripper_goal(arm_group, width=open_w, max_effort=10.0)
 
-        # STEP 1: Pre-Grasp (Position above cube)
+        # STEP 1: Pre-Grasp
         pre_grasp = copy.deepcopy(req.target_pose)
-        pre_grasp.pose.position.z += 0.15 # Increased to 15cm for better vertical alignment
+        pre_grasp.pose.position.z = pre_grasp_z
+        self._apply_top_down_orientation(pre_grasp.pose)
         
-        # FORCE TOP-DOWN for the approach as well
-        pre_grasp.pose.orientation = target_pose.orientation
+        self.get_logger().info(f"🚀 Approach to Z={pre_grasp_z:.3f}...")
         
-        self.get_logger().info(f"🚀 Approach to: X={pre_grasp.pose.position.x:.3f}, Y={pre_grasp.pose.position.y:.3f}, Z={pre_grasp.pose.position.z:.3f}")
-        
-        feedback.status = "Step 1/4: Moving to Pre-Grasp (Above cube)"
+        feedback.status = "Step 1/4: Moving to Pre-Grasp"
         feedback.completion_percentage = 25.0
         goal_handle.publish_feedback(feedback)
         if not await self.send_pose_goal(arm_group, pre_grasp, tcp_frame):
@@ -470,28 +497,29 @@ class SimpleMoveItServer(Node):
             return result
             
         # STEP 2: Vertical Descent (LIN)
-        feedback.status = "Step 2/4: Vertical Descent (Pilz LIN)"
+        feedback.status = f"Step 2/4: Vertical Descent to Z={grasp_z}"
         feedback.completion_percentage = 50.0
         goal_handle.publish_feedback(feedback)
         
-        # Adjusted to 0.270m (Table top is at 0.200m) to gain a few cm as requested
         grasp_pose = copy.deepcopy(req.target_pose)
-        grasp_pose.pose.position.z = 0.270 
+        grasp_pose.pose.position.z = grasp_z
         
-        self.get_logger().info(f"📍 Executing Linear Approach (LIN) to Z=0.270...")
-        
-        # Use a Pose goal but with LIN planner for vertical descent
+        self.get_logger().info(f"📍 Executing Linear Descent (LIN) to Z={grasp_z}...")
         if not await self.send_pose_goal_custom(arm_group, grasp_pose, tcp_frame, planner="LIN"):
             goal_handle.abort()
             result.success = False
-            result.message = "Vertical descent (LIN) failed - likely table collision"
+            result.message = "Vertical descent (LIN) failed"
             return result
+
+        time.sleep(pause_s)
             
-        # STEP 3: Grasp (Close to 5cm thickness)
-        feedback.status = "Step 3/4: Closing Gripper (5cm)"
+        # STEP 3: Grasp
+        feedback.status = f"Step 3/4: Closing Gripper to {grasp_w}m"
         feedback.completion_percentage = 75.0
         goal_handle.publish_feedback(feedback)
-        await self.send_gripper_goal(arm_group, width=0.048, max_effort=30.0)
+        await self.send_gripper_goal(arm_group, width=grasp_w, max_effort=30.0)
+
+        time.sleep(pause_l) 
             
         # STEP 4: Vertical Lift (LIN)
         feedback.status = "Step 4/4: Vertical Lift (Pilz LIN)"
@@ -502,6 +530,8 @@ class SimpleMoveItServer(Node):
             result.success = False
             result.message = "Vertical lift (LIN) failed"
             return result
+            
+        time.sleep(pause_s)
 
         feedback.status = "Pick sequence completed"
         feedback.completion_percentage = 100.0
@@ -518,6 +548,13 @@ class SimpleMoveItServer(Node):
         result = MtcPlaceObject.Result()
         feedback = MtcPlaceObject.Feedback()
         
+        # Load Parameters
+        clearance = self.get_parameter('approach_clearance').value
+        z_offset = self.get_parameter('place_z_offset').value
+        open_w = self.get_parameter('gripper_open_width').value
+        pause_s = self.get_parameter('safety_pause_short').value
+        pause_l = self.get_parameter('safety_pause_long').value
+
         arm_group, tcp_frame = self.get_arm_config(req_arm)
         if not arm_group:
             goal_handle.abort()
@@ -527,51 +564,63 @@ class SimpleMoveItServer(Node):
             
         req = goal_handle.request
         place_pose = req.place_pose.pose
+        self._apply_top_down_orientation(place_pose)
         
-        # Force Top-Down Orientation
-        place_pose.orientation.x = 1.0
-        place_pose.orientation.y = 0.0
-        place_pose.orientation.z = 0.0
-        place_pose.orientation.w = 0.0
+        # Final Z based on Request + Offset
+        final_place_z = place_pose.position.z + z_offset
+        pre_place_z = final_place_z + clearance
         
-        # Step 1: Pre-Place (Position above target)
+        self.get_logger().info(f"🎯 Place Target (Base Z={place_pose.position.z:.3f}, Final Z={final_place_z:.3f})")
+
+        # Step 1: Pre-Place
         pre_place = copy.deepcopy(req.place_pose)
-        pre_place.pose.position.z += 0.10
-        pre_place.pose.orientation = place_pose.orientation
+        pre_place.pose.position.z = pre_place_z
+        self._apply_top_down_orientation(pre_place.pose)
         
-        feedback.status = "Step 1/4: Moving to Pre-Place (Above target)"
+        feedback.status = f"Step 1/4: Moving to Pre-Place (Z={pre_place_z:.3f})"
         goal_handle.publish_feedback(feedback)
-        if not await self.send_pose_goal_custom(arm_group, pre_place, tcp_frame, planner="PTP"):
+        if not await self.send_pose_goal(arm_group, pre_place, tcp_frame):
             goal_handle.abort()
             result.success = False
+            result.message = "Pre-Place move failed"
             return result
             
+        time.sleep(pause_s)
+            
         # Step 2: Linear Descent (LIN)
-        feedback.status = "Step 2/4: Vertical Descent (Pilz LIN)"
+        feedback.status = f"Step 2/4: Vertical Descent to Z={final_place_z}"
         goal_handle.publish_feedback(feedback)
         
-        # Adjusted to 0.270m for consistency
         place_target = copy.deepcopy(req.place_pose)
-        place_target.pose.position.z = 0.270 
+        place_target.pose.position.z = final_place_z
         
-        self.get_logger().info(f"📍 Executing Linear Approach (LIN) to Z=0.270 for Place...")
-        
+        self.get_logger().info(f"📍 Executing Linear Descent (LIN) to Z={final_place_z} for Place...")
         if not await self.send_pose_goal_custom(arm_group, place_target, tcp_frame, planner="LIN"):
             goal_handle.abort()
             result.success = False
+            result.message = "Vertical descent (LIN) failed for Place"
             return result
             
-        # Optional: Open Gripper (0.08 = Fully Open)
-        await self.send_gripper_goal(arm_group, width=0.08, max_effort=10.0)
+        time.sleep(pause_s)
+
+        # Step 3: Open Gripper
+        feedback.status = f"Step 3/4: Opening Gripper ({open_w}m)"
+        goal_handle.publish_feedback(feedback)
+        await self.send_gripper_goal(arm_group, width=open_w, max_effort=10.0)
         
-        # Step 4: Linear Retreat (LIN)
-        feedback.status = "Step 4/4: Vertical Retreat (Pilz LIN)"
+        time.sleep(pause_l) # Wait for physical release
+        
+        # Step 4: Vertical Retreat (LIN)
+        feedback.status = "Step 4/4: Vertical Retreat"
         goal_handle.publish_feedback(feedback)
         if not await self.send_pose_goal_custom(arm_group, pre_place, tcp_frame, planner="LIN"):
              self.get_logger().warn("Retreat failed, but object placed.")
              
+        time.sleep(pause_s)
+             
         result.success = True
         result.message = f"Place successful with {arm_group}"
+        self.get_logger().info("🎉 Strategic Place Sequence SUCCESS!")
         goal_handle.succeed()
         return result
 

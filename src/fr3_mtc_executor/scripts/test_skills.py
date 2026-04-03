@@ -51,7 +51,7 @@ class SkillTester(Node):
         return self.pick_client.send_goal_async(goal)
 
     def send_place(self, arm="left_arm"):
-        self.get_logger().info(f"📥 Sending PLACE goal for {arm} (Box)...")
+        self.get_logger().info(f"📥 Sending PLACE goal for {arm} (Shared Workspace)...")
         if not self.place_client.wait_for_server(timeout_sec=5.0):
             self.get_logger().error("❌ Place Action Server not available!")
             return
@@ -60,18 +60,18 @@ class SkillTester(Node):
         goal.arm = arm
         goal.retreat_distance = 0.1
         
-        # Place Pose (inside the box/bin)
+        # Shared Workspace Pose (middle of the table)
         goal.place_pose = PoseStamped()
         goal.place_pose.header.frame_id = "world"
-        goal.place_pose.pose.position.x = 0.10
-        goal.place_pose.pose.position.y = 0.10
-        goal.place_pose.pose.position.z = 0.230 # Matches world file (0.230)
+        goal.place_pose.pose.position.x = 0.50
+        goal.place_pose.pose.position.y = 0.20
+        goal.place_pose.pose.position.z = 0.3 # Shared Workspace height
         
         goal.place_pose.pose.orientation.x = 1.0
         goal.place_pose.pose.orientation.y = 0.0
         goal.place_pose.pose.orientation.z = 0.0
         goal.place_pose.pose.orientation.w = 0.0
-        
+       
         return self.place_client.send_goal_async(goal)
 
 def main():
