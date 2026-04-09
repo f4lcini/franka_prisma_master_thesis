@@ -7,41 +7,41 @@
 #include <moveit/task_constructor/solvers/pipeline_planner.h>
 #include <moveit/task_constructor/solvers/cartesian_path.h>
 
-#include <franka_custom_interfaces/action/mtc_pick_object.hpp>
+#include <franka_custom_interfaces/action/pick_object.hpp>
 
-using MtcPickObject = franka_custom_interfaces::action::MtcPickObject;
-using GoalHandleMtcPick = rclcpp_action::ServerGoalHandle<MtcPickObject>;
+using PickObject = franka_custom_interfaces::action::PickObject;
+using GoalHandlePick = rclcpp_action::ServerGoalHandle<PickObject>;
 namespace mtc = moveit::task_constructor;
 
-class MtcPickServer : public rclcpp::Node {
+class PickServer : public rclcpp::Node {
 public:
-    MtcPickServer() : Node("mtc_pick_server_cpp", rclcpp::NodeOptions().allow_undeclared_parameters(true)) {
-        action_server_ = rclcpp_action::create_server<MtcPickObject>(
-            this, "mtc_pick_object",
-            std::bind(&MtcPickServer::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
-            std::bind(&MtcPickServer::handle_cancel, this, std::placeholders::_1),
-            std::bind(&MtcPickServer::handle_accepted, this, std::placeholders::_1)
+    PickServer() : Node("pick_server_cpp", rclcpp::NodeOptions().allow_undeclared_parameters(true)) {
+        action_server_ = rclcpp_action::create_server<PickObject>(
+            this, "pick_object",
+            std::bind(&PickServer::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
+            std::bind(&PickServer::handle_cancel, this, std::placeholders::_1),
+            std::bind(&PickServer::handle_accepted, this, std::placeholders::_1)
         );
-        RCLCPP_INFO(this->get_logger(), "MTC Pick Action Server (C++ Nativo) OPERATIVO.");
+        RCLCPP_INFO(this->get_logger(), "Pick Action Server (C++ Nativo) OPERATIVO.");
     }
 
 private:
-    rclcpp_action::Server<MtcPickObject>::SharedPtr action_server_;
+    rclcpp_action::Server<PickObject>::SharedPtr action_server_;
 
-    rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID&, std::shared_ptr<const MtcPickObject::Goal>) {
+    rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID&, std::shared_ptr<const PickObject::Goal>) {
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     }
 
-    rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandleMtcPick>) {
+    rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandlePick>) {
         return rclcpp_action::CancelResponse::ACCEPT;
     }
 
-    void handle_accepted(const std::shared_ptr<GoalHandleMtcPick> goal_handle) {
-        std::thread{std::bind(&MtcPickServer::execute, this, std::placeholders::_1), goal_handle}.detach();
+    void handle_accepted(const std::shared_ptr<GoalHandlePick> goal_handle) {
+        std::thread{std::bind(&PickServer::execute, this, std::placeholders::_1), goal_handle}.detach();
     }
 
-    void execute(const std::shared_ptr<GoalHandleMtcPick> goal_handle) {
-        auto result = std::make_shared<MtcPickObject::Result>();
+    void execute(const std::shared_ptr<GoalHandlePick> goal_handle) {
+        auto result = std::make_shared<PickObject::Result>();
         auto goal = goal_handle->get_goal();
         std::string object_id = "target_cube";
 
@@ -118,7 +118,7 @@ private:
 
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<MtcPickServer>();
+    auto node = std::make_shared<PickServer>();
     rclcpp::executors::MultiThreadedExecutor executor;
     executor.add_node(node);
     executor.spin();

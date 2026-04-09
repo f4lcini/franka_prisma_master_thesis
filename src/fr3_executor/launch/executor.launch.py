@@ -79,8 +79,10 @@ def generate_launch_description():
         planning_pipeline_parameters,
     ] if p is not None]
 
-    mtc_node = Node(
-        package="franka_task_orchestrator",
+    # Note: Skill-level parameters (approach_clearance, etc.) are loaded 
+    # as defaults from fr3_application/config.py, but can be overridden here.
+    moveit_server_node = Node(
+        package="fr3_application",
         executable="simple_moveit_server",
         name="python_moveit_server",
         output="screen",
@@ -119,7 +121,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        mtc_node, 
+        moveit_server_node,
         static_tf_body, 
         static_tf_optical
     ])

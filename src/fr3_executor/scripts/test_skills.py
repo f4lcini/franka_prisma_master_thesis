@@ -3,7 +3,7 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
-from franka_custom_interfaces.action import MtcMoveHome, MtcPickObject, MtcPlaceObject
+from franka_custom_interfaces.action import MoveHome, PickObject, PlaceObject
 from geometry_msgs.msg import PoseStamped
 import sys
 import time
@@ -11,9 +11,9 @@ import time
 class SkillTester(Node):
     def __init__(self):
         super().__init__('skill_tester')
-        self.home_client = ActionClient(self, MtcMoveHome, 'mtc_move_home')
-        self.pick_client = ActionClient(self, MtcPickObject, 'mtc_pick_object')
-        self.place_client = ActionClient(self, MtcPlaceObject, 'mtc_place_object')
+        self.home_client = ActionClient(self, MoveHome, 'move_home')
+        self.pick_client = ActionClient(self, PickObject, 'pick_object')
+        self.place_client = ActionClient(self, PlaceObject, 'place_object')
 
     def send_home(self, arm="left_arm"):
         self.get_logger().info(f"🏠 Sending HOME goal for {arm}...")
@@ -21,26 +21,27 @@ class SkillTester(Node):
             self.get_logger().error("❌ Home Action Server not available!")
             return
         
-        goal = MtcMoveHome.Goal()
+        goal = MoveHome.Goal()
         goal.arm = arm
         return self.home_client.send_goal_async(goal)
 
-    def send_pick(self, arm="left_arm"):
-        self.get_logger().info(f"📦 Sending PICK goal for {arm} (Red Cube)...")
+    def send_pick(self, arm="left_arm", target="base_pose"):
+        self.get_logger().info(f"📦 Sending PICK goal for {arm} ({target})...")
         if not self.pick_client.wait_for_server(timeout_sec=5.0):
             self.get_logger().error("❌ Pick Action Server not available!")
             return
         
-        goal = MtcPickObject.Goal()
+        goal = PickObject.Goal()
         goal.arm = arm
-        goal.approach_distance = 0.1
         
-        # Red Cube Pose (approximate center of table)
+        # Predefined Target Logic (Server will override coords if frame_id matches)
         goal.target_pose = PoseStamped()
-        goal.target_pose.header.frame_id = "world"
+        goal.target_pose.header.frame_id = target # "base_pose" or "shared"
+        
+        # Default coords if server doesn't override (Legacy Support)
         goal.target_pose.pose.position.x = 1.10
         goal.target_pose.pose.position.y = 0.20
-        goal.target_pose.pose.position.z = 0.225 # Matches world file (0.225)
+        goal.target_pose.pose.position.z = 0.225
         
         # Standard Grasp Orientation (TCP pointing down)
         goal.target_pose.pose.orientation.x = 1.0
@@ -50,28 +51,24 @@ class SkillTester(Node):
         
         return self.pick_client.send_goal_async(goal)
 
-    def send_place(self, arm="left_arm"):
-        self.get_logger().info(f"📥 Sending PLACE goal for {arm} (Shared Workspace)...")
+    def send_place(self, arm="left_arm", target="shared"):
+        self.get_logger().info(f"📥 Sending PLACE goal for {arm} ({target})...")
         if not self.place_client.wait_for_server(timeout_sec=5.0):
             self.get_logger().error("❌ Place Action Server not available!")
             return
         
-        goal = MtcPlaceObject.Goal()
+        goal = PlaceObject.Goal()
         goal.arm = arm
-        goal.retreat_distance = 0.1
         
-        # Shared Workspace Pose (middle of the table)
+        # Predefined Target Logic (Server will override coords if frame_id matches)
         goal.place_pose = PoseStamped()
-        goal.place_pose.header.frame_id = "world"
+        goal.place_pose.header.frame_id = target # "shared" or "box"
+        
+        # Default coords if server doesn't override (Legacy Support)
         goal.place_pose.pose.position.x = 0.50
         goal.place_pose.pose.position.y = 0.20
-        goal.place_pose.pose.position.z = 0.3 # Shared Workspace height
+        goal.place_pose.pose.position.z = 0.30 
         
-        goal.place_pose.pose.orientation.x = 1.0
-        goal.place_pose.pose.orientation.y = 0.0
-        goal.place_pose.pose.orientation.z = 0.0
-        goal.place_pose.pose.orientation.w = 0.0
-       
         return self.place_client.send_goal_async(goal)
 
 def main():
@@ -79,19 +76,22 @@ def main():
     tester = SkillTester()
     
     if len(sys.argv) < 2:
-        print("Usage: python3 test_skills.py [home|pick|place] [left_arm|right_arm]")
+        print("Usage: python3 test_skills.py [home|pick|place] [left_arm|right_arm] [target]")
         return
 
     skill = sys.argv[1].lower()
     arm = sys.argv[2] if len(sys.argv) > 2 else "left_arm"
+    target = sys.argv[3] if len(sys.argv) > 3 else None
     
     future = None
     if skill == "home":
         future = tester.send_home(arm)
     elif skill == "pick":
-        future = tester.send_pick(arm)
+        # Default to base_pose if no target specified
+        future = tester.send_pick(arm, target if target else "base_pose")
     elif skill == "place":
-        future = tester.send_place(arm)
+        # Default to shared if no target specified
+        future = tester.send_place(arm, target if target else "shared")
     else:
         print(f"Unknown skill: {skill}")
         return

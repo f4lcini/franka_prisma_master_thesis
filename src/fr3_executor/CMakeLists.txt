@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(fr3_mtc_executor)
+project(fr3_executor)
 
 find_package(ament_cmake REQUIRED)
 

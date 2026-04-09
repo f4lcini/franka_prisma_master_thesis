@@ -1,81 +1,73 @@
 import py_trees
 import rclpy
 from rclpy.action import ActionClient
-from franka_custom_interfaces.action import MtcPlaceObject
+from franka_custom_interfaces.action import PlaceObject
 import copy
+from geometry_msgs.msg import PoseStamped
 
-class MtcPlaceActionClient(py_trees.behaviour.Behaviour):
-    def __init__(self, name="Execute MTC Place", action_name="/mtc_place_object"):
+class PlaceActionClient(py_trees.behaviour.Behaviour):
+    def __init__(self, name="Execute Place", action_name="/place_object", prefix="left_"):
         super().__init__(name=name)
         self.action_name = action_name
+        self.prefix = prefix
         self.node = None
         self.action_client = None
         self.send_goal_future = None
         self.get_result_future = None
         
         self.blackboard = py_trees.blackboard.Client(name=name)
-        self.blackboard.register_key(key="target_pose", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="active_arm", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="target_location", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key=f"{prefix}target_pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key=f"{prefix}active_arm", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key=f"{prefix}target_location", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="handover_ready", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="handover_starting", access=py_trees.common.Access.WRITE)
 
     def setup(self, **kwargs):
         try:
             self.node = kwargs['node']
         except KeyError:
-            self.logger.error(f"[{self.name}] ROS 2 node not found in setup kwargs. Cannot create Action Client!")
+            self.logger.error(f"[{self.name}] ROS 2 node not found in setup kwargs!")
             return False
 
-        self.action_client = ActionClient(self.node, MtcPlaceObject, self.action_name)
-        self.logger.info(f"[{self.name}] Waiting for MTC Place server at '{self.action_name}'...")
+        self.action_client = ActionClient(self.node, PlaceObject, self.action_name)
+        self.logger.info(f"[{self.name}] Waiting for Place server...")
         self.action_client.wait_for_server(timeout_sec=1.0)
         return True
 
     def initialise(self):
-        self.logger.info(f"[{self.name}] Initializing MTC Place...")
+        self.logger.info(f"[{self.name}] Initializing Place...")
         self.send_goal_future = None
         self.get_result_future = None
         
         target_arm = "any"
-        target_loc = None
-        if hasattr(self.blackboard, "active_arm"):
-            target_arm = self.blackboard.active_arm
-        if hasattr(self.blackboard, "target_location"):
-            target_loc = self.blackboard.target_location
+        target_loc = "none"
+        if hasattr(self.blackboard, f"{self.prefix}active_arm"):
+            target_arm = getattr(self.blackboard, f"{self.prefix}active_arm")
+        if hasattr(self.blackboard, f"{self.prefix}target_location"):
+            target_loc = getattr(self.blackboard, f"{self.prefix}target_location")
 
-        from geometry_msgs.msg import PoseStamped
-        target_pose = None
-        
-        # ZONE ASTRATTE (HARDCODED): Non usiamo YOLO se la destinazione è lo spazio neutro
-        if target_loc == "shared_workspace":
-            self.logger.info(f"[{self.name}] Target is a known abstract zone: shared_workspace.")
+        # PREDEFINED TARGET SUPPORT
+        if target_loc in ["base_pose", "shared", "box"]:
+            self.logger.info(f"[{self.name}] Using predefined target location: '{target_loc}'")
             target_pose = PoseStamped()
-            target_pose.header.frame_id = "world"
-            # TODO: Placeholder Simulation vs Hardware Absolute Positions
-            target_pose.pose.position.x = 0.50 # Center of the table Forward
-            target_pose.pose.position.y = 0.00 # Exact middle line between the 2 arms
-            target_pose.pose.position.z = 0.15 # Just above table surface
-            target_pose.pose.orientation.w = 1.0
+            target_pose.header.frame_id = target_loc
+            target_pose.header.stamp = self.node.get_clock().now().to_msg()
         else:
             try:
-                target_pose = self.blackboard.target_pose
-                if target_pose is None:
-                    raise ValueError("Target pose is None from Perception")
+                target_pose = getattr(self.blackboard, f"{self.prefix}target_pose")
             except AttributeError:
-                self.logger.error(f"[{self.name}] No dynamic 'target_pose' found on the blackboard!")
+                self.logger.error(f"[{self.name}] No dynamic '{self.prefix}target_pose' found!")
                 self.status = py_trees.common.Status.FAILURE
                 return
 
-        goal_msg = MtcPlaceObject.Goal()
+        goal_msg = PlaceObject.Goal()
         goal_msg.arm = target_arm
         goal_msg.place_pose = copy.deepcopy(target_pose)
         goal_msg.retreat_distance = 0.15 
 
-        if not self.action_client.server_is_ready():
-            self.logger.error(f"[{self.name}] Action server {self.action_name} is OFF!")
-            self.status = py_trees.common.Status.FAILURE
-            return
-
-        self.logger.info(f"[{self.name}] Sending action goal asynchronously...")
+        self.logger.info(f"[{self.name}] Sending Place Goal for {target_arm} to {goal_msg.place_pose.header.frame_id}")
+        if target_loc == "shared":
+             self.blackboard.handover_starting = True
         self.send_goal_future = self.action_client.send_goal_async(goal_msg)
         self.status = py_trees.common.Status.RUNNING
 
@@ -87,20 +79,19 @@ class MtcPlaceActionClient(py_trees.behaviour.Behaviour):
             if self.send_goal_future and self.send_goal_future.done():
                 goal_handle = self.send_goal_future.result()
                 if not goal_handle.accepted:
-                    self.logger.error(f"[{self.name}] MTC Place goal REJECTED by server!")
                     return py_trees.common.Status.FAILURE
-                self.logger.info(f"[{self.name}] MTC Place goal ACCEPTED. Waiting for execution...")
                 self.get_result_future = goal_handle.get_result_async()
             return py_trees.common.Status.RUNNING
         
         if self.get_result_future.done():
             result = self.get_result_future.result().result
             if result.success:
-                self.logger.info(f"[{self.name}] MTC Place SUCCEEDED: {result.message}")
+                target_loc = getattr(self.blackboard, f"{self.prefix}target_location", "none")
+                if target_loc == "shared":
+                    self.blackboard.handover_ready = True
+                    self.logger.info(f"[{self.name}] Shared Placement logic complete. Signalling Handover.")
                 return py_trees.common.Status.SUCCESS
-            else:
-                self.logger.error(f"[{self.name}] MTC Place FAILED: {result.message}")
-                return py_trees.common.Status.FAILURE
+            return py_trees.common.Status.FAILURE
 
         return py_trees.common.Status.RUNNING
 

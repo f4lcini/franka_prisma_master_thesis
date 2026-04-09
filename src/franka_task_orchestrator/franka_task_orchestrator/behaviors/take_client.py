@@ -1,10 +1,12 @@
 import py_trees
 import rclpy
 from rclpy.action import ActionClient
-from franka_custom_interfaces.action import MoveHome
+from franka_custom_interfaces.action import TakeObject
+import copy
+from geometry_msgs.msg import PoseStamped
 
-class MoveHomeClient(py_trees.behaviour.Behaviour):
-    def __init__(self, name="Execute Move Home", action_name="/move_home", prefix="left_"):
+class TakeActionClient(py_trees.behaviour.Behaviour):
+    def __init__(self, name="Execute Take", action_name="/take_object", prefix="left_"):
         super().__init__(name=name)
         self.action_name = action_name
         self.prefix = prefix
@@ -14,6 +16,7 @@ class MoveHomeClient(py_trees.behaviour.Behaviour):
         self.get_result_future = None
         
         self.blackboard = py_trees.blackboard.Client(name=name)
+        self.blackboard.register_key(key=f"{prefix}target_name", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key=f"{prefix}active_arm", access=py_trees.common.Access.READ)
 
     def setup(self, **kwargs):
@@ -23,27 +26,34 @@ class MoveHomeClient(py_trees.behaviour.Behaviour):
             self.logger.error(f"[{self.name}] ROS 2 node not found in setup kwargs!")
             return False
 
-        self.action_client = ActionClient(self.node, MoveHome, self.action_name)
-        self.logger.info(f"[{self.name}] Waiting for MoveHome server...")
+        self.action_client = ActionClient(self.node, TakeObject, self.action_name)
+        self.logger.info(f"[{self.name}] Waiting for Take server...")
         self.action_client.wait_for_server(timeout_sec=1.0)
         return True
 
     def initialise(self):
-        self.logger.info(f"[{self.name}] Initializing MoveHome...")
+        self.logger.info(f"[{self.name}] Initializing Mid-Air TAKE...")
         self.send_goal_future = None
         self.get_result_future = None
         
-        target_arm = "left_arm"
-        if hasattr(self.blackboard, f"{self.prefix}active_arm"):
+        target_arm = "any"
+        target_loc = "mid_air"
+        try:
             target_arm = getattr(self.blackboard, f"{self.prefix}active_arm")
-        
-        if target_arm not in ("left_arm", "right_arm"):
-            target_arm = "left_arm"
+        except (AttributeError, KeyError):
+            pass
+        try:
+            target_loc = getattr(self.blackboard, f"{self.prefix}target_name")
+        except (AttributeError, KeyError):
+            pass
 
-        goal_msg = MoveHome.Goal()
+        goal_msg = TakeObject.Goal()
         goal_msg.arm = target_arm
+        goal_msg.handover_pose = PoseStamped()
+        goal_msg.handover_pose.header.frame_id = target_loc
+        goal_msg.handover_pose.header.stamp = self.node.get_clock().now().to_msg()
 
-        self.logger.info(f"[{self.name}] Sending MoveHome Goal for {target_arm}")
+        self.logger.info(f"[{self.name}] Sending TAKE Goal for {target_arm} to {target_loc}")
         self.send_goal_future = self.action_client.send_goal_async(goal_msg)
         self.status = py_trees.common.Status.RUNNING
 

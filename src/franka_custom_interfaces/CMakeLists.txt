@@ -14,11 +14,14 @@ find_package(sensor_msgs REQUIRED)
 # Generate custom interfaces
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/DetectObject.action"
-  "action/MtcPickObject.action"
-  "action/MtcPlaceObject.action"
-  "action/MtcMoveHome.action"
+  "action/PickObject.action"
+  "action/PlaceObject.action"
+  "action/MoveHome.action"
+  "action/GiveObject.action"
+  "action/TakeObject.action"
   "action/VlmQuery.action"
   "srv/ClearOctomap.srv"
+  "srv/HandoverReady.srv"
   DEPENDENCIES geometry_msgs sensor_msgs
 )
 

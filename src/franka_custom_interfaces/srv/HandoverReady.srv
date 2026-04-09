@@ -1,0 +1,7 @@
+# Request
+string arm_id          # "donor" or "recipient"
+float32 timeout_sec    # max wait before timeout
+---
+# Response
+bool success
+string message

@@ -36,10 +36,10 @@ def generate_launch_description():
         "ompl": ompl_base_yaml,
     }
 
-    # 4. Istanziazione del Microservizio C++ MTC
-    mtc_server_node = Node(
-        package='franka_mtc_cpp_server',
-        executable='mtc_pick_server_cpp',
+    # 4. Istanziazione del Microservizio C++
+    action_server_node = Node(
+        package='franka_action_server',
+        executable='pick_server_cpp',
         output='screen',
         parameters=[
             robot_description,
@@ -50,4 +50,4 @@ def generate_launch_description():
         ],
     )
 
-    return LaunchDescription([mtc_server_node])
+    return LaunchDescription([action_server_node])

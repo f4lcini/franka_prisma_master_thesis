@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(franka_mtc_cpp_server)
+project(franka_action_server)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -15,8 +15,8 @@ find_package(moveit_ros_planning_interface REQUIRED)
 find_package(shape_msgs REQUIRED)
 find_package(moveit_msgs REQUIRED)
 
-add_executable(mtc_pick_server_cpp src/mtc_pick_server.cpp)
-ament_target_dependencies(mtc_pick_server_cpp 
+add_executable(pick_server_cpp src/pick_server.cpp)
+ament_target_dependencies(pick_server_cpp 
   rclcpp 
   rclcpp_action 
   moveit_task_constructor_core 
@@ -31,5 +31,5 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
-install(TARGETS mtc_pick_server_cpp DESTINATION lib/${PROJECT_NAME})
+install(TARGETS pick_server_cpp DESTINATION lib/${PROJECT_NAME})
 ament_package()
