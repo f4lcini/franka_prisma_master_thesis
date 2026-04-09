@@ -74,6 +74,8 @@ RUN apt-get update && apt-get install -y \
     ros-humble-xacro \
     ros-humble-rviz2 \
     ros-humble-rviz-marker-tools \
+    iputils-ping \
+    openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Installazione dipendenze Python per VLM e YOLO (Piazzato in ALTO per ottimizzare la CACHE)

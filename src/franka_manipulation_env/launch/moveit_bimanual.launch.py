@@ -90,14 +90,18 @@ def generate_launch_description():
 
     joint_limits_yaml = load_yaml('franka_manipulation_env', 'config/joint_limits_bimanual.yaml')
 
+    use_sim_time_arg = LaunchConfiguration('use_sim_time', default='false')
+
     # Filter out None parameters
     valid_params = [p for p in [
         robot_description,
         robot_description_semantic,
         kinematics_yaml,
-        {"robot_description_planning": joint_limits_yaml} if joint_limits_yaml else None,
+        {
+            "robot_description_planning": joint_limits_yaml
+        } if joint_limits_yaml else None,
         moveit_capabilities,
-        {"use_sim_time": True},
+        {"use_sim_time": use_sim_time_arg},
         trajectory_execution_parameters,
         moveit_controller_parameters,
         planning_pipeline_parameters,
