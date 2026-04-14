@@ -22,11 +22,11 @@ class RobotControlAPI:
         
         # MoveGroup Action (Client side)
         self.move_group_client = ActionClient(
-            self.node, MoveGroup, 'move_action', callback_group=client_cb_group)
+            self.node, MoveGroup, '/move_action', callback_group=client_cb_group)
         
-        # Gripper Actions (Client side)
-        self.gripper1_client = ActionClient(self.node, FollowJointTrajectory, 'franka1_gripper/follow_joint_trajectory', callback_group=client_cb_group)
-        self.gripper2_client = ActionClient(self.node, FollowJointTrajectory, 'franka2_gripper/follow_joint_trajectory', callback_group=client_cb_group)
+        # Gripper Actions (Client side - Hardware Namespaces)
+        self.gripper1_client = ActionClient(self.node, FollowJointTrajectory, '/franka1/franka_gripper/follow_joint_trajectory', callback_group=client_cb_group)
+        self.gripper2_client = ActionClient(self.node, FollowJointTrajectory, '/franka2/franka_gripper/follow_joint_trajectory', callback_group=client_cb_group)
             
         # Cartesian Path Service & Execution
         self.cartesian_client = self.node.create_client(

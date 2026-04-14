@@ -13,28 +13,35 @@ def generate_launch_description():
         description='If true, remap standard simulation camera topics to RealSense camera topics.'
     )
 
-    # Hardware mode: remap to RealSense topics
+    # Hardware mode: RealSense topics and Best Effort QoS
     perception_node_hw = Node(
         package='franka_bimanual_skills',
         executable='object_localization_node',
         name='object_localization_node',
         output='screen',
         emulate_tty=True,
-        remappings=[
-            ('/camera/image_raw', '/camera/color/image_raw'),
-            ('/camera/depth', '/camera/depth/image_rect_raw'),
-            ('/camera/camera_info', '/camera/depth/camera_info')
-        ],
+        parameters=[{
+            'image_topic': '/camera/color/image_raw',
+            'depth_topic': '/camera/depth/image_rect_raw',
+            'camera_info_topic': '/camera/depth/camera_info',
+            'use_sensor_data_qos': True
+        }],
         condition=IfCondition(use_hardware)
     )
 
-    # Simulation mode: no remapping needed
+    # Simulation mode: standard topics and Reliable QoS
     perception_node_sim = Node(
         package='franka_bimanual_skills',
         executable='object_localization_node',
         name='object_localization_node',
         output='screen',
         emulate_tty=True,
+        parameters=[{
+            'image_topic': '/camera/image_raw',
+            'depth_topic': '/camera/depth',
+            'camera_info_topic': '/camera/camera_info',
+            'use_sensor_data_qos': False
+        }],
         condition=UnlessCondition(use_hardware)
     )
 

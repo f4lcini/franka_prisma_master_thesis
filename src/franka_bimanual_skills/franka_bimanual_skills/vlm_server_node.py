@@ -1,6 +1,6 @@
 """
 ================================================================================
-Author: Falco Robotics (with AI Assistant)
+Author: Falco Robotics 
 Code Description: 
 [ROLE]: ACTION SERVER (Provides: /vlm_query)
 Generalized Bimanual Orchestrator version.
@@ -13,6 +13,7 @@ from rclpy.node import Node
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, qos_profile_sensor_data
 
 from sensor_msgs.msg import Image
 from franka_custom_interfaces.action import VlmQuery
@@ -42,11 +43,30 @@ class VlmServerNode(Node):
         
         self.cb_group = ReentrantCallbackGroup()
         
+        # ---- Parameters ----
+        self.declare_parameter('image_topic', '/camera/image_raw')
+        self.declare_parameter('use_sensor_data_qos', False)
+        
+        image_topic = self.get_parameter('image_topic').value
+        use_sensor_qos = self.get_parameter('use_sensor_data_qos').value
+        
+        # QoS Strategy: Best Effort for real hardware, Reliable for simulation
+        if use_sensor_qos:
+            self.get_logger().info("Using SensorDataQoS (Best Effort) for lab hardware.")
+            qos = qos_profile_sensor_data
+        else:
+            self.get_logger().info("Using Reliable QoS for simulation.")
+            qos = QoSProfile(
+                reliability=ReliabilityPolicy.RELIABLE,
+                history=HistoryPolicy.KEEP_LAST,
+                depth=5
+            )
+
         self.image_sub = self.create_subscription(
             Image,
-            '/camera/image_raw',
+            image_topic,
             self.image_callback,
-            10,
+            qos,
             callback_group=self.cb_group
         )
         

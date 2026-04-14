@@ -24,7 +24,7 @@ from rclpy.node import Node
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, qos_profile_sensor_data
 
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import PoseStamped
@@ -76,6 +76,12 @@ class ObjectLocalizationNode(Node):
         self.declare_parameter('camera_roll',  0.0)
         self.declare_parameter('camera_pitch', 0.785)   # pi/4 -> 45 deg tilt down
         self.declare_parameter('camera_yaw',  -1.57)    # -pi/2 -> rotated 90 deg CW
+        
+        # ---- Lab Scaling & Topics ----
+        self.declare_parameter('image_topic',       '/camera/image_raw')
+        self.declare_parameter('depth_topic',       '/camera/depth')
+        self.declare_parameter('camera_info_topic', '/camera/camera_info')
+        self.declare_parameter('use_sensor_data_qos', False)
 
         self._cam_pos, self._R_optical_to_world = self._build_camera_transform()
         self.get_logger().info(
@@ -91,12 +97,17 @@ class ObjectLocalizationNode(Node):
             self.model = YOLO('yolov8n.pt')
             self.get_logger().info('YOLOv8n loaded successfully.')
 
-        # ---- QoS (Reliable to match Gazebo's ros_gz_bridge) ----
-        qos = QoSProfile(
-            reliability=ReliabilityPolicy.RELIABLE,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=10
-        )
+        # ---- QoS Strategy ----
+        if self.get_parameter('use_sensor_data_qos').value:
+            self.get_logger().info("Using SensorDataQoS (Best Effort) for lab hardware.")
+            qos = qos_profile_sensor_data
+        else:
+            self.get_logger().info("Using Reliable QoS for simulation.")
+            qos = QoSProfile(
+                reliability=ReliabilityPolicy.RELIABLE,
+                history=HistoryPolicy.KEEP_LAST,
+                depth=10
+            )
 
         # ---- Callback Groups ----
         self.sensor_cb_group = ReentrantCallbackGroup()
@@ -104,17 +115,17 @@ class ObjectLocalizationNode(Node):
 
         # ---- Subscribers ----
         self.create_subscription(
-            Image, '/camera/image_raw',
+            Image, self.get_parameter('image_topic').value,
             self.image_callback, qos,
             callback_group=self.sensor_cb_group
         )
         self.create_subscription(
-            Image, '/camera/depth',
+            Image, self.get_parameter('depth_topic').value,
             self.depth_callback, qos,
             callback_group=self.sensor_cb_group
         )
         self.create_subscription(
-            CameraInfo, '/camera/camera_info',
+            CameraInfo, self.get_parameter('camera_info_topic').value,
             self.camera_info_callback, qos,
             callback_group=self.sensor_cb_group
         )

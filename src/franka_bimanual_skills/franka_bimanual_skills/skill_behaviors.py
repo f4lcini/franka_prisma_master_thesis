@@ -18,6 +18,9 @@ class SkillBehaviors:
         self.robot_control_api = robot_control_api
         self.logger = node.get_logger()
 
+        # ---- Declare Lab Parameters (Defaults from config.py) ----
+        self._declare_lab_parameters()
+
         # In-process rendezvous events (multi-stage handshake)
         self._donor_ready = threading.Event()
         self._recipient_ready = threading.Event()
@@ -43,7 +46,32 @@ class SkillBehaviors:
             self.node, TakeObject, 'take_object',
             execute_callback=self.execute_take, callback_group=server_cb_group)
             
-        self.logger.info("✅ Python Servers (Home, Pick, Place, Give, Take) Advertised!")
+        self.logger.info("✅ Lab-Aware Python Servers (Home, Pick, Place, Give, Take) Advertised!")
+
+    def _declare_lab_parameters(self):
+        """Declares workspace targets and offsets as ROS parameters for easy lab calibration."""
+        from .config import PREDEFINED_TARGETS, DEFAULT_OFFSETS, READY_POSE_VALUES
+        
+        # 1. Predefined Targets (stored as flat lists [x, y, z])
+        for target_name, coords in PREDEFINED_TARGETS.items():
+            param_name = f"targets.{target_name}"
+            self.node.declare_parameter(param_name, list(coords))
+            
+        # 2. Offsets
+        for offset_name, val in DEFAULT_OFFSETS.items():
+            param_name = f"offsets.{offset_name}"
+            self.node.declare_parameter(param_name, float(val))
+
+        # 3. Ready Pose
+        self.node.declare_parameter("ready_pose", READY_POSE_VALUES)
+
+    def _get_target(self, name):
+        """Helper to fetch target from parameters."""
+        return self.node.get_parameter(f"targets.{name}").value
+
+    def _get_offset(self, name):
+        """Helper to fetch offset from parameters."""
+        return self.node.get_parameter(f"offsets.{name}").value
 
 
 
@@ -71,7 +99,7 @@ class SkillBehaviors:
         req.allowed_planning_time = 5.0
         req.num_planning_attempts = 10
         
-        ready_values = READY_POSE_VALUES
+        ready_values = self.node.get_parameter("ready_pose").value
         joint_names = [f"{arm_group.split('_')[0]}_fr3_joint{i+1}" for i in range(7)]
         
         c = Constraints()
@@ -128,7 +156,7 @@ class SkillBehaviors:
         
         if success:
             self.logger.info(f"👐 Opening gripper for {arm_group}...")
-            await self.robot_control_api.send_gripper_goal(arm_group, width=0.08, max_effort=10.0)
+            await self.robot_control_api.send_gripper_goal(arm_group, width=self._get_offset('gripper_open_width'), max_effort=10.0)
             goal_handle.succeed()
         else:
             goal_handle.abort()
@@ -140,13 +168,13 @@ class SkillBehaviors:
         result = PickObject.Result()
         feedback = PickObject.Feedback()
         
-        # Load Parameters
-        clearance = self.node.get_parameter('approach_clearance').value
-        z_offset = self.node.get_parameter('pick_z_offset').value
-        open_w = self.node.get_parameter('gripper_open_width').value
-        grasp_w = self.node.get_parameter('gripper_grasp_width').value
-        pause_s = self.node.get_parameter('safety_pause_short').value
-        pause_l = self.node.get_parameter('safety_pause_long').value
+        # Load Parameters from ROS
+        clearance = self._get_offset('approach_clearance')
+        z_offset = self._get_offset('pick_z_offset')
+        open_w = self._get_offset('gripper_open_width')
+        grasp_w = self._get_offset('gripper_grasp_width')
+        pause_s = self._get_offset('safety_pause_short')
+        pause_l = self._get_offset('safety_pause_long')
 
         arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
         if not arm_group:
@@ -159,13 +187,14 @@ class SkillBehaviors:
         target_pose = req.target_pose.pose
         
         fid = req.target_pose.header.frame_id.lower()
-        if fid in PREDEFINED_TARGETS:
-            px, py, pz = PREDEFINED_TARGETS[fid]
-            self.logger.info(f"📍 Overriding Pick with Predefined '{fid}': [{px}, {py}, {pz}]")
+        try:
+            target_coords = self._get_target(fid)
+            px, py, pz = target_coords
+            self.logger.info(f"📍 Overriding Pick with Predefined Parameterized '{fid}': [{px}, {py}, {pz}]")
             target_pose.position.x = px
             target_pose.position.y = py
             target_pose.position.z = pz
-        else:
+        except Exception:
             self.logger.info(f'🤖 Using Dynamic/YOLO Pose for Pick: [{target_pose.position.x:.3f}, {target_pose.position.y:.3f}]')
 
         apply_top_down_orientation(target_pose)
@@ -243,11 +272,11 @@ class SkillBehaviors:
         result = PlaceObject.Result()
         feedback = PlaceObject.Feedback()
         
-        clearance = self.node.get_parameter('approach_clearance').value
-        z_offset = self.node.get_parameter('place_z_offset').value
-        open_w = self.node.get_parameter('gripper_open_width').value
-        pause_s = self.node.get_parameter('safety_pause_short').value
-        pause_l = self.node.get_parameter('safety_pause_long').value
+        clearance = self._get_offset('approach_clearance')
+        z_offset = self._get_offset('place_z_offset')
+        open_w = self._get_offset('gripper_open_width')
+        pause_s = self._get_offset('safety_pause_short')
+        pause_l = self._get_offset('safety_pause_long')
 
         arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
         if not arm_group:
@@ -260,14 +289,15 @@ class SkillBehaviors:
         place_pose = req.place_pose.pose
         
         fid = req.place_pose.header.frame_id.lower()
-        if fid in PREDEFINED_TARGETS:
-            px, py, pz = PREDEFINED_TARGETS[fid]
-            self.logger.info(f"📍 Overriding Place with Predefined '{fid}': [{px}, {py}, {pz}]")
+        try:
+            target_coords = self._get_target(fid)
+            px, py, pz = target_coords
+            self.logger.info(f"📍 Overriding Place with Predefined Parameterized '{fid}': [{px}, {py}, {pz}]")
             place_pose.position.x = px
             place_pose.position.y = py
             place_pose.position.z = pz
-        else:
-            self.logger.info(f'🤖 Using Dynamic/YOLO Pose for Pick: [{place_pose.position.x:.3f}, {place_pose.position.y:.3f}]')
+        except Exception:
+            self.logger.info(f'🤖 Using Dynamic Pose for Place: [{place_pose.position.x:.3f}, {place_pose.position.y:.3f}]')
 
         apply_top_down_orientation(place_pose)
         
@@ -333,11 +363,12 @@ class SkillBehaviors:
         target_pose = goal_handle.request.handover_pose.pose
         
         fid = goal_handle.request.handover_pose.header.frame_id.lower()
-        if fid in PREDEFINED_TARGETS:
-            px, py, pz = PREDEFINED_TARGETS[fid]
+        try:
+            target_coords = self._get_target(fid)
+            px, py, pz = target_coords
             target_pose.position.x, target_pose.position.y, target_pose.position.z = px, py, pz
             goal_handle.request.handover_pose.header.frame_id = WORLD_FRAME
-        else:
+        except Exception:
             self.logger.info(f'🤖 Using Dynamic Pose for Give: [{target_pose.position.x:.3f}, {target_pose.position.y:.3f}]')
 
         apply_donor_handover_orientation(target_pose)
@@ -347,7 +378,7 @@ class SkillBehaviors:
         give_pose.pose = target_pose
 
         # Donor approaches from ABOVE along Z axis
-        donor_z_offset = self.node.get_parameter('handover_donor_z_offset').value
+        donor_z_offset = self._get_offset('handover_donor_z_offset')
         pre_give_pose = copy.deepcopy(give_pose)
         pre_give_pose.pose.position.z += donor_z_offset
         
@@ -366,7 +397,7 @@ class SkillBehaviors:
         self._donor_ready.set()
         
         # --- HANDSHAKE STAGE 2: WAIT FOR RECIPIENT TO ARRIVE AT POINT ---
-        timeout = self.node.get_parameter('handover_timeout_sec').value
+        timeout = self._get_offset('handover_timeout_sec')
         self.logger.info(f"[{req_arm}] Waiting for RECIPIENT_READY...")
         if not self._recipient_ready.wait(timeout=timeout):
             self.logger.error("[Handshake] Timeout: recipient never reached handover point!")
@@ -376,7 +407,7 @@ class SkillBehaviors:
 
         # --- HANDSHAKE STAGE 3: RELEASE OBJECT ---
         self.logger.info(f"[{req_arm}] Recipient ready. Releasing object...")
-        open_w = self.node.get_parameter('gripper_open_width').value
+        open_w = self._get_offset('gripper_open_width')
         await self.robot_control_api.send_gripper_goal(arm_group, width=open_w)
         
         # --- HANDSHAKE STAGE 4: WAIT FOR RECIPIENT TO GRASP ---
@@ -404,11 +435,12 @@ class SkillBehaviors:
         target_pose = goal_handle.request.handover_pose.pose
         
         fid = goal_handle.request.handover_pose.header.frame_id.lower()
-        if fid in PREDEFINED_TARGETS:
-            px, py, pz = PREDEFINED_TARGETS[fid]
+        try:
+            target_coords = self._get_target(fid)
+            px, py, pz = target_coords
             target_pose.position.x, target_pose.position.y, target_pose.position.z = px, py, pz
             goal_handle.request.handover_pose.header.frame_id = WORLD_FRAME
-        else:
+        except Exception:
             self.logger.info(f'🤖 Using Dynamic Pose for Take: [{target_pose.position.x:.3f}, {target_pose.position.y:.3f}]')
 
         apply_recipient_handover_orientation(target_pose)
@@ -418,13 +450,13 @@ class SkillBehaviors:
         take_pose.pose = target_pose
 
         # Recipient approaches LATERALLY along X axis (avoids Z collision with donor)
-        recipient_x_offset = self.node.get_parameter('handover_recipient_x_offset').value
+        recipient_x_offset = self._get_offset('handover_recipient_x_offset')
         pre_take_pose = copy.deepcopy(take_pose)
         pre_take_pose.pose.position.x += recipient_x_offset  # offset in X, not Z
 
         # --- HANDSHAKE STAGE 1: WAIT FOR DONOR TO BE READY ---
         self.logger.info(f"[{req_arm}] Waiting for DONOR_READY...")
-        timeout = self.node.get_parameter('handover_timeout_sec').value
+        timeout = self._get_offset('handover_timeout_sec')
         if not self._donor_ready.wait(timeout=timeout):
             self.logger.error("[Handshake] Timeout: donor never reached handover point!")
             goal_handle.abort()
@@ -446,14 +478,14 @@ class SkillBehaviors:
         self.logger.info(f"[{req_arm}] At point. Signaling RECIPIENT_READY and grasping...")
         self._recipient_ready.set()
         
-        grasp_w = self.node.get_parameter('gripper_grasp_width').value
+        grasp_w = self._get_offset('gripper_grasp_width')
         await self.robot_control_api.send_gripper_goal(arm_group, width=grasp_w)
         
         self.logger.info(f"[{req_arm}] Grasp complete. Signaling RECIPIENT_GRASPED...")
         self._recipient_grasped.set()
 
         # ─── STEP 4: Retreat ───
-        pause_s = self.node.get_parameter('safety_pause_short').value
+        pause_s = self._get_offset('safety_pause_short')
         time.sleep(pause_s)
         
         self.logger.info(f"[{req_arm}] Starting Linear Retreat (LIN) along X...")
