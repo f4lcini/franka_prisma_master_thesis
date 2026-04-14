@@ -92,11 +92,11 @@ def robot_description_dependent_nodes_spawner(
     right_ip_str = context.perform_substitution(right_ip)
 
     franka_xacro_filepath = os.path.join(
-        get_package_share_directory('franka_manipulation_env'), 'urdf', 'bimanual_custom.urdf.xacro'
+        get_package_share_directory('franka_bimanual_config'), 'urdf', 'bimanual_custom.urdf.xacro'
     )
 
     franka_controllers = os.path.join(
-        get_package_share_directory('franka_manipulation_env'), 'config', 'basic_controllers_custom.yaml'
+        get_package_share_directory('franka_bimanual_config'), 'config', 'basic_controllers_custom.yaml'
     )
     franka_controllers_str =  franka_controllers
 
@@ -217,14 +217,14 @@ def generate_launch_description():
     )
     
     # Gazebo specific configurations
-    base_resources = os.path.dirname(get_package_share_directory('franka_description')) + ':' + os.path.dirname(get_package_share_directory('franka_manipulation_env')) + ':' + os.path.join(get_package_share_directory('franka_manipulation_env'), 'models')
+    base_resources = os.path.dirname(get_package_share_directory('franka_description')) + ':' + os.path.dirname(get_package_share_directory('franka_bimanual_config')) + ':' + os.path.join(get_package_share_directory('franka_bimanual_config'), 'models')
     os.environ['GZ_SIM_RESOURCE_PATH'] = base_resources
     # Gazebo classic and new IGN use different env variables, better safe than sorry
     os.environ['IGN_GAZEBO_RESOURCE_PATH'] = base_resources
     os.environ['IGN_IP'] = '127.0.0.1'
     os.environ['GZ_IP'] = '127.0.0.1'
     pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
-    pkg_franka_env = get_package_share_directory('franka_manipulation_env')
+    pkg_franka_env = get_package_share_directory('franka_bimanual_config')
     
     spawn = Node(
         package='ros_gz_sim',
@@ -290,7 +290,7 @@ def generate_launch_description():
     )
 
     gripper_sim_params = os.path.join(
-        get_package_share_directory('franka_manipulation_env'),
+        get_package_share_directory('franka_bimanual_config'),
         'config', 'gripper_sim_params.yaml'
     )
 

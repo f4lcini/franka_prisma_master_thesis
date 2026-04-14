@@ -29,7 +29,7 @@ Implementation Steps Summary:
 """
 
 def generate_launch_description():
-    pkg_franka_manipulation_env = get_package_share_directory('franka_manipulation_env')
+    pkg_franka_bimanual_config = get_package_share_directory('franka_bimanual_config')
     pkg_franka_desc = get_package_share_directory('franka_description')
     pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
 
@@ -41,7 +41,7 @@ def generate_launch_description():
     )
 
     # Step 2: Set indispensable Gazebo plugin and resource paths via append variables.
-    resources = [os.path.dirname(pkg_franka_desc), ':', os.path.dirname(pkg_franka_manipulation_env)]
+    resources = [os.path.dirname(pkg_franka_desc), ':', os.path.dirname(pkg_franka_bimanual_config)]
     env_vars = [
         AppendEnvironmentVariable(name='GZ_SIM_RESOURCE_PATH', value=resources),
         AppendEnvironmentVariable(name='IGN_GAZEBO_RESOURCE_PATH', value=resources),
@@ -50,7 +50,7 @@ def generate_launch_description():
     ]
 
     # Step 3: Parse the XACRO with initial pose and launch the Robot State Publisher to broadcast TFs.
-    xacro_file = os.path.join(pkg_franka_manipulation_env, 'urdf', 'system.urdf.xacro')
+    xacro_file = os.path.join(pkg_franka_bimanual_config, 'urdf', 'system.urdf.xacro')
     robot_description_content = Command(
         [FindExecutable(name="xacro"), " ", xacro_file, " ", LaunchConfiguration('initial_pose')]
     )
@@ -82,7 +82,7 @@ def generate_launch_description():
     spawn_cube = Node(
         package='ros_gz_sim',
         executable='create',
-        arguments=['-name', 'target_cube', '-file', os.path.join(pkg_franka_manipulation_env, 'models', 'cube', 'model.sdf'), '-x', '0.6', '-y', '0.0', '-z', '0.775'],
+        arguments=['-name', 'target_cube', '-file', os.path.join(pkg_franka_bimanual_config, 'models', 'cube', 'model.sdf'), '-x', '0.6', '-y', '0.0', '-z', '0.775'],
         output='screen',
     )
     

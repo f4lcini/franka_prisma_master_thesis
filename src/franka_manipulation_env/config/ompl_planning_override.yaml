@@ -1,4 +1,4 @@
-# File: franka_manipulation_env/config/ompl_planning_override.yaml
+# File: franka_bimanual_config/config/ompl_planning_override.yaml
 
 # Patch per abilitare la parametrizzazione temporale mancante nel pacchetto originale
 planning_plugin: ompl_interface/OMPLPlanner

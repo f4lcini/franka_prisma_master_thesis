@@ -25,7 +25,7 @@ def generate_launch_description():
     )
 
     pkg_idra_share = get_package_share_directory('idra_franka_launch')
-    pkg_env_share = get_package_share_directory('franka_manipulation_env')
+    pkg_env_share = get_package_share_directory('franka_bimanual_config')
 
     # Bimanual Robot Description (URDF)
     xacro_file_urdf = os.path.join(pkg_idra_share, 'urdf', 'bimanual.urdf.xacro')
@@ -38,13 +38,13 @@ def generate_launch_description():
     robot_description_semantic = {"robot_description_semantic": ParameterValue(robot_description_semantic_config, value_type=str)}
 
     # Kinematics
-    kinematics_yaml = load_yaml('franka_manipulation_env', 'config/kinematics_bimanual.yaml')
+    kinematics_yaml = load_yaml('franka_bimanual_config', 'config/kinematics_bimanual.yaml')
     if kinematics_yaml is None:
          kinematics_yaml = load_yaml('franka_fr3_moveit_config', 'config/kinematics.yaml')
     
     # OMPL Planning Pipeline
     ompl_base_yaml = load_yaml('franka_fr3_moveit_config', 'config/ompl_planning.yaml')
-    ompl_override_yaml = load_yaml('franka_manipulation_env', 'config/ompl_planning_bimanual_override.yaml')
+    ompl_override_yaml = load_yaml('franka_bimanual_config', 'config/ompl_planning_bimanual_override.yaml')
 
     ompl_combined = {}
     if ompl_base_yaml:
@@ -59,7 +59,7 @@ def generate_launch_description():
     }
 
     # Controllers
-    moveit_controllers_yaml = load_yaml('franka_manipulation_env', 'config/moveit_controllers_bimanual.yaml')
+    moveit_controllers_yaml = load_yaml('franka_bimanual_config', 'config/moveit_controllers_bimanual.yaml')
     moveit_controller_parameters = {
         "moveit_manage_controllers": True,
         "moveit_controller_manager": "moveit_simple_controller_manager/MoveItSimpleControllerManager",
@@ -90,7 +90,7 @@ def generate_launch_description():
     # ── MoveIt Python Action Server ──────────────────────────────────────────
     # Serves: /pick, /place, /move_home, /give_object, /take_object actions
     moveit_server_node = Node(
-        package="fr3_application",
+        package="franka_bimanual_skills",
         executable="simple_moveit_server",
         name="python_moveit_server",
         output="screen",
@@ -100,7 +100,7 @@ def generate_launch_description():
     # ── Handover Coordinator ─────────────────────────────────────────────────
     # Services: /donor_ready + /recipient_ready  (rendezvous sync for handover)
     handover_coordinator_node = Node(
-        package="fr3_application",
+        package="franka_bimanual_skills",
         executable="handover_coordinator",
         name="handover_coordinator",
         output="screen",

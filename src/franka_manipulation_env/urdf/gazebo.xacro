@@ -13,7 +13,7 @@
         
         <gazebo>
             <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
-                <parameters>$(find franka_manipulation_env)/config/fr3_controllers.yaml</parameters>
+                <parameters>$(find franka_bimanual_config)/config/fr3_controllers.yaml</parameters>
             </plugin>
         </gazebo>
 

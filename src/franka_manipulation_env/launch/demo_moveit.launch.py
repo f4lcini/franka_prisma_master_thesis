@@ -24,7 +24,7 @@ Implementation Steps Summary:
 
 def generate_launch_description():
     # Step 1: Resolve the package directory to construct paths.
-    pkg_env = get_package_share_directory('franka_manipulation_env')
+    pkg_env = get_package_share_directory('franka_bimanual_config')
 
     # Step 2: Include the simulation launch file to start Gazebo and Controllers.
     sim_and_control_launch = IncludeLaunchDescription(

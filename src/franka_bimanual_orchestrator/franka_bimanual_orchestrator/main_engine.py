@@ -14,15 +14,15 @@ import py_trees_ros
 import sys
 import operator
 
-from franka_task_orchestrator.behaviors.vlm_client import VlmActionClient
-from franka_task_orchestrator.behaviors.object_localization_client import ObjectLocalizationClient
-from franka_task_orchestrator.behaviors.pick_client import PickActionClient
-from franka_task_orchestrator.behaviors.place_client import PlaceActionClient
-from franka_task_orchestrator.behaviors.move_home_client import MoveHomeClient
-from franka_task_orchestrator.behaviors.wait_client import WaitActionClient
-from franka_task_orchestrator.behaviors.give_client import GiveActionClient
-from franka_task_orchestrator.behaviors.take_client import TakeActionClient
-from franka_task_orchestrator.behaviors.planner_utils import PlanSplitter, DynamicActionIterator, PlanPopper
+from franka_bimanual_orchestrator.behaviors.vlm_client import VlmActionClient
+from franka_bimanual_orchestrator.behaviors.object_localization_client import ObjectLocalizationClient
+from franka_bimanual_orchestrator.behaviors.pick_client import PickActionClient
+from franka_bimanual_orchestrator.behaviors.place_client import PlaceActionClient
+from franka_bimanual_orchestrator.behaviors.move_home_client import MoveHomeClient
+from franka_bimanual_orchestrator.behaviors.wait_client import WaitActionClient
+from franka_bimanual_orchestrator.behaviors.give_client import GiveActionClient
+from franka_bimanual_orchestrator.behaviors.take_client import TakeActionClient
+from franka_bimanual_orchestrator.behaviors.planner_utils import PlanSplitter, DynamicActionIterator, PlanPopper
 
 def create_arm_lane(arm_name="left"):
     """

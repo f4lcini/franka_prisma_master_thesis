@@ -6,7 +6,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
-    pkg_env = get_package_share_directory('franka_manipulation_env')
+    pkg_env = get_package_share_directory('franka_bimanual_config')
 
     use_gazebo = LaunchConfiguration('use_gazebo', default='true')
     use_rviz = LaunchConfiguration('use_rviz', default='true')

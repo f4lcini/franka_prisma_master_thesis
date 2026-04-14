@@ -2,7 +2,7 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="fr3">
 
     <xacro:include filename="$(find franka_description)/robots/fr3/fr3.urdf.xacro" />
-    <xacro:include filename="$(find franka_manipulation_env)/urdf/gazebo.xacro" />
+    <xacro:include filename="$(find franka_bimanual_config)/urdf/gazebo.xacro" />
 
     <link name="world" />
 
@@ -112,6 +112,6 @@
     </gazebo>
 
     <xacro:franka_gazebo_control
-        config_file="$(find franka_manipulation_env)/config/fr3_controllers.yaml" />
+        config_file="$(find franka_bimanual_config)/config/fr3_controllers.yaml" />
 
 </robot>

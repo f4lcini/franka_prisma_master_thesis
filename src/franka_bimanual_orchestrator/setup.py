@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'franka_task_orchestrator'
+package_name = 'franka_bimanual_orchestrator'
 
 setup(
     name=package_name,
@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'main_engine = franka_task_orchestrator.main_engine:main',
+            'main_engine = franka_bimanual_orchestrator.main_engine:main',
         ],
     },
 )

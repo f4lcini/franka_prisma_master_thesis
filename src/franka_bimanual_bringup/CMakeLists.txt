@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(fr3_executor)
+project(franka_bimanual_bringup)
 
 find_package(ament_cmake REQUIRED)
 

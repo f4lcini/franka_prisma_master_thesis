@@ -37,7 +37,7 @@ def load_yaml(package_name, file_path):
 
 def generate_launch_description():
     # Step 1: Resolve required package directories.
-    pkg_env = get_package_share_directory('franka_manipulation_env')
+    pkg_env = get_package_share_directory('franka_bimanual_config')
     pkg_moveit = get_package_share_directory('franka_fr3_moveit_config')
 
     # Step 2: Execute xacro to generate URDF and SRDF semantic representations dynamically.
@@ -49,11 +49,11 @@ def generate_launch_description():
 
     # Step 3: Load core kinematics and basic controller YAML parameters.
     kinematics_yaml = load_yaml('franka_fr3_moveit_config', 'config/kinematics.yaml')
-    moveit_controllers_yaml = load_yaml('franka_manipulation_env', 'config/moveit_controllers.yaml')
+    moveit_controllers_yaml = load_yaml('franka_bimanual_config', 'config/moveit_controllers.yaml')
 
     # Step 4: Combine base OMPL parameters with custom environment overrides via dictionary updates.
     ompl_base_yaml = load_yaml('franka_fr3_moveit_config', 'config/ompl_planning.yaml')
-    ompl_override_yaml = load_yaml('franka_manipulation_env', 'config/ompl_planning_override.yaml')
+    ompl_override_yaml = load_yaml('franka_bimanual_config', 'config/ompl_planning_override.yaml')
 
     if ompl_base_yaml is None or ompl_override_yaml is None:
         raise FileNotFoundError("Errore fatale: impossibile localizzare i file di configurazione OMPL base o override.")

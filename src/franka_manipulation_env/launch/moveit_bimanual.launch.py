@@ -25,7 +25,7 @@ def load_yaml(package_name, file_path):
 
 def generate_launch_description():
     pkg_idra_share = get_package_share_directory('idra_franka_launch')
-    pkg_env_share = get_package_share_directory('franka_manipulation_env')
+    pkg_env_share = get_package_share_directory('franka_bimanual_config')
     
     use_rviz_arg = LaunchConfiguration('use_rviz', default='true')
 
@@ -44,13 +44,13 @@ def generate_launch_description():
     robot_description_semantic = {"robot_description_semantic": ParameterValue(robot_description_semantic_config, value_type=str)}
 
     # Kinematics
-    kinematics_yaml = load_yaml('franka_manipulation_env', 'config/kinematics_bimanual.yaml')
+    kinematics_yaml = load_yaml('franka_bimanual_config', 'config/kinematics_bimanual.yaml')
     if kinematics_yaml is None:
          kinematics_yaml = load_yaml('franka_fr3_moveit_config', 'config/kinematics.yaml')
     
-    moveit_controllers_yaml = load_yaml('franka_manipulation_env', 'config/moveit_controllers_bimanual.yaml')
+    moveit_controllers_yaml = load_yaml('franka_bimanual_config', 'config/moveit_controllers_bimanual.yaml')
     ompl_base_yaml = load_yaml('franka_fr3_moveit_config', 'config/ompl_planning.yaml')
-    ompl_override_yaml = load_yaml('franka_manipulation_env', 'config/ompl_planning_bimanual_override.yaml')
+    ompl_override_yaml = load_yaml('franka_bimanual_config', 'config/ompl_planning_bimanual_override.yaml')
 
     ompl_combined = {}
     if ompl_base_yaml:
@@ -88,7 +88,7 @@ def generate_launch_description():
         "capabilities": "move_group/ExecuteTaskSolutionCapability"
     }
 
-    joint_limits_yaml = load_yaml('franka_manipulation_env', 'config/joint_limits_bimanual.yaml')
+    joint_limits_yaml = load_yaml('franka_bimanual_config', 'config/joint_limits_bimanual.yaml')
 
     use_sim_time_arg = LaunchConfiguration('use_sim_time', default='false')
 
@@ -127,7 +127,7 @@ def generate_launch_description():
                    '-x', '0.0', '-y', '0.0', '-z', '0.0'],
     )
 
-    pkg_env = get_package_share_directory('franka_manipulation_env')
+    pkg_env = get_package_share_directory('franka_bimanual_config')
     rviz_config_file = os.path.join(pkg_env, 'rviz', 'bimanual_moveit.rviz')
 
     rviz_node = Node(

@@ -1,4 +1,4 @@
-# File: franka_manipulation_env/config/ompl_planning_bimanual_override.yaml
+# File: franka_bimanual_config/config/ompl_planning_bimanual_override.yaml
 
 planning_plugin: ompl_interface/OMPLPlanner
 request_adapters: >-

@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>fr3_executor</name>
+  <name>franka_bimanual_bringup</name>
   <version>1.0.0</version>
   <description>C++ Node providing Pick, Place, and MoveHome Action Servers.</description>
   <maintainer email="falco_robotics@todo.todo">falco_robotics</maintainer>

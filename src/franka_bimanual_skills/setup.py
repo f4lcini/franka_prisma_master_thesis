@@ -2,7 +2,7 @@ import os
 from glob import glob
 from setuptools import find_packages, setup
 
-package_name = 'fr3_application'
+package_name = 'franka_bimanual_skills'
 
 setup(
     name=package_name,
@@ -30,11 +30,11 @@ setup(
         'console_scripts': [
             # Syntax: executable_name = package_name.module_name:main_function
             # This defines the executable 'fr3_pnp_node' invoked in run_pnp.launch.py
-            'fr3_pnp_node = fr3_application.fr3_pnp_node:main',
-            'vlm_server_node = fr3_application.vlm_server_node:main',
-            'object_localization_node = fr3_application.object_localization_node:main',
-            'simple_moveit_server = fr3_application.simple_moveit_server:main',
-            'handover_coordinator = fr3_application.handover_coordinator:main'
+            'fr3_pnp_node = franka_bimanual_skills.fr3_pnp_node:main',
+            'vlm_server_node = franka_bimanual_skills.vlm_server_node:main',
+            'object_localization_node = franka_bimanual_skills.object_localization_node:main',
+            'simple_moveit_server = franka_bimanual_skills.simple_moveit_server:main',
+            'handover_coordinator = franka_bimanual_skills.handover_coordinator:main'
         ],
     },
 )

@@ -24,7 +24,7 @@ Implementation Steps Summary:
 """
 
 def generate_launch_description():
-    pkg_env = get_package_share_directory('franka_manipulation_env')
+    pkg_env = get_package_share_directory('franka_bimanual_config')
     
     # Step 1: Specify the initial configuration `MY_ROBOT_POSE` as an environment string.
     MY_ROBOT_POSE = "j1:=0.0 j2:=-0.785 j3:=0.0 j4:=-2.356 j5:=0.0 j6:=1.571 j7:=0.785"

@@ -21,7 +21,7 @@ from cv_bridge import CvBridge
 import cv2
 import PIL.Image
 
-from fr3_application.skills_repertoire import TaskPlan
+from franka_bimanual_skills.skills_repertoire import TaskPlan
 from google import genai
 from google.genai import types
 

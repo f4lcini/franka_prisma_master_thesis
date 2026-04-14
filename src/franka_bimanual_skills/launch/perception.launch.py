@@ -14,23 +14,25 @@ def generate_launch_description():
     )
 
     # Hardware mode: remap to RealSense topics
-    reasoning_node_hw = Node(
-        package='fr3_application',
-        executable='vlm_server_node',
-        name='vlm_server_node',
+    perception_node_hw = Node(
+        package='franka_bimanual_skills',
+        executable='object_localization_node',
+        name='object_localization_node',
         output='screen',
         emulate_tty=True,
         remappings=[
-            ('/camera/image_raw', '/camera/color/image_raw')
+            ('/camera/image_raw', '/camera/color/image_raw'),
+            ('/camera/depth', '/camera/depth/image_rect_raw'),
+            ('/camera/camera_info', '/camera/depth/camera_info')
         ],
         condition=IfCondition(use_hardware)
     )
 
     # Simulation mode: no remapping needed
-    reasoning_node_sim = Node(
-        package='fr3_application',
-        executable='vlm_server_node',
-        name='vlm_server_node',
+    perception_node_sim = Node(
+        package='franka_bimanual_skills',
+        executable='object_localization_node',
+        name='object_localization_node',
         output='screen',
         emulate_tty=True,
         condition=UnlessCondition(use_hardware)
@@ -38,6 +40,6 @@ def generate_launch_description():
 
     return LaunchDescription([
         declare_use_hardware,
-        reasoning_node_hw,
-        reasoning_node_sim,
+        perception_node_hw,
+        perception_node_sim,
     ])
