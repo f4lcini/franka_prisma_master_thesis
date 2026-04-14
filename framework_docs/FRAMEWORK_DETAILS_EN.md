@@ -310,3 +310,28 @@ Hardware validation introduces real-world uncertainty, including sensor noise, c
 - **Planning**: MoveGroup + Pilz ensures deterministic, linear/PTP trajectories.
 - **Sync**: Handover logic uses Threading Events and **Wrench Feedback** (as planned) for robust bimanual coordination.
 - **Orientation Note**: While the perception pipeline is capable of 6DoF orientation estimation via PCA, the current manipulation layer implements a **top-down grasp constraint** for increased stability in unstructured tabletop scenarios.
+
+---
+
+## 15. Laboratory Deployment Readiness Checklist
+
+To transition from simulation to the physical Franka Research 3 hardware, the following environmental and system prerequisites must be satisfied.
+
+### 15.1 Host Machine Requirements (Physical PC)
+- [ ] **Kernel**: `PREEMPT_RT` modified kernel is installed and active (`uname -a` should show `PREEMPT_RT`).
+- [ ] **Networking**:
+    - [ ] Static IP configured on the dedicated Franka NIC (e.g., `192.168.1.1/24`).
+    - [ ] Communication verified: `ping 192.168.1.11` (Left) and `ping 192.168.1.12` (Right).
+- [ ] **Hardware Drivers**:
+    - [ ] NVIDIA Drivers + `nvidia-container-toolkit` must be installed on the host for GPU-accelerated YOLO inference.
+    - [ ] RealSense `udev` rules installed on the host (`liblibrealsense2-udev-rules`).
+
+### 15.2 Software & Middleware Configuration
+- [ ] **DDS Implementation**: Confirm `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp` is set in the environment to ensure control loop stability.
+- [ ] **API Access**: `GEMINI_API_KEY` must be configured in the `.env` file at the workspace root to enable VLM reasoning.
+- [ ] **Docker Privileges**: The `docker-compose.yml` must retain `privileged: true` and `network_mode: host` to allow low-level socket access for `libfranka`.
+
+### 15.3 Deployment Hardware Verification
+1. **Connectivity Sync**: Run `ros2 launch franka_bimanual_skills lab_bringup.launch.py` and verify `JointState` updates in RViz.
+2. **Perception Feed**: Run `ros2 launch franka_bimanual_skills perception.launch.py use_hardware:=true` and verify RGB-D alignment.
+3. **Safety Stop**: Verify the physical E-Stop functionality before triggering any `MoveHome` or `Pick` behaviors.
