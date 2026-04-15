@@ -15,4 +15,4 @@ log/
 Commands.txt
 .gitignore
 local_bashrc
-ros_entrypoint.sh
+
