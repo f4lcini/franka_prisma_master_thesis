@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
     cmake \
     python3-pip \
     python3-colcon-common-extensions \
-    # Dipendenze core per compilare sorgenti Franka/IDRA
+    # Dipendenze MoveIt e core
     ros-humble-moveit-task-constructor-core \
     ros-humble-moveit-ros-perception \
     ros-humble-moveit-visual-tools \
@@ -44,13 +44,9 @@ RUN apt-get update && apt-get install -y \
     ros-humble-moveit-ros-planning-interface \
     ros-humble-moveit-core \
     ros-humble-moveit-msgs \
-    # Franka Packages
+    # Franka (pacchetti binari stabili)
     ros-humble-franka-msgs \
-    ros-humble-franka-hardware \
     ros-humble-franka-gripper \
-    ros-humble-franka-bringup \
-    ros-humble-franka-example-controllers \
-    ros-humble-franka-semantic-components \
     ros-humble-realtime-tools \
     ros-humble-control-msgs \
     ros-humble-std-msgs \
@@ -81,21 +77,30 @@ RUN pip3 install --no-cache-dir \
     ultralytics \
     scipy
 
-# 3. Setup Workspace
+# 3. Setup Workspace e Franka da sorgenti (per Humble)
 WORKDIR /mm_ws
 
+# Clonazione franka_ros2 e rimozione immediata dei duplicati conflittuali
+RUN mkdir -p /mm_ws/src && cd /mm_ws/src && \
+    git clone https://github.com/frankaemika/franka_ros2.git -b humble && \
+    # Risoluzione errore "Multiple packages found with the same name"
+    rm -rf franka_ros2/franka_gazebo_bringup
+
+# Copia i tuoi pacchetti custom
 COPY src/ /mm_ws/src/
 COPY ros_entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh
 
-# Build dei pacchetti custom richiesti
+# Installazione dipendenze tramite rosdep
+RUN apt-get update && \
+    . /opt/ros/humble/setup.sh && \
+    rosdep update && \
+    rosdep install --from-paths src --ignore-src -y -r && \
+    rm -rf /var/lib/apt/lists/*
+
+# Build globale del workspace (Franka + Custom)
 RUN . /opt/ros/humble/setup.sh && \
-    colcon build --symlink-install --packages-up-to \
-    franka_bimanual_bringup \
-    franka_bimanual_orchestrator \
-    franka_bimanual_skills \
-    franka_custom_interfaces \
-    franka_manipulation_env
+    colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 # 4. Configurazione Bash & Alias
 RUN echo 'source /opt/ros/humble/setup.bash' >> /root/.bashrc && \
@@ -104,7 +109,7 @@ RUN echo 'source /opt/ros/humble/setup.bash' >> /root/.bashrc && \
     echo 'alias cbp="colcon build --symlink-install --packages-select"' >> /root/.bashrc && \
     echo 'alias ros_source="source /opt/ros/humble/setup.bash && source install/setup.bash"' >> /root/.bashrc
 
-# 5. RealSense drivers — layer separato per sfruttare la cache Docker
+# 5. RealSense drivers
 RUN apt-get update && apt-get install -y \
     ros-humble-realsense2-camera \
     ros-humble-realsense2-description \
