@@ -10,7 +10,3 @@ log/
 .DS_Store
 *.swp
 *.swo
-
-# --- Ignora la cronologia di Git per alleggerire il context ---
-.git/
-.gitignore

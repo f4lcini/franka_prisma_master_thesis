@@ -44,10 +44,7 @@ RUN apt-get update && apt-get install -y \
     ros-humble-moveit-ros-planning-interface \
     ros-humble-moveit-core \
     ros-humble-moveit-msgs \
-    ros-humble-eigen3-cmake-module \
-    ros-humble-py-trees \
-    ros-humble-py-trees-ros \
-    ros-humble-shape-msgs \
+    # Franka Packages
     ros-humble-franka-msgs \
     ros-humble-franka-hardware \
     ros-humble-franka-gripper \
@@ -63,22 +60,18 @@ RUN apt-get update && apt-get install -y \
     ros-humble-visualization-msgs \
     ros-humble-action-msgs \
     ros-humble-tf2-msgs \
-    ros-humble-pinocchio \
-    ros-humble-generate-parameter-library \
     ros-humble-joint-state-publisher \
     ros-humble-joint-state-publisher-gui \
     ros-humble-robot-state-publisher \
     ros-humble-controller-manager \
     ros-humble-ros2controlcli \
     ros-humble-urdf \
-    ros-humble-xacro \
     ros-humble-rviz2 \
-    ros-humble-rviz-marker-tools \
     iputils-ping \
     openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Installazione dipendenze Python per VLM e YOLO (Piazzato in ALTO per ottimizzare la CACHE)
+# 2. Installazione dipendenze Python per VLM e YOLO
 RUN pip3 install --no-cache-dir \
     google-genai \
     pydantic \
@@ -91,25 +84,27 @@ RUN pip3 install --no-cache-dir \
 # 3. Setup Workspace
 WORKDIR /mm_ws
 
+COPY src/ /mm_ws/src/
 COPY ros_entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh
 
-# Automate .bashrc configuration with aliases and ROS sourcing
+# Build dei pacchetti custom richiesti
+RUN . /opt/ros/humble/setup.sh && \
+    colcon build --symlink-install --packages-up-to \
+    franka_bimanual_bringup \
+    franka_bimanual_orchestrator \
+    franka_bimanual_skills \
+    franka_custom_interfaces \
+    franka_manipulation_env
+
+# 4. Configurazione Bash & Alias
 RUN echo 'source /opt/ros/humble/setup.bash' >> /root/.bashrc && \
     echo 'if [ -f /mm_ws/install/setup.bash ]; then source /mm_ws/install/setup.bash; fi' >> /root/.bashrc && \
     echo 'export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' >> /root/.bashrc && \
-    echo 'export LC_NUMERIC=en_US.UTF-8' >> /root/.bashrc && \
-    echo 'export QTWEBENGINE_DISABLE_SANDBOX=1' >> /root/.bashrc && \
-    echo 'export XDG_RUNTIME_DIR=/tmp/runtime-root' >> /root/.bashrc && \
     echo 'alias cbp="colcon build --symlink-install --packages-select"' >> /root/.bashrc && \
-    echo 'cbsp() { local PKG_NAME=$1; if [ -z "$PKG_NAME" ]; then echo "Usage: cbsp <package_name>"; return 1; fi; if colcon build --symlink-install --packages-select "$PKG_NAME"; then source install/setup.bash; echo -e "\033[1;32m$PKG_NAME built and sourced.\033[0m"; fi; }' >> /root/.bashrc && \
-    echo 'alias ll="ls -alF"' >> /root/.bashrc && \
-    echo 'alias la="ls -A"' >> /root/.bashrc && \
-    echo 'alias l="ls -CF"' >> /root/.bashrc && \
     echo 'alias ros_source="source /opt/ros/humble/setup.bash && source install/setup.bash"' >> /root/.bashrc
 
-# 4. RealSense drivers — layer separato per sfruttare la cache Docker
-# Per aggiornare solo questa parte: docker compose build (2 min invece di 20)
+# 5. RealSense drivers — layer separato per sfruttare la cache Docker
 RUN apt-get update && apt-get install -y \
     ros-humble-realsense2-camera \
     ros-humble-realsense2-description \
