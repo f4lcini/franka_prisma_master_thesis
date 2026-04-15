@@ -12,7 +12,6 @@ log/
 .DS_Store
 *.swp
 .env
-Commands.txt
 .gitignore
 local_bashrc
 

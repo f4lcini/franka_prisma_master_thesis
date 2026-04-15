@@ -1,0 +1,160 @@
+# ==========================================
+# DOCKER & ROS 2 HUMBLE COMMANDS CHEATSHEET
+# ==========================================
+
+# ------------------------------------------
+# 1. DOCKER CONTAINER MANAGEMENT
+# ------------------------------------------
+cd ~/mm_ws
+
+docker compose up -d                  # Start the container in the background (silent)
+docker exec -it franka_vlm_container bash  # Open a terminal inside the container
+docker compose down                   # Stop and remove the container cleanly
+docker compose build                  # Rebuild the image from scratch (if Dockerfile changes)
+
+
+# ------------------------------------------
+# 2. WORKSPACE COMPILATION (Inside Container)
+# ------------------------------------------
+cd /mm_ws
+
+colcon build --symlink-install        # Compile with symlinks. Best for Python! .py changes reflect instantly without rebuilding.
+colcon build --packages-select NAME   # Compile a single package (e.g., franka_bimanual_skills) to save time.
+colcon build --packages-select franka_custom_interfaces franka_bimanual_skills  # Build interfaces + app (needed after HandoverCoordinator changes)
+
+source /opt/ros/humble/setup.bash     # Load base ROS 2 environment (do this in every new terminal)
+source install/setup.bash             # Load recently compiled packages (do after colcon build)
+
+
+# ------------------------------------------
+# 3. ESSENTIAL ROS 2 COMMANDS (Nodes & Topics)
+# ------------------------------------------
+ros2 run <package> <node>             # e.g., ros2 run franka_bimanual_skills object_localization_node
+ros2 node list                        # Show all currently active nodes
+ros2 node info /node_name             # Show subscriptions and publications of a specific node
+
+ros2 topic list                       # Show all active communication channels
+ros2 topic echo /topic_name           # Print messages traveling on that topic in real-time
+ros2 topic hz /topic_name             # Shows publishing frequency (useful for verifying 30fps camera)
+
+
+# ------------------------------------------
+# 4. ROS 2 ACTION COMMANDS (MTC & Behavior Trees)
+# ------------------------------------------
+ros2 action list                      # Show all available actions (e.g., /detect_object)
+ros2 action info /action_name         # Show Clients and Servers connected to that action
+ros2 action send_goal /action_name <msg_type> "{...json...}"  # Send a manual goal to test a server
+
+
+# ------------------------------------------
+# 5. DEBUGGING & GRAPHICAL INTERFACES (RViz, rqt)
+# ------------------------------------------
+# IMPORTANT: To open windows (like RViz) from Docker on your screen:
+# RUN THIS ON YOUR LOCAL PC FIRST (outside container):
+# xhost +local:root
+
+rviz2                                 # Open 3D visualizer (essential for MoveIt Task Constructor)
+rqt_graph                             # Draw a visual graph of all active nodes and topics
+ros2 interface show <msg_type>        # e.g., ros2 interface show geometry_msgs/msg/PoseStamped. Shows message structure.
+
+
+# ------------------------------------------
+# 6. ARCHITECTURE TESTING (VLM & LOCALIZATION)
+# ------------------------------------------
+# Terminal 1: The Brain (Gemini Node / VLM)
+ros2 run franka_bimanual_skills vlm_server_node
+
+# Terminal 2: The Eye (YOLO + 3D Localization)
+ros2 run franka_bimanual_skills object_localization_node
+
+# Terminal 3: Command-line Test Calls (Simulated Behavior Tree)
+ros2 run franka_bimanual_skills test_localization_client cup   # Search for "cup" and print X,Y,Z (Requires active camera)
+
+
+# ------------------------------------------
+# 7. ENVIRONMENT & ROBOT LAUNCH (MoveIt)
+# ------------------------------------------
+ros2 launch franka_bimanual_config demo_moveit.launch.py   # Launch full simulation/planning in RViz
+
+
+# ------------------------------------------
+# 8. PARAMETERS & TF (TRANSFORM FRAME) MANAGEMENT
+# ------------------------------------------
+ros2 param list                       # List runtime parameters for each node
+ros2 param get /node_name param_name  # Read a live parameter
+ros2 param set /node_name param_name value # Modify a parameter live
+
+# Verify kinematics (X,Y,Z axes of cameras and grippers)
+ros2 run tf2_ros tf2_echo camera_link fr3_hand   # Print physical distance between two frames
+ros2 run tf2_tools view_frames        # Generate "frames.pdf" with the entire kinematic tree
+
+
+# ------------------------------------------
+# 9. DOCKER MAINTENANCE
+# ------------------------------------------
+docker system prune -a --volumes      # WARNING: Cleans ALL unused cache, images, and volumes. Use if out of disk space.
+
+
+# ------------------------------------------
+# 10. MODULAR BIMANUAL PIPELINE - SIMULATION (3 Terminals)
+# ------------------------------------------
+# Note: demo_moveit_bimanual is a wrapper that lancia Gazebo AND MoveGroup.
+
+
+# Terminal 1: Simulation (Gazebo + MoveGroup + RViz)
+# Aspetta ~12 secondi dopo l'avvio: MoveGroup parte in ritardo per dare tempo a Gazebo.
+ros2 launch franka_bimanual_config demo_moveit_bimanual.launch.py use_gazebo:=true
+
+# Terminal 2: Python MoveIt Server & Skills (The Muscles)
+# (Lancia il server MoveIt che ora risiede nel pacchetto franka_bimanual_skills)
+# ARCHITETTURA MODULARE:
+# - robot_control_api.py: Interfaccia MoveIt (Low-Level)
+# - skill_behaviors.py: Logica di Pick/Place (Skills)
+# - config.py: Unico punto di verità per Target e Offset (Configura qui!)
+ros2 launch franka_bimanual_bringup executor.launch.py 
+
+
+# Terminal 3: Test individual skills (Home, Pick, Place)
+# Questo bypassa VLM/YOLO e invia comandi diretti al server.
+cd /mm_ws && source install/setup.bash
+python3 src/franka_bimanual_bringup/scripts/test_skills.py home left_arm
+python3 src/franka_bimanual_bringup/scripts/test_skills.py pick left_arm
+
+# Test Handover Completo (Pick + Give + Take + Place)
+python3 src/franka_bimanual_bringup/scripts/test_handover.py
+
+# Terminal 4: (Opzionale) Behavior Tree Completo con VLM
+# T3: ros2 launch franka_bimanual_skills perception.launch.py
+# T4: ros2 launch franka_bimanual_skills reasoning.launch.py
+# T5: ros2 run franka_bimanual_orchestrator main_engine "Pick the red cube"
+
+
+
+# ==========================================
+# REAL LABORATORY EXECUTION (HARDWARE)
+# ==========================================
+
+# ------------------------------------------
+# 11. MODULAR BIMANUAL PIPELINE - HARDWARE (5 Terminals)
+# ------------------------------------------
+# This version starts physical hardware and AI nodes 
+# in separate terminals for clean logging and debugging.
+
+# Terminal 1: Hardware Bringup (Physical Controllers + MoveIt)
+cd /mm_ws && source install/setup.bash
+ros2 launch franka_bimanual_skills lab_bringup.launch.py left_ip:=192.168.1.11 right_ip:=192.168.1.12
+
+# Terminal 2: YOLO Perception (The Eye) - Hardware Mode
+cd /mm_ws && source install/setup.bash
+ros2 launch franka_bimanual_skills perception.launch.py use_hardware:=true
+
+# Terminal 3: VLM Reasoning (The Brain) - Hardware Mode
+cd /mm_ws && source install/setup.bash
+ros2 launch franka_bimanual_skills reasoning.launch.py use_hardware:=true
+
+# Terminal 4: Behavior Tree Visualizer (Live View)
+/opt/ros/humble/bin/py-trees-tree-viewer
+
+# Terminal 5: Natural Language Command (User Input & BT Engine)
+cd /mm_ws && source install/setup.bash
+ros2 run franka_bimanual_orchestrator main_engine "Place the green ball in the box"
