@@ -33,6 +33,7 @@ from franka_custom_interfaces.action import DetectObject
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import numpy as np
+import datetime
 from scipy.spatial.transform import Rotation
 
 try:
@@ -71,11 +72,11 @@ class ObjectLocalizationNode(Node):
         # P_world = R_optical_to_world @ P_optical + cam_pos
         # -------------------------------------------------------------------------------
         self.declare_parameter('camera_x',     0.6)
-        self.declare_parameter('camera_y',     1.0)
-        self.declare_parameter('camera_z',     1.0)
+        self.declare_parameter('camera_y',    -0.6)
+        self.declare_parameter('camera_z',     1.3)
         self.declare_parameter('camera_roll',  0.0)
         self.declare_parameter('camera_pitch', 0.785)   # pi/4 -> 45 deg tilt down
-        self.declare_parameter('camera_yaw',  -1.57)    # -pi/2 -> rotated 90 deg CW
+        self.declare_parameter('camera_yaw',   1.57)    # pi/2 -> looking towards +Y
 
         self._cam_pos, self._R_optical_to_world = self._build_camera_transform()
         self.get_logger().info(
@@ -265,6 +266,7 @@ class ObjectLocalizationNode(Node):
             "open box": ["suitcase", "bowl", "book", "box"],
             "red_cube": ["traffic light", "stop sign", "suitcase", "book", "apple", "refrigerator"],
             "red cube": ["traffic light", "stop sign", "suitcase", "book", "apple", "refrigerator"],
+            "cube": ["traffic light", "stop sign", "suitcase", "book", "apple", "refrigerator"],
             "table": ["dining table", "desk"]
         }
         
@@ -298,6 +300,15 @@ class ObjectLocalizationNode(Node):
                 best_box, best_conf = box, conf
         
         self.get_logger().info(f'All detections: {", ".join(all_labels) if all_labels else "NONE"}')
+        
+        # --- Debug Image (Save on any detection attempt) ---
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        debug_path = f'/mm_ws/test_data/yolo_raw_{timestamp}.jpg'
+        try:
+            results[0].save(filename=debug_path)
+            self.get_logger().info(f'YOLO raw inference saved: {debug_path}')
+        except Exception as e:
+            self.get_logger().warn(f'Failed to save YOLO raw inference: {e}')
         
         if best_box is None:
             self.get_logger().error(f'"{object_name}" (mapped to {search_targets}) not found in frame.')
@@ -449,7 +460,8 @@ class ObjectLocalizationNode(Node):
                 cv2.arrowedLine(img, (cu, cv_pt), (eu, ev), colors[i], 2, tipLength=0.2)
                 cv2.putText(img, labels[i], (eu + 5, ev + 5), font, 0.4, colors[i], 1)
         
-        path = '/mm_ws/yolo_detection_resulted.jpg'
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        path = f'/mm_ws/test_data/yolo_detection_{timestamp}.jpg'
         cv2.imwrite(path, img)
         self.get_logger().info(f'Debug image saved: {path}')
 

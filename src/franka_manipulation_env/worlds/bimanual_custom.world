@@ -194,7 +194,7 @@
     <!-- OVERHEAD CAMERA -->
     <model name="camera">
       <static>true</static>
-      <pose>0.6 1.0 1.0 0 0.785 -1.57</pose>
+      <pose>0.6 -0.6 1.3 0 0.785 1.57</pose>
       <link name="link">
         <sensor name="rgb_camera" type="rgbd">
           <always_on>true</always_on>

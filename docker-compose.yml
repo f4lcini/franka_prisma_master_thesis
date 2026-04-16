@@ -19,7 +19,4 @@ services:
       - /dev:/dev:rw
       - /dev/bus/usb:/dev/bus/usb:rw
       - /run/udev:/run/udev:ro
-      - ./src:/mm_ws/src:rw
-      - ./build:/mm_ws/build:rw
-      - ./install:/mm_ws/install:rw
-      - ./log:/mm_ws/log:rw
+      - .:/mm_ws:rw

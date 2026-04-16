@@ -10,7 +10,7 @@ import time
 import traceback
 import threading
 
-from .config import PREDEFINED_TARGETS, WORLD_FRAME, READY_POSE_VALUES, get_arm_config, apply_top_down_orientation, apply_donor_handover_orientation, apply_recipient_handover_orientation, parse_error_code
+from .config import PREDEFINED_TARGETS, WORLD_FRAME, READY_POSE_VALUES_LEFT, READY_POSE_VALUES_RIGHT, get_arm_config, apply_top_down_orientation, apply_donor_handover_orientation, apply_recipient_handover_orientation, parse_error_code
 
 class SkillBehaviors:
     def __init__(self, node, robot_control_api, server_cb_group):
@@ -73,7 +73,11 @@ class SkillBehaviors:
         req.allowed_planning_time = 5.0
         req.num_planning_attempts = 10
         
-        ready_values = READY_POSE_VALUES
+        if arm_group == "franka1_arm":
+            ready_values = READY_POSE_VALUES_RIGHT
+        else:
+            ready_values = READY_POSE_VALUES_LEFT
+            
         joint_names = [f"{arm_group.split('_')[0]}_fr3_joint{i+1}" for i in range(7)]
         
         c = Constraints()

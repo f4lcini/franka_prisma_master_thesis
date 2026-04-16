@@ -24,10 +24,10 @@ MOVEIT_ERROR_CODES = {
 }
 
 PREDEFINED_TARGETS = {
-    "base_pose": (1.1, 0.2, 0.225),
-    "shared":    (0.6, 0.5, 0.250),
-    "box":       (0.1, 0.1, 0.140),
-    "mid_air":   (0.5, 0.4, 0.5)    # Ideally centered for better manipulability
+    # "base_pose": (1.1, 0.2, 0.225),  # REMOVED: Force YOLO detection
+    "shared":    (0.6, 0.5, 0.250),    # Table crossover point
+    "box":       (0.1, 0.1, 0.140),    # Receptacle
+    # "mid_air":   (0.5, 0.4, 0.5)     # REMOVED: Handover disabled
 }
 
 # NOTE: There is a ~15cm projection offset between the robot flange (link hand) 
@@ -55,7 +55,8 @@ DEFAULT_OFFSETS = {
     'handover_timeout_sec': 120.0        # rendezvous timeout
 }
 
-READY_POSE_VALUES = [0.0, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
+READY_POSE_VALUES_RIGHT = [1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
+READY_POSE_VALUES_LEFT  = [-1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
 
 WORLD_FRAME = "world"
 

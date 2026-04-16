@@ -20,7 +20,7 @@ def generate_launch_description():
     pkg_env_share = get_package_share_directory('franka_manipulation_env')
 
     # Bimanual Robot Description (URDF)
-    xacro_file_urdf = os.path.join(pkg_idra_share, 'urdf', 'bimanual.urdf.xacro')
+    xacro_file_urdf = os.path.join(pkg_env_share, 'urdf', 'bimanual_custom.urdf.xacro')
     robot_description_config = Command(['xacro', ' ', xacro_file_urdf, ' ', 'hand:=true', ' ', 'gazebo:=true', ' ', 'ros2_control:=false'])
     robot_description = {"robot_description": ParameterValue(robot_description_config, value_type=str)}
 
@@ -100,8 +100,8 @@ def generate_launch_description():
         executable='static_transform_publisher',
         name='camera_body_broadcaster',
         arguments=[
-            '--x', '0.6', '--y', '1.0', '--z', '1.3',
-            '--roll', '0', '--pitch', '0.785', '--yaw', '-1.57',
+            '--x', '0.6', '--y', '-0.6', '--z', '1.3',
+            '--roll', '0', '--pitch', '0.785', '--yaw', '1.57',
             '--frame-id', 'world',
             '--child-frame-id', 'camera/link'
         ]
