@@ -4,8 +4,7 @@ from moveit_msgs.action import MoveGroup, ExecuteTrajectory
 from moveit_msgs.srv import GetCartesianPath
 from moveit_msgs.msg import MotionPlanRequest, Constraints, PositionConstraint, OrientationConstraint, BoundingVolume, PlanningScene
 from shape_msgs.msg import SolidPrimitive
-from control_msgs.action import FollowJointTrajectory
-from trajectory_msgs.msg import JointTrajectoryPoint
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Pose
 import copy
@@ -24,11 +23,12 @@ class RobotControlAPI:
         self.move_group_client = ActionClient(
             self.node, MoveGroup, 'move_action', callback_group=client_cb_group)
         
-        # Gripper Actions (Client side)
-        self.gripper1_client = ActionClient(self.node, FollowJointTrajectory, 'franka1_gripper/follow_joint_trajectory', callback_group=client_cb_group)
-        self.gripper2_client = ActionClient(self.node, FollowJointTrajectory, 'franka2_gripper/follow_joint_trajectory', callback_group=client_cb_group)
-            
-        # Cartesian Path Service & Execution
+        # Gripper Publishers (direct topic - more reliable than action in simulation)
+        self.gripper1_pub = self.node.create_publisher(
+            JointTrajectory, 'franka1_gripper/joint_trajectory', 10)
+        self.gripper2_pub = self.node.create_publisher(
+            JointTrajectory, 'franka2_gripper/joint_trajectory', 10)
+
         self.cartesian_client = self.node.create_client(
             GetCartesianPath, 'compute_cartesian_path', callback_group=client_cb_group)
         self.trajectory_executor = ActionClient(
@@ -97,54 +97,31 @@ class RobotControlAPI:
         req.path_constraints = c
 
     async def send_gripper_goal(self, arm_group, width, max_effort=20.0):
-        self.logger.info(f"🦾 Requesting Symmetrical Gripper Action for {arm_group} (width: {width})...")
-        client = self.gripper1_client if arm_group == "franka1_arm" else self.gripper2_client
-            
-        goal_msg = FollowJointTrajectory.Goal()
-        goal_msg.trajectory.joint_names = [
-            f"{'franka1' if arm_group == 'franka1_arm' else 'franka2'}_fr3_finger_joint1",
-            f"{'franka1' if arm_group == 'franka1_arm' else 'franka2'}_fr3_finger_joint2"
+        self.logger.info(f"🦾 Sending Gripper Trajectory for {arm_group} (width: {width})...")
+        
+        publisher = self.gripper1_pub if arm_group == "franka1_arm" else self.gripper2_pub
+        prefix = "franka1" if arm_group == "franka1_arm" else "franka2"
+        
+        traj = JointTrajectory()
+        traj.joint_names = [
+            f"{prefix}_fr3_finger_joint1",
+            f"{prefix}_fr3_finger_joint2"
         ]
+        traj.header.stamp = self.node.get_clock().now().to_msg()
         
         point = JointTrajectoryPoint()
         pos = width / 2.0
         point.positions = [pos, pos]
+        point.velocities = [0.0, 0.0]
         point.time_from_start.sec = 2
         point.time_from_start.nanosec = 0
-        goal_msg.trajectory.points = [point]
+        traj.points = [point]
         
-        try:
-            if not client.wait_for_server(timeout_sec=5.0):
-                self.logger.error("Gripper Action Server not available")
-                return False
-
-            goal_handle_future = client.send_goal_async(goal_msg)
-            
-            start_t = time.time()
-            while not goal_handle_future.done() and (time.time() - start_t < 2.0):
-                time.sleep(0.01)
-                
-            goal_handle = goal_handle_future.result()
-            if not goal_handle.accepted:
-                self.logger.error("Gripper Goal Rejected")
-                return False
-            
-            self.logger.info("Gripper Goal Accepted, waiting for result...")
-            result_future = goal_handle.get_result_async()
-            
-            start_t = time.time()
-            while not result_future.done() and (time.time() - start_t < 10.0):
-                time.sleep(0.1)
-                
-            if result_future.done():
-                self.logger.info("Gripper Goal Completed SUCCESSFULLY")
-            else:
-                self.logger.warn("Gripper Goal Timeout (Continuing anyway)")
-                
-            return True
-        except Exception as e:
-            self.logger.error(f"Error in send_gripper_goal: {e}")
-            return False
+        publisher.publish(traj)
+        self.logger.info(f"✅ Gripper trajectory published for {arm_group}")
+        # Wait for fingers to physically travel
+        time.sleep(2.5)
+        return True
 
     async def send_pose_goal_custom(self, group_name, pose_stamped, tcp_frame, planner="PTP", is_handover=False):
         self.logger.info(f"📍 Requesting {planner} Move for {group_name} using Pilz...")

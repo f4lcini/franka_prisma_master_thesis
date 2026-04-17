@@ -5,6 +5,7 @@ from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import MotionPlanRequest, Constraints, JointConstraint
 from franka_custom_interfaces.action import MoveHome, PickObject, PlaceObject, GiveObject, TakeObject
 from franka_custom_interfaces.srv import HandoverReady
+from std_msgs.msg import Bool
 import copy
 import time
 import traceback
@@ -44,6 +45,9 @@ class SkillBehaviors:
         self.take_server = ActionServer(
             self.node, TakeObject, 'take_object',
             execute_callback=self.execute_take, callback_group=server_cb_group)
+
+        # Publisher: fires when an object has been placed at 'shared' → wakes up the waiting arm
+        self._handover_ready_pub = node.create_publisher(Bool, '/handover_ready', 10)
             
         self.logger.info("✅ Python Servers (Home, Pick, Place, Give, Take) Advertised!")
 
@@ -183,7 +187,16 @@ class SkillBehaviors:
 
         feedback.status = f"Pre-Step: Opening Gripper fully ({open_w}m)"
         goal_handle.publish_feedback(feedback)
-        await self.robot_control_api.send_gripper_goal(arm_group, width=open_w, max_effort=10.0)
+        # Retry up to 3 times until gripper open is accepted
+        for attempt in range(3):
+            gripper_ok = await self.robot_control_api.send_gripper_goal(arm_group, width=open_w, max_effort=10.0)
+            if gripper_ok:
+                break
+            self.logger.warning(f"Gripper open attempt {attempt+1} failed, retrying...")
+            time.sleep(0.5)
+        # Hard wait to let fingers physically reach the open position
+        time.sleep(2.0)
+        self.logger.info("✅ Gripper fully open — proceeding to approach.")
 
         pre_grasp = copy.deepcopy(req.target_pose)
         pre_grasp.pose.position.z = pre_grasp_z
@@ -327,6 +340,14 @@ class SkillBehaviors:
         result.success = True
         result.message = f"Place successful with {arm_group}"
         self.logger.info("🎉 Strategic Place Sequence SUCCESS!")
+        
+        # If the object was placed at 'shared', signal the waiting arm
+        if fid == 'shared':
+            self.logger.info("📡 Publishing /handover_ready to wake up recipient arm.")
+            msg = Bool()
+            msg.data = True
+            self._handover_ready_pub.publish(msg)
+        
         goal_handle.succeed()
         return result
 

@@ -24,7 +24,7 @@ MOVEIT_ERROR_CODES = {
 }
 
 PREDEFINED_TARGETS = {
-    # "base_pose": (1.1, 0.2, 0.225),  # REMOVED: Force YOLO detection
+    "base_pose": (1.1, 0.2, 0.225),
     "shared":    (0.6, 0.5, 0.250),    # Table crossover point
     "box":       (0.1, 0.1, 0.140),    # Receptacle
     # "mid_air":   (0.5, 0.4, 0.5)     # REMOVED: Handover disabled

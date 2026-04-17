@@ -289,15 +289,39 @@ class ObjectLocalizationNode(Node):
         # Parse all detections
         best_box, best_conf = None, 0.0
         all_labels = []
+        best_red_ratio = 0.0
+        
         for box in results[0].boxes:
             cls_id = int(box.cls[0].item())
             label = self.model.names[cls_id]
             conf = float(box.conf[0].item())
             all_labels.append(f'{label}({conf:.0%})')
             
-            # Match if the label is exactly the target or in the semantic mapping
-            if (label == object_name or label in search_targets) and conf > best_conf:
-                best_box, best_conf = box, conf
+            if object_name == 'cube':
+                # Heuristic: Find the box with the most RED pixels, completely ignoring YOLO's label
+                x1, y1, x2, y2 = [int(c) for c in box.xyxy[0].tolist()]
+                h, w = cv_image.shape[:2]
+                x1, y1, x2, y2 = max(0, x1), max(0, y1), min(w, x2), min(h, y2)
+                
+                if (x2 - x1) < 5 or (y2 - y1) < 5:
+                    continue
+                
+                roi = cv_image[y1:y2, x1:x2]
+                hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+                mask1 = cv2.inRange(hsv, np.array([0, 100, 100]), np.array([10, 255, 255]))
+                mask2 = cv2.inRange(hsv, np.array([160, 100, 100]), np.array([180, 255, 255]))
+                red_ratio = np.sum((mask1 | mask2) > 0) / (roi.shape[0] * roi.shape[1])
+                
+                if red_ratio > best_red_ratio and red_ratio > 0.10: # >10% red
+                    best_red_ratio = red_ratio
+                    best_box, best_conf = box, conf
+            else:
+                # Match semantic mapping
+                if (label == object_name or label in search_targets) and conf > best_conf:
+                    best_box, best_conf = box, conf
+                    
+        if object_name == 'cube' and best_box is not None:
+            self.get_logger().info(f"Red cube found via HSV heuristic! Red ratio: {best_red_ratio:.2%}")
         
         self.get_logger().info(f'All detections: {", ".join(all_labels) if all_labels else "NONE"}')
         
