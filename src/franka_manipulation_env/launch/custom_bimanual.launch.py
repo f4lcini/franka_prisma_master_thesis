@@ -74,7 +74,8 @@ def robot_description_dependent_nodes_spawner(
         self_collisions,
         limit_override,
         left_ip,
-        right_ip
+        right_ip,
+        ros2_control
     ):
 
     load_gripper_str = context.perform_substitution(load_gripper)
@@ -95,9 +96,7 @@ def robot_description_dependent_nodes_spawner(
         get_package_share_directory('franka_bimanual_config'), 'urdf', 'bimanual_custom.urdf.xacro'
     )
 
-    franka_controllers = os.path.join(
-        get_package_share_directory('franka_bimanual_config'), 'config', 'basic_controllers_custom.yaml'
-    )
+    franka_controllers = '/mm_ws/src/franka_manipulation_env/config/basic_controllers_custom.yaml'
     franka_controllers_str =  franka_controllers
 
     p = '\t' # Padding
@@ -114,8 +113,8 @@ def robot_description_dependent_nodes_spawner(
             'fake_sensor_commands': fake_sensor_commands_str,
 
             'limit_override': limit_override_str,
-            'franka1_ip': right_ip_str,
-            'franka2_ip': left_ip_str,
+            'franka1_ip': left_ip_str,
+            'franka2_ip': right_ip_str,
 
             'controller_path': franka_controllers_str
         }
@@ -138,7 +137,6 @@ def robot_description_dependent_nodes_spawner(
             name='controller_manager',
             parameters=[
                 franka_controllers_str,
-                {'load_gripper': load_gripper_str}
             ],
             remappings=[
                 ('~/robot_description', '/robot_description'),
@@ -195,7 +193,8 @@ def generate_launch_description():
             enable_self_collisions,
             limit_override,
             left_ip,
-            right_ip
+            right_ip,
+            LaunchConfiguration('ros2_control')
         ]
     )
 
@@ -205,7 +204,8 @@ def generate_launch_description():
             left_ip,
             'franka2',
             use_fake_hardware, 
-        ]
+        ],
+        condition=IfCondition(load_gripper)
     )
 
     robot_gripper_right = OpaqueFunction(
@@ -214,7 +214,8 @@ def generate_launch_description():
             right_ip,
             'franka1',
             use_fake_hardware, 
-        ]
+        ],
+        condition=IfCondition(load_gripper)
     )
     
     # Gazebo specific configurations
@@ -295,16 +296,14 @@ def generate_launch_description():
         package='controller_manager',
         executable='spawner',
         arguments=['franka2_arm_controller', '--controller-manager', '/controller_manager'],
-        output='screen',
-        condition=IfCondition(PythonExpression(["'", controller_type, "' == 'trajectory'"]))
+        output='screen'
     )
 
     arm_controller_right = Node(
         package='controller_manager',
         executable='spawner',
         arguments=['franka1_arm_controller', '--controller-manager', '/controller_manager'],
-        output='screen',
-        condition=IfCondition(PythonExpression(["'", controller_type, "' == 'trajectory'"]))
+        output='screen'
     )
 
     arm_controller_left_inactive = Node(

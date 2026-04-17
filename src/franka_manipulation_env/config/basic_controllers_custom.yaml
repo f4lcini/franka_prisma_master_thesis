@@ -1,3 +1,7 @@
+/**:
+  ros__parameters:
+    update_rate: 1000
+
 controller_manager:
   ros__parameters:
     update_rate: 1000
@@ -17,18 +21,11 @@ controller_manager:
     cartesian_impedance_right:
       type: forward_command_controller/ForwardCommandController
 
-position_reader:
-  ros__parameters:
-    robot_names: [franka1, franka2]
-
-pose_reader:
-  ros__parameters:
-    robot_names: [franka1, franka2]
-
+# Formato per caricamento dinamico (Spawning)
 franka1_arm_controller:
   ros__parameters:
     command_interfaces:
-      - position
+      - position 
     state_interfaces:
       - position
       - velocity
@@ -44,7 +41,7 @@ franka1_arm_controller:
 franka2_arm_controller:
   ros__parameters:
     command_interfaces:
-      - position
+      - position 
     state_interfaces:
       - position
       - velocity
@@ -59,10 +56,36 @@ franka2_arm_controller:
 
 cartesian_impedance_left:
   ros__parameters:
-    joints: [franka2_x, franka2_y, franka2_z, franka2_qw, franka2_qx, franka2_qy, franka2_qz]
+    joints:
+      - franka2_x
+      - franka2_y
+      - franka2_z
+      - franka2_qw
+      - franka2_qx
+      - franka2_qy
+      - franka2_qz
     interface_name: cartesian_pose
 
 cartesian_impedance_right:
   ros__parameters:
-    joints: [franka1_x, franka1_y, franka1_z, franka1_qw, franka1_qx, franka1_qy, franka1_qz]
+    joints:
+      - franka1_x
+      - franka1_y
+      - franka1_z
+      - franka1_qw
+      - franka1_qx
+      - franka1_qy
+      - franka1_qz
     interface_name: cartesian_pose
+
+position_reader:
+  ros__parameters:
+    robot_names:
+      - franka1
+      - franka2
+
+pose_reader:
+  ros__parameters:
+    robot_names:
+      - franka1
+      - franka2

@@ -15,3 +15,12 @@ log/
 .gitignore
 local_bashrc
 
+
+# SSH Keys and secrets
+ssh_falcini
+ssh_falcini.pub
+*.pem
+*.key
+id_rsa*
+.env
+*.secret
