@@ -135,6 +135,7 @@ def robot_description_dependent_nodes_spawner(
         Node(
             package='controller_manager',
             executable='ros2_control_node',
+            name='controller_manager',
             parameters=[
                 franka_controllers_str,
                 {'load_gripper': load_gripper_str}
@@ -256,12 +257,14 @@ def generate_launch_description():
         condition=UnlessCondition(use_gazebo)
     )
 
+    controller_type = LaunchConfiguration('controller_type', default='trajectory')
+
     controller_left = Node(
         package='controller_manager',
         executable='spawner',
         arguments=['cartesian_impedance_left', '--controller-manager', '/controller_manager'],
         output='screen',
-        condition=UnlessCondition(use_gazebo)
+        condition=IfCondition(PythonExpression(["'", controller_type, "' == 'impedance'"]))
     )
 
     controller_right = Node(
@@ -269,24 +272,55 @@ def generate_launch_description():
         executable='spawner',
         arguments=['cartesian_impedance_right', '--controller-manager', '/controller_manager'],
         output='screen',
-        condition=UnlessCondition(use_gazebo)
+        condition=IfCondition(PythonExpression(["'", controller_type, "' == 'impedance'"]))
     )
 
-    # Gazebo trajectory controllers for MoveIt integration
-    gazebo_controller_left = Node(
+    controller_left_inactive = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['cartesian_impedance_left', '--controller-manager', '/controller_manager', '--inactive'],
+        output='screen',
+        condition=UnlessCondition(PythonExpression(["'", controller_type, "' == 'impedance'"]))
+    )
+
+    controller_right_inactive = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['cartesian_impedance_right', '--controller-manager', '/controller_manager', '--inactive'],
+        output='screen',
+        condition=UnlessCondition(PythonExpression(["'", controller_type, "' == 'impedance'"]))
+    )
+
+    arm_controller_left = Node(
         package='controller_manager',
         executable='spawner',
         arguments=['franka2_arm_controller', '--controller-manager', '/controller_manager'],
         output='screen',
-        condition=IfCondition(use_gazebo)
+        condition=IfCondition(PythonExpression(["'", controller_type, "' == 'trajectory'"]))
     )
 
-    gazebo_controller_right = Node(
+    arm_controller_right = Node(
         package='controller_manager',
         executable='spawner',
         arguments=['franka1_arm_controller', '--controller-manager', '/controller_manager'],
         output='screen',
-        condition=IfCondition(use_gazebo)
+        condition=IfCondition(PythonExpression(["'", controller_type, "' == 'trajectory'"]))
+    )
+
+    arm_controller_left_inactive = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['franka2_arm_controller', '--controller-manager', '/controller_manager', '--inactive'],
+        output='screen',
+        condition=UnlessCondition(PythonExpression(["'", controller_type, "' == 'trajectory'"]))
+    )
+
+    arm_controller_right_inactive = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['franka1_arm_controller', '--controller-manager', '/controller_manager', '--inactive'],
+        output='screen',
+        condition=UnlessCondition(PythonExpression(["'", controller_type, "' == 'trajectory'"]))
     )
 
     gripper_sim_params = os.path.join(
@@ -382,6 +416,11 @@ def generate_launch_description():
         ),
 
         DeclareLaunchArgument(
+            'controller_type',
+            default_value='trajectory',
+            description='Type of controller to activate: trajectory or impedance'
+        ),
+        DeclareLaunchArgument(
             'ros2_control',
             description='Is the robot being controlled with ros2_control?',
             default_value='false'
@@ -455,7 +494,9 @@ def generate_launch_description():
                 target_action=load_joint_state_broadcaster,
                 on_exit=[
                     controller_left, controller_right, 
-                    gazebo_controller_left, gazebo_controller_right,
+                    controller_left_inactive, controller_right_inactive,
+                    arm_controller_left, arm_controller_right,
+                    arm_controller_left_inactive, arm_controller_right_inactive,
                     gazebo_gripper_left, gazebo_gripper_right
                 ],
             )

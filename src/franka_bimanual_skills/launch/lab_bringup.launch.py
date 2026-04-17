@@ -12,34 +12,50 @@ def generate_launch_description():
     
     declare_left_ip = DeclareLaunchArgument(
         'left_ip', 
-        default_value='192.168.1.11', # Default lab IP for left robot
+        default_value='192.168.9.11', 
         description='IP address of the left Franka robot.'
     )
     
     declare_right_ip = DeclareLaunchArgument(
         'right_ip', 
-        default_value='192.168.1.12', # Default lab IP for right robot
+        default_value='192.168.9.12', 
         description='IP address of the right Franka robot.'
+    )
+
+    declare_use_rviz = DeclareLaunchArgument(
+        'use_rviz',
+        default_value='false',
+        description='Whether to start RViz'
+    )
+
+    declare_controller_type = DeclareLaunchArgument(
+        'controller_type',
+        default_value='trajectory',
+        description='Type of controller to activate: "trajectory" for MoveIt/Pilz or "impedance" for teleop.'
     )
 
     # --- External Launch Inclusions ---
     
-    # 1. Hardware Bringup (from idra_franka_launch package)
-    bringup_launch_dir = PathJoinSubstitution([FindPackageShare('idra_franka_launch'), 'launch'])
+    # 1. Hardware Bringup (using custom bimanual config to avoid modifying library defaults)
+    bringup_launch_dir = PathJoinSubstitution([FindPackageShare('franka_bimanual_config'), 'launch'])
     hardware_bringup = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(PathJoinSubstitution([bringup_launch_dir, 'bimanual.launch.py'])),
+        PythonLaunchDescriptionSource(PathJoinSubstitution([bringup_launch_dir, 'custom_bimanual.launch.py'])),
         launch_arguments={
             'left_ip': left_ip,
             'right_ip': right_ip,
+            'ros2_control': 'true',
+            'use_rviz': LaunchConfiguration('use_rviz'),
+            'controller_type': LaunchConfiguration('controller_type'),
         }.items()
     )
-
 
 
     return LaunchDescription([
         # Declare arguments
         declare_left_ip,
         declare_right_ip,
+        declare_use_rviz,
+        declare_controller_type,
         
         # Start hardware controllers
         hardware_bringup

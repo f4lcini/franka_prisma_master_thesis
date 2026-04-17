@@ -24,10 +24,10 @@ MOVEIT_ERROR_CODES = {
 }
 
 PREDEFINED_TARGETS = {
-    "base_pose": (1.1, 0.2, 0.225),
-    "shared":    (0.6, 0.5, 0.250),
-    "box":       (0.2, 0.3, 0.140),   # Box location for place
-    "mid_air":   (0.7, 0.3, 0.6)    # Shifted closer to the box side (X lower) and centered (Y=0.3)
+    "base_pose": (0.4, 0.3, 0.225),
+    "shared":    (0.4, 0.0, 0.250),
+    "box":       (0.4, -0.3, 0.140),   # Box location for place
+    "mid_air":   (0.4, 0.0, 0.6)    
 }
 
 # Actual positions extracted from bimanual_custom.world for tracking discrepancies

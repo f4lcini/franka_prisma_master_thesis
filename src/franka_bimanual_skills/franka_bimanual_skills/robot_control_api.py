@@ -4,7 +4,7 @@ from moveit_msgs.action import MoveGroup, ExecuteTrajectory
 from moveit_msgs.srv import GetCartesianPath
 from moveit_msgs.msg import MotionPlanRequest, Constraints, PositionConstraint, OrientationConstraint, BoundingVolume, PlanningScene
 from shape_msgs.msg import SolidPrimitive
-from control_msgs.action import FollowJointTrajectory
+from control_msgs.action import FollowJointTrajectory, GripperCommand
 from trajectory_msgs.msg import JointTrajectoryPoint
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Pose
@@ -25,8 +25,8 @@ class RobotControlAPI:
             self.node, MoveGroup, '/move_action', callback_group=client_cb_group)
         
         # Gripper Actions (Client side - Hardware Namespaces)
-        self.gripper1_client = ActionClient(self.node, FollowJointTrajectory, '/franka1/franka_gripper/follow_joint_trajectory', callback_group=client_cb_group)
-        self.gripper2_client = ActionClient(self.node, FollowJointTrajectory, '/franka2/franka_gripper/follow_joint_trajectory', callback_group=client_cb_group)
+        self.gripper1_client = ActionClient(self.node, GripperCommand, '/franka1/franka_gripper/gripper_action', callback_group=client_cb_group)
+        self.gripper2_client = ActionClient(self.node, GripperCommand, '/franka2/franka_gripper/gripper_action', callback_group=client_cb_group)
             
         # Cartesian Path Service & Execution
         self.cartesian_client = self.node.create_client(
@@ -35,12 +35,12 @@ class RobotControlAPI:
             self.node, ExecuteTrajectory, 'execute_trajectory', callback_group=client_cb_group)
 
         self.logger.info("⏳ Checking backends (MoveGroup, Grippers)...")
-        if not self.move_group_client.wait_for_server(timeout_sec=1.0):
+        if not self.move_group_client.wait_for_server(timeout_sec=5.0):
              self.logger.warning("⚠️ MoveGroup (/move_action) not ready yet. Will retry during execution.")
         
-        if not self.gripper1_client.wait_for_server(timeout_sec=0.5):
+        if not self.gripper1_client.wait_for_server(timeout_sec=2.0):
              self.logger.warning("⚠️ Gripper 1 not ready yet.")
-        if not self.gripper2_client.wait_for_server(timeout_sec=0.5):
+        if not self.gripper2_client.wait_for_server(timeout_sec=2.0):
              self.logger.warning("⚠️ Gripper 2 not ready yet.")
 
         # --- DYNAMIC COLLISION TRACKING ---
@@ -55,9 +55,9 @@ class RobotControlAPI:
 
     def apply_safety_limits(self, req):
         if req.max_velocity_scaling_factor < 0.01:
-            req.max_velocity_scaling_factor = 0.2
+            req.max_velocity_scaling_factor = 0.5
         if req.max_acceleration_scaling_factor < 0.01:
-            req.max_acceleration_scaling_factor = 0.2
+            req.max_acceleration_scaling_factor = 0.5
 
     def apply_workspace_constraints(self, req, arm_group, tcp_frame, is_handover=False):
         """Adds path constraints to keep arms in their respective zones."""
@@ -97,21 +97,12 @@ class RobotControlAPI:
         req.path_constraints = c
 
     async def send_gripper_goal(self, arm_group, width, max_effort=20.0):
-        self.logger.info(f"🦾 Requesting Symmetrical Gripper Action for {arm_group} (width: {width})...")
+        self.logger.info(f"🦾 Requesting Gripper Action for {arm_group} (width: {width})...")
         client = self.gripper1_client if arm_group == "franka1_arm" else self.gripper2_client
             
-        goal_msg = FollowJointTrajectory.Goal()
-        goal_msg.trajectory.joint_names = [
-            f"{'franka1' if arm_group == 'franka1_arm' else 'franka2'}_fr3_finger_joint1",
-            f"{'franka1' if arm_group == 'franka1_arm' else 'franka2'}_fr3_finger_joint2"
-        ]
-        
-        point = JointTrajectoryPoint()
-        pos = width / 2.0
-        point.positions = [pos, pos]
-        point.time_from_start.sec = 2
-        point.time_from_start.nanosec = 0
-        goal_msg.trajectory.points = [point]
+        goal_msg = GripperCommand.Goal()
+        goal_msg.command.position = width
+        goal_msg.command.max_effort = max_effort
         
         try:
             if not client.wait_for_server(timeout_sec=5.0):

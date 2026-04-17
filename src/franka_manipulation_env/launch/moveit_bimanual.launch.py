@@ -3,8 +3,9 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import DeclareLaunchArgument
-from launch.conditions import IfCondition
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, LogInfo
+from launch.event_handlers import OnProcessExit, OnShutdown
+from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import Command, FindExecutable, PathJoinSubstitution, LaunchConfiguration
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -27,7 +28,7 @@ def generate_launch_description():
     pkg_idra_share = get_package_share_directory('idra_franka_launch')
     pkg_env_share = get_package_share_directory('franka_bimanual_config')
     
-    use_rviz_arg = LaunchConfiguration('use_rviz', default='true')
+    use_gazebo = LaunchConfiguration('use_gazebo', default='false')
 
     # Bimanual Robot Description (URDF) - CUSTOM VERSION WITH SYMMETRIC GRIPPER
     xacro_file_urdf = os.path.join(pkg_env_share, 'urdf', 'bimanual_custom.urdf.xacro')
@@ -35,12 +36,23 @@ def generate_launch_description():
     # CUSTOM CONTROLLER PATH
     custom_controller_path = os.path.join(pkg_env_share, 'config', 'basic_controllers_custom.yaml')
     
-    robot_description_config = Command(['xacro', ' ', xacro_file_urdf, ' ', 'hand:=true', ' ', 'gazebo:=true', ' ', 'ros2_control:=false', ' ', 'controller_path:=', custom_controller_path])
+    robot_description_config = Command([
+        'xacro ', xacro_file_urdf, 
+        ' hand:=true', 
+        ' gazebo:=', use_gazebo, 
+        ' ros2_control:=true', 
+        ' controller_path:=', custom_controller_path
+    ])
     robot_description = {"robot_description": ParameterValue(robot_description_config, value_type=str)}
 
     # Bimanual SRDF
     xacro_file_srdf = os.path.join(pkg_env_share, 'srdf', 'bimanual_sim_srdf.xacro')
-    robot_description_semantic_config = Command(['xacro', ' ', xacro_file_srdf, ' ', 'name:=idra_bimanual_setup', ' ', 'hand:=true'])
+    robot_description_semantic_config = Command([
+        'xacro ', xacro_file_srdf, 
+        ' name:=idra_bimanual_setup', 
+        ' hand:=true',
+        ' gazebo:=', use_gazebo
+    ])
     robot_description_semantic = {"robot_description_semantic": ParameterValue(robot_description_semantic_config, value_type=str)}
 
     # Kinematics
@@ -141,8 +153,28 @@ def generate_launch_description():
         # Force start for debugging, ignore condition for now
     )
 
-    return LaunchDescription([
+    # In case of real hardware, we don't want to spawn the controller_manager and robot_state_publisher again
+    # as they are already managed by the hardware bringup.
+    # However, MoveIt nodes still need the robot_description parameters.
+    
+    nodes_to_launch = [
         DeclareLaunchArgument('use_rviz', default_value='true', description='Visualize the robot in Rviz'),
+        DeclareLaunchArgument('use_gazebo', default_value='false', description='Use Gazebo simulation'),
         move_group_node, 
-        rviz_node
-    ])
+        rviz_node,
+    ]
+
+    # Only add the spawner nodes if we are in Gazebo (Sim)
+    # If we are in Lab, these are already running.
+    def add_spawners(context):
+        if context.perform_substitution(use_gazebo) == 'true':
+            return [
+                robot_description_dependent_nodes_spawner_opaque_function,
+                spawn,
+                load_joint_state_broadcaster,
+                load_pose_broadcaster,
+                load_position_broadcaster
+            ]
+        return []
+
+    return LaunchDescription(nodes_to_launch + [OpaqueFunction(function=add_spawners)])
