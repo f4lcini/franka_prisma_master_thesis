@@ -7,4 +7,10 @@ install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
 
+install(PROGRAMS
+  scripts/gripper_test.py
+  scripts/test_skills.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_package()

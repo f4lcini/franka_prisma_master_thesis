@@ -7,6 +7,7 @@ import copy
 import tf2_ros
 import tf2_geometry_msgs  # noqa: F401 - registers the transform for PoseStamped
 from geometry_msgs.msg import PoseStamped
+import time
 
 # -----------------------------------------------------------------
 # TEST_MODE: bypass YOLO/blackboard and send a hardcoded world-frame
@@ -29,8 +30,11 @@ class PickActionClient(py_trees.behaviour.Behaviour):
         
         self.blackboard = py_trees.blackboard.Client(name=name)
         self.blackboard.register_key(key=f"{prefix}target_name", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key=f"{prefix}target_pose", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key=f"{prefix}active_arm", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="vlm_plan", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="handover_ready", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key=f"{prefix}last_error", access=py_trees.common.Access.WRITE)
 
     def setup(self, **kwargs):
         try:
@@ -96,14 +100,49 @@ class PickActionClient(py_trees.behaviour.Behaviour):
         goal_msg.approach_distance = 0.15
 
         self.logger.info(f"[{self.name}] Sending Pick Goal for {target_arm} to {goal_msg.target_pose.header.frame_id}")
-        self.send_goal_future = self.action_client.send_goal_async(goal_msg)
+        
+        # --- HANDOVER SYNC: Delay goal sending if targeting 'shared' ---
+        self.target_label = target_label
+        self.goal_msg = goal_msg
+        
+        if target_label == "shared":
+            self.logger.info(f"[{self.name}] ⏳ Waiting for donor arm to signal 'handover_ready'...")
+            self.send_goal_future = None
+        else:
+            self.send_goal_future = self.action_client.send_goal_async(goal_msg)
+        
         self.status = py_trees.common.Status.RUNNING
 
     def update(self):
+        # --- GLOBAL PLAN VALIDITY CHECK ---
+        if not hasattr(self.blackboard, "vlm_plan") or self.blackboard.vlm_plan is None:
+            self.logger.warning(f"[{self.name}] Global plan cleared (replan?)... failing.")
+            return py_trees.common.Status.FAILURE
+
         if hasattr(self, 'status') and self.status == py_trees.common.Status.FAILURE:
             return py_trees.common.Status.FAILURE
 
         if self.get_result_future is None:
+            # Check if we are waiting for handover
+            if self.target_label == "shared":
+                if not getattr(self.blackboard, "handover_ready", False):
+                    return py_trees.common.Status.RUNNING
+                
+                # Handover ready! Send goal if not already sent
+                if self.send_goal_future is None:
+                    if not hasattr(self, "handover_start_time"):
+                        self.logger.info(f"[{self.name}] ✅ Handover signal received! Waiting 2s for physics to settle...")
+                        self.handover_start_time = self.node.get_clock().now()
+                        return py_trees.common.Status.RUNNING
+                    
+                    elapsed = (self.node.get_clock().now() - self.handover_start_time).nanoseconds / 1e9
+                    if elapsed < 2.0:
+                        return py_trees.common.Status.RUNNING
+                    
+                    self.logger.info(f"[{self.name}] 🚀 Physics settled. Sending Pick goal.")
+                    self.send_goal_future = self.action_client.send_goal_async(self.goal_msg)
+                    return py_trees.common.Status.RUNNING
+
             if self.send_goal_future and self.send_goal_future.done():
                 goal_handle = self.send_goal_future.result()
                 if not goal_handle.accepted:
@@ -114,11 +153,21 @@ class PickActionClient(py_trees.behaviour.Behaviour):
         if self.get_result_future.done():
             result = self.get_result_future.result().result
             if result.success:
-                target_label = getattr(self.blackboard, f"{self.prefix}target_label", "none")
-                if target_label == "shared":
-                    self.blackboard.handover_ready = False
-                    self.logger.info(f"[{self.name}] Shared Pick complete. Handover flag reset.")
                 return py_trees.common.Status.SUCCESS
+            
+            # --- HARDENING: YIELD & RETRY if planning failed (collision/IK) ---
+            error_str = result.message.lower()
+            if "no_ik_solution" in error_str or "planning_failed" in error_str or "no path found" in error_str:
+                if not hasattr(self, "planning_retries"): self.planning_retries = 0
+                if self.planning_retries < 10:
+                    self.logger.warning(f"[{self.name}] 🚧 Planning failed (likely obstruction). Yielding & Retrying... ({self.planning_retries+1}/10)")
+                    self.planning_retries += 1
+                    self.send_goal_future = None # Reset to trigger new send_goal after delay
+                    self.get_result_future = None
+                    self.handover_start_time = self.node.get_clock().now() # Re-use delay logic
+                    return py_trees.common.Status.RUNNING
+            
+            setattr(self.blackboard, f"{self.prefix}last_error", result.message)
             return py_trees.common.Status.FAILURE
 
         return py_trees.common.Status.RUNNING

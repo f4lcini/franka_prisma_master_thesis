@@ -21,6 +21,7 @@ import rclpy
 import json
 from rclpy.action import ActionClient
 from franka_custom_interfaces.action import VlmQuery
+from franka_bimanual_skills.skills_repertoire import TaskPlan
 
 class VlmActionClient(py_trees.behaviour.Behaviour):
     def __init__(self, name="VLM Query", action_name="/vlm_query", task_description="Default description of the query"):
@@ -77,19 +78,20 @@ class VlmActionClient(py_trees.behaviour.Behaviour):
             result = self.get_result_future.result().result
             if result.success:
                 try:
-                    # Deserialize JSON plan
-                    plan_data = json.loads(result.vlm_plan_json)
-                    sequence = plan_data.get("sequence", [])
-                    reasoning = plan_data.get("reasoning", "No reasoning provided.")
+                    # Validate and Parse using Pydantic
+                    plan = TaskPlan.parse_raw(result.vlm_plan_json)
                     
-                    self.node.get_logger().info(f"[{self.name}] VLM Success!\nReasoning: {reasoning}")
-                    self.node.get_logger().info(f"[{self.name}] Plan Sequence: {[s['action'] for s in sequence]}")
+                    self.node.get_logger().info(f"[{self.name}] VLM Success (Validated)!\nReasoning: {plan.reasoning}")
+                    self.node.get_logger().info(f"[{self.name}] Plan Sequence: {[a.action for a in plan.sequence]}")
                     
-                    # Store sequence in blackboard
-                    self.blackboard.vlm_plan = sequence
+                    if not plan.sequence:
+                        self.node.get_logger().warning(f"[{self.name}] ⚠️ RECEIVED EMPTY PLAN SEQUENCE!")
+                    
+                    # Store sequence in blackboard (as list of dicts for the existing iterator)
+                    self.blackboard.vlm_plan = [a.dict() for a in plan.sequence]
                     return py_trees.common.Status.SUCCESS
                 except Exception as e:
-                    self.node.get_logger().error(f"[{self.name}] Failed to parse JSON plan: {e}")
+                    self.node.get_logger().error(f"[{self.name}] Pydantic Validation Failed: {e}")
                     return py_trees.common.Status.FAILURE
             else:
                 self.node.get_logger().error(f"[{self.name}] VLM Server returned failure: {result.message}")

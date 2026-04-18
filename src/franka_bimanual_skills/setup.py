@@ -5,7 +5,7 @@ from setuptools import find_packages, setup
 package_name = 'franka_bimanual_skills'
 
 setup(
-    name=package_name,
+    name='franka-bimanual-skills',
     version='0.0.0',
     packages=find_packages(exclude=['test']),
     data_files=[
@@ -34,7 +34,7 @@ setup(
             'vlm_server_node = franka_bimanual_skills.vlm_server_node:main',
             'object_localization_node = franka_bimanual_skills.object_localization_node:main',
             'simple_moveit_server = franka_bimanual_skills.simple_moveit_server:main',
-            'handover_coordinator = franka_bimanual_skills.handover_coordinator:main'
+            'handover_coordinator = franka_bimanual_skills.handover_coordinator:main',
         ],
     },
 )

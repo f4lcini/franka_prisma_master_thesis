@@ -229,6 +229,7 @@
     <xacro:configure_joint joint_name="${robot_name}_fr3_joint7" initial_position="${pi/4}" />
     <xacro:if value="$(eval gazebo and hand)">
       <xacro:configure_joint joint_name="${robot_name}_fr3_finger_joint1" initial_position="0.0" />
+      <xacro:configure_joint joint_name="${robot_name}_fr3_finger_joint2" initial_position="0.0" />
     </xacro:if>
 
     <!-- Elbow interfaces -->

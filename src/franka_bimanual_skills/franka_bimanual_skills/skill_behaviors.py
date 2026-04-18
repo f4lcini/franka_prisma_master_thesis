@@ -227,12 +227,20 @@ class SkillBehaviors:
             result.message = "Vertical descent (LIN) failed"
             return result
 
-        time.sleep(pause_s)
-            
         feedback.status = f"Step 3/4: Closing Gripper to {grasp_w}m"
         feedback.completion_percentage = 75.0
         goal_handle.publish_feedback(feedback)
         await self.robot_control_api.send_gripper_goal(arm_group, width=grasp_w, max_effort=30.0)
+
+        # --- FORCE-BASED GRASP VALIDATION ---
+        time.sleep(pause_s)
+        if not self.robot_control_api.check_grasp(arm_group):
+            self.logger.error(f"❌ Grasp FAILED for {arm_group}. No object detected (effort below threshold).")
+            goal_handle.abort()
+            result.success = False
+            result.message = "Object missed during grasp"
+            return result
+        self.logger.info(f"✅ Grasp CONFIRMED via force feedback for {arm_group}.")
 
         time.sleep(pause_l) 
             
@@ -506,6 +514,20 @@ class SkillBehaviors:
         grasp_w = self.node.get_parameter('gripper_grasp_width').value
         await self.robot_control_api.send_gripper_goal(arm_group, width=grasp_w)
         
+        # --- FORCE-BASED GRASP VALIDATION ---
+        pause_s = self.node.get_parameter('safety_pause_short').value
+        time.sleep(pause_s)
+        if not self.robot_control_api.check_grasp(arm_group):
+            self.logger.error(f"❌ Take FAILED for {arm_group}. No object detected (effort below threshold).")
+            # Clear handover flags to avoid hanging the other arm
+            self._recipient_ready.clear()
+            self._recipient_pre_pos_ready.clear()
+            goal_handle.abort()
+            result.success = False
+            result.message = "Object missed during take"
+            return result
+        self.logger.info(f"✅ Take grasp CONFIRMED via force feedback for {arm_group}.")
+
         self.logger.info(f"[{req_arm}] Grasp complete. Signaling RECIPIENT_GRASPED...")
         self._recipient_grasped.set()
 

@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Literal, List, Union
 
-ArmSelection = Literal["left_arm", "right_arm"]
+ArmSelection = Literal["left", "right", "both", "left_arm", "right_arm"]
 
 # ==========================================
 # 1. ATOMIC ACTIONS DEFINITION (SKILLS)

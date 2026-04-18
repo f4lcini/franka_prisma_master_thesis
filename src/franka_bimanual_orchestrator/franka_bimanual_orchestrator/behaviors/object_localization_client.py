@@ -18,12 +18,21 @@ class ObjectLocalizationClient(py_trees.behaviour.Behaviour):
         self.blackboard = py_trees.blackboard.Client(name=name)
         self.blackboard.register_key(key=f"{prefix}target_name", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key=f"{prefix}target_pose", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key=f"{prefix}last_error", access=py_trees.common.Access.WRITE)
 
     def setup(self, **kwargs):
         try:
             self.node = kwargs['node']
         except KeyError:
             return False
+
+        # --- HARDENING: Check for bypass in setup to avoid unnecessary timeouts ---
+        if not self.node.has_parameter('bypass_perception'):
+            self.node.declare_parameter('bypass_perception', False)
+        
+        if self.node.get_parameter('bypass_perception').value:
+             self.node.get_logger().info(f"[{self.name}] 🧪 Perception Bypass Active in Setup.")
+             return True
 
         self.action_client = ActionClient(self.node, DetectObject, self.action_name)
         # Make it non-blocking for No-YOLO testing
@@ -32,6 +41,12 @@ class ObjectLocalizationClient(py_trees.behaviour.Behaviour):
         return True
 
     def initialise(self):
+        self.bypass = False
+        if not self.node.has_parameter('bypass_perception'):
+            self.node.declare_parameter('bypass_perception', False)
+        
+        self.bypass = self.node.get_parameter('bypass_perception').value
+        
         target_name = "none"
         if hasattr(self.blackboard, f"{self.prefix}target_name"):
             target_name = getattr(self.blackboard, f"{self.prefix}target_name")
@@ -39,11 +54,30 @@ class ObjectLocalizationClient(py_trees.behaviour.Behaviour):
         goal_msg = DetectObject.Goal()
         goal_msg.object_name = target_name
 
+        if self.bypass:
+            self.node.get_logger().info(f"[{self.name}] 🧪 BYPASS ACTIVE. Using hardcoded pose for '{target_name}'")
+            return
+
         self.node.get_logger().info(f"[{self.name}] Requesting YOLO localization for: '{target_name}'")
         self.send_goal_future = self.action_client.send_goal_async(goal_msg)
         self.get_result_future = None
 
     def update(self):
+        if self.bypass:
+            from geometry_msgs.msg import PoseStamped
+            # Use hardcoded world-frame pose matching test_skills.py defaults
+            target_pose = PoseStamped()
+            target_pose.header.frame_id = 'world'
+            target_pose.header.stamp = self.node.get_clock().now().to_msg()
+            target_pose.pose.position.x = 1.10
+            target_pose.pose.position.y = 0.20
+            target_pose.pose.position.z = 0.225
+            target_pose.pose.orientation.x = 1.0 # TCP facing down
+            
+            setattr(self.blackboard, f"{self.prefix}target_pose", target_pose)
+            self.node.get_logger().info(f"[{self.name}] 🎯 Written '{self.prefix}target_pose' to blackboard.")
+            return py_trees.common.Status.SUCCESS
+
         if not self.send_goal_future:
             return py_trees.common.Status.FAILURE
         if self.send_goal_future and not self.send_goal_future.done():
@@ -61,6 +95,8 @@ class ObjectLocalizationClient(py_trees.behaviour.Behaviour):
             if result.success:
                 setattr(self.blackboard, f"{self.prefix}target_pose", result.target_pose)
                 return py_trees.common.Status.SUCCESS
+            
+            setattr(self.blackboard, f"{self.prefix}last_error", "missing_pos")
             return py_trees.common.Status.FAILURE
         return py_trees.common.Status.FAILURE
 

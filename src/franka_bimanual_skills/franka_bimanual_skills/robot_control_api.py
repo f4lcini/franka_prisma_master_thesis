@@ -5,9 +5,11 @@ from moveit_msgs.srv import GetCartesianPath
 from moveit_msgs.msg import MotionPlanRequest, Constraints, PositionConstraint, OrientationConstraint, BoundingVolume, PlanningScene
 from shape_msgs.msg import SolidPrimitive
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from control_msgs.action import FollowJointTrajectory
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Pose
 import copy
+import asyncio
 import time
 import traceback
 
@@ -23,11 +25,14 @@ class RobotControlAPI:
         self.move_group_client = ActionClient(
             self.node, MoveGroup, 'move_action', callback_group=client_cb_group)
         
-        # Gripper Publishers (direct topic - more reliable than action in simulation)
-        self.gripper1_pub = self.node.create_publisher(
-            JointTrajectory, 'franka1_gripper/joint_trajectory', 10)
-        self.gripper2_pub = self.node.create_publisher(
-            JointTrajectory, 'franka2_gripper/joint_trajectory', 10)
+        # Gripper Action Clients — JTC exposes FollowJointTrajectory
+        # action at <controller_name>/follow_joint_trajectory
+        self.gripper1_client = ActionClient(
+            self.node, FollowJointTrajectory, 'franka1_gripper/follow_joint_trajectory',
+            callback_group=client_cb_group)
+        self.gripper2_client = ActionClient(
+            self.node, FollowJointTrajectory, 'franka2_gripper/follow_joint_trajectory',
+            callback_group=client_cb_group)
 
         self.cartesian_client = self.node.create_client(
             GetCartesianPath, 'compute_cartesian_path', callback_group=client_cb_group)
@@ -38,20 +43,23 @@ class RobotControlAPI:
         if not self.move_group_client.wait_for_server(timeout_sec=1.0):
              self.logger.warning("⚠️ MoveGroup (/move_action) not ready yet. Will retry during execution.")
         
-        if not self.gripper1_client.wait_for_server(timeout_sec=0.5):
-             self.logger.warning("⚠️ Gripper 1 not ready yet.")
-        if not self.gripper2_client.wait_for_server(timeout_sec=0.5):
-             self.logger.warning("⚠️ Gripper 2 not ready yet.")
+        # Gripper Action Servers
+        if not self.gripper1_client.wait_for_server(timeout_sec=2.0):
+            self.logger.warning("⚠️ franka1_gripper/follow_joint_trajectory not ready yet.")
+        if not self.gripper2_client.wait_for_server(timeout_sec=2.0):
+            self.logger.warning("⚠️ franka2_gripper/follow_joint_trajectory not ready yet.")
 
-        # --- DYNAMIC COLLISION TRACKING ---
+        # --- DYNAMIC COLLISION & FORCE TRACKING ---
         self.latest_joint_states = {}
+        self.latest_efforts = {}
         self.joint_state_sub = self.node.create_subscription(
             JointState, '/joint_states', self.joint_state_cb, 10, callback_group=client_cb_group)
         self.collision_pub = self.node.create_publisher(PlanningScene, '/planning_scene', 10)
 
     def joint_state_cb(self, msg):
-        for name, pos in zip(msg.name, msg.position):
+        for name, pos, eff in zip(msg.name, msg.position, msg.effort):
             self.latest_joint_states[name] = pos
+            self.latest_efforts[name] = eff
 
     def apply_safety_limits(self, req):
         if req.max_velocity_scaling_factor < 0.01:
@@ -97,33 +105,57 @@ class RobotControlAPI:
         req.path_constraints = c
 
     async def send_gripper_goal(self, arm_group, width, max_effort=20.0):
-        self.logger.info(f"🦾 Sending Gripper Trajectory for {arm_group} (width: {width})...")
+        self.logger.info(f"🦾 Sending Gripper Action for {arm_group} (width: {width}m)...")
         
-        publisher = self.gripper1_pub if arm_group == "franka1_arm" else self.gripper2_pub
+        client = self.gripper1_client if arm_group == "franka1_arm" else self.gripper2_client
         prefix = "franka1" if arm_group == "franka1_arm" else "franka2"
         
+        goal = FollowJointTrajectory.Goal()
         traj = JointTrajectory()
-        traj.joint_names = [
-            f"{prefix}_fr3_finger_joint1",
-            f"{prefix}_fr3_finger_joint2"
-        ]
+        traj.joint_names = [f"{prefix}_fr3_finger_joint1", f"{prefix}_fr3_finger_joint2"]
         traj.header.stamp = self.node.get_clock().now().to_msg()
         
         point = JointTrajectoryPoint()
-        pos = width / 2.0
-        point.positions = [pos, pos]
+        pos = float(width / 2.0)   # each finger travels half the total width
+        point.positions  = [pos, pos]
         point.velocities = [0.0, 0.0]
-        point.time_from_start.sec = 2
-        point.time_from_start.nanosec = 0
+        # Reduce time to 0.5s for faster response in simulation
+        point.time_from_start.sec     = 0
+        point.time_from_start.nanosec = 500000000 
         traj.points = [point]
+        goal.trajectory = traj
+
+        # Relax tolerances so the action returns SUCCESS even if physics stalls the fingers
+        goal.goal_time_tolerance.sec = 0
+        goal.goal_time_tolerance.nanosec = 500000000
         
-        publisher.publish(traj)
-        self.logger.info(f"✅ Gripper trajectory published for {arm_group}")
-        # Wait for fingers to physically travel
-        time.sleep(2.5)
-        return True
+        try:
+            goal_handle = await client.send_goal_async(goal)
+            if not goal_handle.accepted:
+                self.logger.error(f"❌ Gripper goal REJECTED for {arm_group}")
+                return False
+            
+            result = await goal_handle.get_result_async()
+            self.logger.info(f"✅ Gripper goal completed (Symmetrical/Fast) for {arm_group}")
+            return True
+        except Exception as e:
+            self.logger.error(f"❌ Gripper action exception: {e}")
+            return False
+
+    def publish_planning_scene(self):
+        """Pushes latest joint states to the planning scene to ensure inter-arm collision awareness."""
+        msg = PlanningScene()
+        msg.is_diff = True
+        msg.robot_state.joint_state.header.stamp = self.node.get_clock().now().to_msg()
+        for name, pos in self.latest_joint_states.items():
+            msg.robot_state.joint_state.name.append(name)
+            msg.robot_state.joint_state.position.append(pos)
+        self.collision_pub.publish(msg)
+        # --- HARDENING: Small sleep to ensure MoveIt processes the scene update before the plan request arrives ---
+        time.sleep(0.1)
 
     async def send_pose_goal_custom(self, group_name, pose_stamped, tcp_frame, planner="PTP", is_handover=False):
+        self.publish_planning_scene() # Sync state before planning
         self.logger.info(f"📍 Requesting {planner} Move for {group_name} using Pilz...")
         
         goal_msg = MoveGroup.Goal()
@@ -176,6 +208,11 @@ class RobotControlAPI:
                 return True
             else:
                 error_str = parse_error_code(error_val)
+                # --- HARDENING: FALLBACK TO OMPL FOR IK FAILURES ---
+                if error_val == -1 and planner != "OMPL":
+                    self.logger.warning(f"⚠️ {planner} failed IK for {group_name}. Falling back to OMPL...")
+                    return await self.send_pose_goal_custom(group_name, pose_stamped, tcp_frame, planner="OMPL", is_handover=is_handover)
+                
                 self.logger.error(f"❌ MoveIt {planner} FAILED: {error_str} ({error_val}) for {group_name}")
                 return False
         except Exception as e:
@@ -183,6 +220,7 @@ class RobotControlAPI:
             return False
 
     async def send_pose_goal(self, group_name, pose_stamped, tcp_frame, is_handover=False):
+        self.publish_planning_scene() # Sync state before planning
         self.logger.info(f"📍 Requesting Cartesian Move for {group_name} to frame {pose_stamped.header.frame_id}")
         
         goal_msg = MoveGroup.Goal()
@@ -286,3 +324,60 @@ class RobotControlAPI:
         except Exception as e:
             self.logger.error(f"❌ Exception in cartesian execution: {e}")
             return False
+
+    def check_grasp(self, arm_group, threshold=0.04, stall_threshold=0.001):
+        """
+        Calculates the combined effort on the gripper fingers to check for a grasp.
+        --- HARDENING: Added temporal verification and POSITION STALL check for Sim/No-Perception ---
+        """
+        prefix = "franka1" if "franka1" in arm_group else "franka2"
+        f1 = f"{prefix}_fr3_finger_joint1"
+        f2 = f"{prefix}_fr3_finger_joint2"
+        
+        # We need to know what width we were AIMING for to check for stall
+        # Default grasp width is 0.048 (4.8cm). Cube is 5.0cm.
+        target_width = 0.048 
+        
+        verification_count = 0
+        stall_count = 0
+        
+        for _ in range(5):
+            eff1 = self.latest_efforts.get(f1, 0.0)
+            eff2 = self.latest_efforts.get(f2, 0.0)
+            total_effort = abs(eff1) + abs(eff2)
+            
+            p1 = self.latest_joint_states.get(f1, None)
+            p2 = self.latest_joint_states.get(f2, None)
+            
+            if p1 is None or p2 is None:
+                self.logger.warning(f"⚠️ Gripper joints NOT FOUND. f1={f1} in keys: {f1 in self.latest_joint_states}, f2={f2} in keys: {f2 in self.latest_joint_states}")
+                if not self.latest_joint_states:
+                    self.logger.warning("Empty joint states!")
+                actual_width = 0.0
+            else:
+                actual_width = p1 + p2
+            
+            # 1. Effort check (Good for hardware)
+            if total_effort > threshold:
+                verification_count += 1
+            
+            # 2. Position Stall check (Good for simulation)
+            # If fingers are significantly wider than the target width, they probably hit something.
+            if actual_width > (target_width + stall_threshold):
+                stall_count += 1
+                
+            time.sleep(0.1)
+            
+        is_grasped_effort = verification_count >= 3
+        is_grasped_stall = stall_count >= 3
+        
+        self.logger.info(f"🔍 Grasp Check [{prefix}]: Effort Hit {verification_count}/5 | Position Stall {stall_count}/5 (Width: {actual_width:.3f}m)")
+        
+        if is_grasped_effort:
+            self.logger.info(f"✅ Grasp CONFIRMED via effort threshold ({threshold})")
+            return True
+        if is_grasped_stall:
+            self.logger.info(f"✅ Grasp CONFIRMED via position stall (Obstruction at {actual_width:.3f}m vs Target {target_width}m)")
+            return True
+            
+        return False

@@ -30,17 +30,19 @@ franka2_arm_controller:
     - franka2_fr3_joint6
     - franka2_fr3_joint7
 
+# Gripper controllers in Gazebo: JTC (not GripperActionController)
+# finger_joint2 is a mimic joint — only finger_joint1 is commanded.
 franka1_gripper:
-  action_ns: gripper_cmd
-  type: GripperCommand
+  action_ns: follow_joint_trajectory
+  type: FollowJointTrajectory
   default: true
   joints:
     - franka1_fr3_finger_joint1
     - franka1_fr3_finger_joint2
 
 franka2_gripper:
-  action_ns: gripper_cmd
-  type: GripperCommand
+  action_ns: follow_joint_trajectory
+  type: FollowJointTrajectory
   default: true
   joints:
     - franka2_fr3_finger_joint1

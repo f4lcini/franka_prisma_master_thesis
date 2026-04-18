@@ -25,7 +25,7 @@ MOVEIT_ERROR_CODES = {
 
 PREDEFINED_TARGETS = {
     "base_pose": (1.1, 0.2, 0.225),
-    "shared":    (0.6, 0.5, 0.250),    # Table crossover point
+    "shared":    (0.6, 0.5, 0.225),    # Table crossover point (aligned to Z=0.225)
     "box":       (0.1, 0.1, 0.140),    # Receptacle
     # "mid_air":   (0.5, 0.4, 0.5)     # REMOVED: Handover disabled
 }
@@ -43,11 +43,11 @@ GAZEBO_WORLD_POSES = {
 
 DEFAULT_OFFSETS = {
     'approach_clearance': 0.1,
-    'pick_z_offset': 0.105,
-    'place_z_offset': 0.140,
+    'pick_z_offset': 0.09,      # Deeper engagement to avoid landing 'on top' of the cube
+    'place_z_offset': 0.110,     # release 5mm above table
     'gripper_open_width': 0.08,
     'gripper_grasp_width': 0.048,
-    'safety_pause_short': 0.5,
+    'safety_pause_short': 1.5,   # Increased for physics settlement
     'safety_pause_long': 1.0,
     'handover_safety_offset': 0.25,
     'handover_donor_z_offset': 0.20,     # Reduced slightly to keep elbow comfortable

@@ -77,19 +77,20 @@ class VlmServerNode(Node):
         return CancelResponse.ACCEPT
 
     async def execute_callback(self, goal_handle):
-        self.get_logger().info('Executing VLM planning goal...')
+        task_description = goal_handle.request.task_description
+        self.get_logger().info(f"Executing VLM planning goal for: '{task_description}'")
         result = VlmQuery.Result()
         
-        # --- Safety Cache ---
-        if self.last_plan_cache is not None:
-            self.get_logger().info("Using CACHED plan to avoid API quota exhaustion.")
+        # --- Safety Cache: Only use if task is identical ---
+        if self.last_plan_cache is not None and getattr(self, "last_task_input", "") == task_description:
+            self.get_logger().info("Using CACHED plan for matching task description.")
             result.success = True
             result.vlm_plan_json = self.last_plan_cache
             result.message = "Cached plan returned."
             goal_handle.succeed()
             return result
 
-        task_description = goal_handle.request.task_description
+        self.last_task_input = task_description
         
         # GENERALIZED BIMANUAL PROMPT
         system_prompt = (

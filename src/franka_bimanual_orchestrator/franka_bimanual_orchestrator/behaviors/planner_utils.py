@@ -29,6 +29,8 @@ class PlanSplitter(py_trees.behaviour.Behaviour):
         self.blackboard.right_arm_plan = right_plan
         
         self.node.get_logger().info(f"[{self.name}] Plan Split: Left({len(left_plan)}) | Right({len(right_plan)})")
+        if not left_plan and not right_plan:
+             self.node.get_logger().warning(f"[{self.name}] ⚠️ BOTH PLANS ARE EMPTY after split!")
         return py_trees.common.Status.SUCCESS
 
 class DynamicActionIterator(py_trees.behaviour.Behaviour):

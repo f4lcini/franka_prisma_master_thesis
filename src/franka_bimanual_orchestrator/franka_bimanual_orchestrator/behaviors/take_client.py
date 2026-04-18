@@ -18,6 +18,7 @@ class TakeActionClient(py_trees.behaviour.Behaviour):
         self.blackboard = py_trees.blackboard.Client(name=name)
         self.blackboard.register_key(key=f"{prefix}target_name", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key=f"{prefix}active_arm", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key=f"{prefix}last_error", access=py_trees.common.Access.WRITE)
 
     def setup(self, **kwargs):
         try:
@@ -71,7 +72,11 @@ class TakeActionClient(py_trees.behaviour.Behaviour):
         
         if self.get_result_future.done():
             result = self.get_result_future.result().result
-            return py_trees.common.Status.SUCCESS if result.success else py_trees.common.Status.FAILURE
+            if result.success:
+                return py_trees.common.Status.SUCCESS
+            
+            setattr(self.blackboard, f"{self.prefix}last_error", result.message)
+            return py_trees.common.Status.FAILURE
 
         return py_trees.common.Status.RUNNING
 

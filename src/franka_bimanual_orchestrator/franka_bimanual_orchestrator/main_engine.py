@@ -23,6 +23,7 @@ from franka_bimanual_orchestrator.behaviors.wait_client import WaitActionClient
 from franka_bimanual_orchestrator.behaviors.give_client import GiveActionClient
 from franka_bimanual_orchestrator.behaviors.take_client import TakeActionClient
 from franka_bimanual_orchestrator.behaviors.planner_utils import PlanSplitter, DynamicActionIterator, PlanPopper
+from franka_bimanual_orchestrator.behaviors.recovery_utils import MissionAbort, ReplanTrigger, MissionFail, MissionExit
 
 def create_arm_lane(arm_name="left"):
     """
@@ -36,14 +37,15 @@ def create_arm_lane(arm_name="left"):
     step = py_trees.composites.Sequence(name=f"Step_{arm_name}", memory=True)
     
     # 1.1 Condition: Plan not empty (Returns FAILURE when plan is empty)
-    has_plan = py_trees.behaviours.CheckBlackboardVariableValue(
-        name=f"Has_{arm_name}_Plan?",
-        check=py_trees.common.ComparisonExpression(
-            variable=plan_key,
-            value=[],
-            operator=operator.ne
+    def create_plan_check(name_suffix):
+        return py_trees.behaviours.CheckBlackboardVariableValue(
+            name=f"Has_{arm_name}_Plan_{name_suffix}?",
+            check=py_trees.common.ComparisonExpression(
+                variable=plan_key,
+                value=[],
+                operator=operator.ne
+            )
         )
-    )
     
     # 1.2 Iterator
     iterator = DynamicActionIterator(name=f"Iterator_{arm_name}", plan_key=plan_key, prefix=prefix)
@@ -71,42 +73,104 @@ def create_arm_lane(arm_name="left"):
                 operator=operator.eq
             )
         )
-        skill_seq.add_children([is_active, client_node])
+        
+        # Skill with safety valve
+        skill_execution = py_trees.composites.Selector(name=f"{skill_name}_Execution_{arm_name}", memory=False)
+        skill_execution.add_child(client_node)
+        
+        # Recovery Selector: Replan vs Fatal Abort
+        recovery_selector = py_trees.composites.Selector(name=f"{skill_name}_Recovery_{arm_name}", memory=False)
+        
+        # Branch A: REPLAN if object missed (PICK or TAKE)
+        if skill_name in ["PICK", "TAKE", "FIND_OBJECT"]:
+            replan_branch = py_trees.composites.Sequence(name=f"Replan_Branch_{arm_name}", memory=True)
+            
+            # --- Robust Error Check Selector (Avoids TypeError with operator.contains) ---
+            error_selector = py_trees.composites.Selector(name=f"Check_Error_{arm_name}", memory=False)
+            
+            error_keywords = ["Object missed during grasp", "Object missed during take", "missing_pos", "No object detected"]
+            for keyword in error_keywords:
+                check_node = py_trees.behaviours.CheckBlackboardVariableValue(
+                    name=f"Error_is_{keyword.replace(' ', '_')}_{arm_name}?",
+                    check=py_trees.common.ComparisonExpression(
+                        variable=f"{prefix}last_error",
+                        value=keyword,
+                        operator=operator.eq
+                    )
+                )
+                error_selector.add_child(check_node)
+            
+            replan_trigger = ReplanTrigger(name=f"Trigger_Replan_{arm_name}")
+            error_home_soft = MoveHomeClient(name=f"Soft_Home_{arm_name}", prefix=prefix)
+            replan_branch.add_children([error_selector, error_home_soft, replan_trigger])
+            recovery_selector.add_child(replan_branch)
+
+        # Branch B: FATAL ABORT (IK Failure, Move Rejection, etc.)
+        fatal_abort = py_trees.composites.Sequence(name=f"Fatal_Abort_{arm_name}", memory=True)
+        error_home_fatal = MoveHomeClient(name=f"Safety_Home_{arm_name}", prefix=prefix)
+        abort_signal = MissionAbort(name=f"Abort_from_{skill_name}_{arm_name}")
+        fatal_fail = MissionFail(name=f"Terminal_Fail_{arm_name}")
+        fatal_abort.add_children([error_home_fatal, abort_signal, fatal_fail])
+        
+        recovery_selector.add_child(fatal_abort)
+        skill_execution.add_child(recovery_selector)
+        
+        skill_seq.add_children([is_active, skill_execution])
         dispatcher.add_child(skill_seq)
         
     # 1.4 Popper
     popper = PlanPopper(name=f"Popper_{arm_name}", plan_key=plan_key)
     
-    step.add_children([has_plan, iterator, dispatcher, popper])
+    step.add_children([create_plan_check("Loop"), iterator, dispatcher, popper])
     
-    # Repeat indefinitely until 'step' fails (i.e. has_plan returns FAILURE)
+    # 2. Operational Sequence: Repeat steps until has_plan fails (plan empty)
+    op_seq = py_trees.composites.Sequence(name=f"Op_Seq_{arm_name}", memory=True)
+    
+    # Wrap Repeat to ensure it finishes normally
     repeat_loop = py_trees.decorators.Repeat(
         child=step,
         num_success=-1,
-        name=f"Repeat_{arm_name.upper()}"
+        name=f"Loop_{arm_name.upper()}"
     )
     
-    # When repeat_loop terminates (Failure), we want the lane to return SUCCESS to the Parallel node.
-    lane = py_trees.decorators.FailureIsSuccess(
-        child=repeat_loop,
-        name=f"Lane_{arm_name.upper()}"
-    )
+    op_seq.add_children([create_plan_check("Gate"), repeat_loop])
+    
+    # 3. Final Lane Structure (Selector)
+    lane = py_trees.composites.Selector(name=f"Lane_{arm_name}", memory=False)
+    
+    # Recovery and Retry logic would go inside the dispatcher or here.
+    # For now, we ensure the arm moves HOME after the operational sequence finishes (fails due to empty plan).
+    final_home = MoveHomeClient(name=f"Final_Home_{arm_name}", prefix=prefix)
+    
+    lane.add_children([op_seq, final_home])
     
     return lane
 
 def create_tree(task_description="Default Task"):
-    root = py_trees.composites.Selector(name="Root_Guard", memory=True)
+    # --- ROOT SELECTOR ---
+    root = py_trees.composites.Selector(name="Root_Guardian", memory=False)
     
-    # Condition: Stop if mission already marked simple success
+    # 1. MISSION DONE GUARD
     mission_done = py_trees.behaviours.CheckBlackboardVariableValue(
-        name="Mission_Done?",
+        name="Mission_Completed?",
         check=py_trees.common.ComparisonExpression(variable="mission_completed", value=True, operator=operator.eq)
     )
 
-    main_sequence = py_trees.composites.Sequence(name="Bimanual_Orchestrator", memory=True)
+    # 2. EMERGENCY STOP GUARD (Terminal state)
+    emergency_branch = py_trees.behaviours.CheckBlackboardVariableValue(
+        name="Mission_Aborted?",
+        check=py_trees.common.ComparisonExpression(variable="mission_aborted", value=True, operator=operator.eq)
+    )
+
+    # 3. MISSION REPEAT LOOP
+    # This loop keeps ticking until mission_completed or mission_aborted is set.
+    main_loop = py_trees.composites.Sequence(name="Mission_Loop", memory=True)
+
+    # 3.1 Workflow Sequence
+    workflow = py_trees.composites.Sequence(name="Bimanual_Orchestrator", memory=True)
     
-    # 1. PLANNING GATE
-    planning_gate = py_trees.composites.Selector(name="Planning_Gate", memory=False)
+    # - Planning Gate
+    planning_gate = py_trees.composites.Selector(name="Planning_Gate", memory=True)
     has_plan_already = py_trees.behaviours.CheckBlackboardVariableValue(
         name="Plan_Exists?",
         check=py_trees.common.ComparisonExpression(variable="vlm_plan", value=None, operator=operator.ne)
@@ -116,24 +180,28 @@ def create_tree(task_description="Default Task"):
 
     splitter = PlanSplitter(name="Plan_Splitter")
     
-    # 2. PARALLEL EXECUTION
+    # - Parallel Lanes
     execution_parallel = py_trees.composites.Parallel(
         name="Side_By_Side_Execution",
         policy=py_trees.common.ParallelPolicy.SuccessOnAll()
     )
     execution_parallel.add_children([create_arm_lane("left"), create_arm_lane("right")])
     
-    # 3. FINALIZE (Latching)
+    # - Success Latching
     mark_done = py_trees.behaviours.SetBlackboardVariable(
         name="Set_Complete",
         variable_name="mission_completed",
         variable_value=True,
         overwrite=True
     )
+    mission_exit = MissionExit(name="Final_Shutdown")
 
-    main_sequence.add_children([planning_gate, splitter, execution_parallel, mark_done])
-    root.add_children([mission_done, main_sequence])
+    workflow.add_children([planning_gate, splitter, execution_parallel, mark_done, mission_exit])
     
+    # No decorator needed here; Root_Guardian will tick 'workflow' again on next loop if it fails/restarts.
+    main_loop.add_child(workflow)
+
+    root.add_children([mission_done, emergency_branch, main_loop])
     return root
 
 def main():
@@ -157,16 +225,20 @@ def main():
     # INITIALIZE BLACKBOARD
     blackboard = py_trees.blackboard.Client(name="Main")
     blackboard.register_key(key="mission_completed", access=py_trees.common.Access.WRITE)
+    blackboard.register_key(key="mission_aborted", access=py_trees.common.Access.WRITE)
+    blackboard.register_key(key="abort_message", access=py_trees.common.Access.WRITE)
     blackboard.register_key(key="vlm_plan", access=py_trees.common.Access.WRITE)
     blackboard.register_key(key="handover_ready", access=py_trees.common.Access.WRITE)
     blackboard.register_key(key="handover_starting", access=py_trees.common.Access.WRITE)
     
     blackboard.mission_completed = False
+    blackboard.mission_aborted = False
+    blackboard.abort_message = ""
     blackboard.vlm_plan = None
     blackboard.handover_ready = False
     blackboard.handover_starting = False
 
-    print("\n--- Bimanual Parallel Engine Ready (No-Loop Version) ---")
+    print("\n--- Bimanual Parallel Engine Ready (Robust Looping Version) ---")
     
     try:
         tree.tick_tock(period_ms=1000)

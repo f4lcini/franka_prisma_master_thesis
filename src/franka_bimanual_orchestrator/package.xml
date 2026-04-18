@@ -11,6 +11,7 @@
   <depend>py_trees</depend>
   <depend>py_trees_ros</depend>
   <depend>franka_custom_interfaces</depend>
+  <depend>franka_bimanual_skills</depend>
   <depend>geometry_msgs</depend>
 
   <test_depend>ament_copyright</test_depend>

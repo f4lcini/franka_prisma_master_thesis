@@ -63,7 +63,12 @@ class PlaceActionClient(py_trees.behaviour.Behaviour):
         goal_msg = PlaceObject.Goal()
         goal_msg.arm = target_arm
         goal_msg.place_pose = copy.deepcopy(target_pose)
-        goal_msg.retreat_distance = 0.15 
+        
+        # INCREASE RETREAT FOR HANDOVERS: Give more space to the other arm
+        if target_loc == "shared":
+            goal_msg.retreat_distance = 0.40
+        else:
+            goal_msg.retreat_distance = 0.15 
 
         self.logger.info(f"[{self.name}] Sending Place Goal for {target_arm} to {goal_msg.place_pose.header.frame_id}")
         if target_loc == "shared":
