@@ -12,7 +12,23 @@ import rclpy
 import py_trees
 import py_trees_ros
 import sys
+import time
 import operator
+
+class UnmatchedActionLogger(py_trees.behaviour.Behaviour):
+    """
+    Diagnostic node that logs when the dispatcher fails to find a matching skill.
+    """
+    def __init__(self, name="Diagnostic_Fallback", prefix="left_"):
+        super().__init__(name=name)
+        self.prefix = prefix
+        self.blackboard = py_trees.blackboard.Client(name=name)
+        self.blackboard.register_key(key=f"{prefix}active_action", access=py_trees.common.Access.READ)
+
+    def update(self):
+        action = getattr(self.blackboard, f"{self.prefix}active_action", "NONE")
+        self.logger.error(f"❌ [DISPATCHER ERROR] No skills matched current action: '{action}' for {self.prefix[:-1]}!")
+        return py_trees.common.Status.FAILURE
 
 from franka_bimanual_orchestrator.behaviors.vlm_client import VlmActionClient
 from franka_bimanual_orchestrator.behaviors.object_localization_client import ObjectLocalizationClient
@@ -33,8 +49,8 @@ def create_arm_lane(arm_name="left"):
     prefix = f"{arm_name}_"
     plan_key = f"{arm_name}_arm_plan"
     
-    # 1. Action Step (Sequence) - MUST return FAILURE when no plan left to exit the repeat
-    step = py_trees.composites.Sequence(name=f"Step_{arm_name}", memory=True)
+    # 1. Action Step (Sequence) - No memory to ensure loops refresh correctly
+    step = py_trees.composites.Sequence(name=f"Step_{arm_name}", memory=False)
     
     # 1.1 Condition: Plan not empty (Returns FAILURE when plan is empty)
     def create_plan_check(name_suffix):
@@ -50,9 +66,10 @@ def create_arm_lane(arm_name="left"):
     # 1.2 Iterator
     iterator = DynamicActionIterator(name=f"Iterator_{arm_name}", plan_key=plan_key, prefix=prefix)
     
-    # 1.3 Dispatcher
+    # 1.3 Action Dispatcher (Non-memory Selector)
     dispatcher = py_trees.composites.Selector(name=f"Dispatcher_{arm_name}", memory=False)
     
+    # Skills Library mapping
     available_skills = {
         "FIND_OBJECT": ObjectLocalizationClient(name=f"YOLO_{arm_name}", prefix=prefix),
         "PICK": PickActionClient(name=f"Pick_{arm_name}", prefix=prefix),
@@ -64,7 +81,7 @@ def create_arm_lane(arm_name="left"):
     }
 
     for skill_name, client_node in available_skills.items():
-        skill_seq = py_trees.composites.Sequence(name=f"{skill_name}_{arm_name}_Seq", memory=True)
+        skill_seq = py_trees.composites.Sequence(name=f"{skill_name}_{arm_name}_Seq", memory=False)
         is_active = py_trees.behaviours.CheckBlackboardVariableValue(
             name=f"Is_{skill_name}_{arm_name}?",
             check=py_trees.common.ComparisonExpression(
@@ -83,7 +100,7 @@ def create_arm_lane(arm_name="left"):
         
         # Branch A: REPLAN if object missed (PICK or TAKE)
         if skill_name in ["PICK", "TAKE", "FIND_OBJECT"]:
-            replan_branch = py_trees.composites.Sequence(name=f"Replan_Branch_{arm_name}", memory=True)
+            replan_branch = py_trees.composites.Sequence(name=f"Replan_Branch_{arm_name}", memory=False)
             
             # --- Robust Error Check Selector (Avoids TypeError with operator.contains) ---
             error_selector = py_trees.composites.Selector(name=f"Check_Error_{arm_name}", memory=False)
@@ -106,7 +123,7 @@ def create_arm_lane(arm_name="left"):
             recovery_selector.add_child(replan_branch)
 
         # Branch B: FATAL ABORT (IK Failure, Move Rejection, etc.)
-        fatal_abort = py_trees.composites.Sequence(name=f"Fatal_Abort_{arm_name}", memory=True)
+        fatal_abort = py_trees.composites.Sequence(name=f"Fatal_Abort_{arm_name}", memory=False)
         error_home_fatal = MoveHomeClient(name=f"Safety_Home_{arm_name}", prefix=prefix)
         abort_signal = MissionAbort(name=f"Abort_from_{skill_name}_{arm_name}")
         fatal_fail = MissionFail(name=f"Terminal_Fail_{arm_name}")
@@ -118,13 +135,16 @@ def create_arm_lane(arm_name="left"):
         skill_seq.add_children([is_active, skill_execution])
         dispatcher.add_child(skill_seq)
         
+    # --- DIAGNOSTIC FALLBACK ---
+    dispatcher.add_child(UnmatchedActionLogger(name=f"Fallback_{arm_name}", prefix=prefix))
+
     # 1.4 Popper
     popper = PlanPopper(name=f"Popper_{arm_name}", plan_key=plan_key)
     
     step.add_children([create_plan_check("Loop"), iterator, dispatcher, popper])
     
     # 2. Operational Sequence: Repeat steps until has_plan fails (plan empty)
-    op_seq = py_trees.composites.Sequence(name=f"Op_Seq_{arm_name}", memory=True)
+    op_seq = py_trees.composites.Sequence(name=f"Op_Seq_{arm_name}", memory=False)
     
     # Wrap Repeat to ensure it finishes normally
     repeat_loop = py_trees.decorators.Repeat(
@@ -241,7 +261,8 @@ def main():
     print("\n--- Bimanual Parallel Engine Ready (Robust Looping Version) ---")
     
     try:
-        tree.tick_tock(period_ms=1000)
+        # --- INCREASED FREQUENCY (5Hz) for Interrogazione Spinta ---
+        tree.tick_tock(period_ms=200)
         rclpy.spin(tree.node)
     except KeyboardInterrupt:
         pass

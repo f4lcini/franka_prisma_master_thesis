@@ -45,7 +45,7 @@ class DynamicActionIterator(py_trees.behaviour.Behaviour):
         self.blackboard.register_key(key=plan_key, access=py_trees.common.Access.READ)
         
         # Namespaced Parameters
-        for key in ["target_name", "active_arm", "active_action", "grasp_type", "target_location"]:
+        for key in ["target_name", "active_arm", "active_action", "grasp_type", "target_location", "target_pose_name"]:
             self.blackboard.register_key(key=f"{prefix}{key}", access=py_trees.common.Access.WRITE)
 
     def setup(self, **kwargs):
@@ -61,11 +61,13 @@ class DynamicActionIterator(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.SUCCESS
 
         current = plan[0]
-        setattr(self.blackboard, f"{self.prefix}active_action", current.get("action"))
+        action_name = current.get("action", "none").upper()
+        setattr(self.blackboard, f"{self.prefix}active_action", action_name)
         setattr(self.blackboard, f"{self.prefix}target_name", current.get("target_name", "none"))
         setattr(self.blackboard, f"{self.prefix}active_arm", current.get("arm", "any"))
-        setattr(self.blackboard, f"{self.prefix}grasp_type", current.get("grasp_type", "top"))
+        setattr(self.blackboard, f"{self.prefix}grasp_type", current.get("grasp_type", "top").lower())
         setattr(self.blackboard, f"{self.prefix}target_location", current.get("target_location", "none"))
+        setattr(self.blackboard, f"{self.prefix}target_pose_name", current.get("target_pose_name", "ready"))
 
         self.node.get_logger().info(f"[{self.name}] Next '{self.prefix}' Action: {current.get('action')}")
         return py_trees.common.Status.SUCCESS
@@ -86,8 +88,12 @@ class PlanPopper(py_trees.behaviour.Behaviour):
             plan = getattr(self.blackboard, self.plan_key)
             if plan and len(plan) > 0:
                 removed = plan.pop(0)
-                self.node.get_logger().info(f"[{self.name}] Action '{removed['action']}' completed. Popping from '{self.plan_key}'.")
+                self.node.get_logger().info(f"🏁 [{self.name}] Action '{removed['action']}' COMPLETED. Popping from '{self.plan_key}'. Remaining: {len(plan)}")
                 setattr(self.blackboard, self.plan_key, plan)
+                
+                # --- AUTO-RESET ACTIVE ACTION to prevent accidental repeat ---
+                prefix = "left_" if "left" in self.plan_key else "right_"
+                setattr(self.blackboard, f"{prefix}active_action", "IDLE")
         except Exception as e:
             self.node.get_logger().error(f"[{self.name}] Popper error: {e}")
             

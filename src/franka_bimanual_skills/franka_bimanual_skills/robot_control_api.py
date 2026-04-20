@@ -381,3 +381,40 @@ class RobotControlAPI:
             return True
             
         return False
+    def calculate_midway_pose(self, arm_group, target_pose_stamped):
+        """
+        Dynamically calculates a 'Midway' pose between current position and target.
+        Ensures a high Z-offset for safety.
+        """
+        prefix = "franka1" if "franka1" in arm_group else "franka2"
+        tcp_frame = f"{prefix}_fr3_hand_tcp"
+        
+        # Get current pose (Mocking if missing joint states, but usually available)
+        # For simplicity in this env, we'll interpolate based on a 'Rough Home' center
+        # or just use a higher Z-buffer.
+        
+        midway = copy.deepcopy(target_pose_stamped)
+        midway.header.frame_id = WORLD_FRAME
+        
+        # Logic: Move 50% towards target in XY, but keep Z high (e.g. 0.5m)
+        # This keeps the arm 'poised' for the next action.
+        
+        current_x = 1.0 if prefix == "franka1" else 0.0
+        current_y = 0.5
+        
+        target_x = midway.pose.position.x
+        target_y = midway.pose.position.y
+        
+        midway.pose.position.x = (current_x + target_x) / 2.0
+        midway.pose.position.y = (current_y + target_y) / 2.0
+        midway.pose.position.z = 0.50 # High safe Z
+        
+        apply_top_down_orientation(midway.pose)
+        return midway
+
+def apply_top_down_orientation(pose):
+    # Standard top-down grasp (pointing down)
+    pose.orientation.x = 1.0
+    pose.orientation.y = 0.0
+    pose.orientation.z = 0.0
+    pose.orientation.w = 0.0

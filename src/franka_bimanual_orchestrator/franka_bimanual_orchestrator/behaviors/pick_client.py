@@ -116,37 +116,30 @@ class PickActionClient(py_trees.behaviour.Behaviour):
     def update(self):
         # --- GLOBAL PLAN VALIDITY CHECK ---
         if not hasattr(self.blackboard, "vlm_plan") or self.blackboard.vlm_plan is None:
-            self.logger.warning(f"[{self.name}] Global plan cleared (replan?)... failing.")
-            return py_trees.common.Status.FAILURE
-
-        if hasattr(self, 'status') and self.status == py_trees.common.Status.FAILURE:
             return py_trees.common.Status.FAILURE
 
         if self.get_result_future is None:
-            # Check if we are waiting for handover
-            if self.target_label == "shared":
-                if not getattr(self.blackboard, "handover_ready", False):
-                    return py_trees.common.Status.RUNNING
-                
-                # Handover ready! Send goal if not already sent
-                if self.send_goal_future is None:
-                    if not hasattr(self, "handover_start_time"):
-                        self.logger.info(f"[{self.name}] ✅ Handover signal received! Waiting 2s for physics to settle...")
-                        self.handover_start_time = self.node.get_clock().now()
-                        return py_trees.common.Status.RUNNING
-                    
-                    elapsed = (self.node.get_clock().now() - self.handover_start_time).nanoseconds / 1e9
-                    if elapsed < 2.0:
-                        return py_trees.common.Status.RUNNING
-                    
-                    self.logger.info(f"[{self.name}] 🚀 Physics settled. Sending Pick goal.")
-                    self.send_goal_future = self.action_client.send_goal_async(self.goal_msg)
-                    return py_trees.common.Status.RUNNING
+            # --- INTERROGAZIONE SPINTA (Aggressive Parallelism) ---
+            # Instead of waiting for a high-level signal, we start "interrogating" 
+            # the planning scene as soon as the donor starts its movement.
+            is_shared = (self.target_label == "shared")
+            handover_starting = getattr(self.blackboard, "handover_starting", False)
+            
+            if is_shared and not handover_starting:
+                return py_trees.common.Status.RUNNING
+            
+            # Send goal immediately to "probe" MoveIt for a path
+            if self.send_goal_future is None:
+                self.logger.info(f"[{self.name}] 🔍 [PROBE] Interrogating MoveIt for collision-free path to {self.target_label}...")
+                self.send_goal_future = self.action_client.send_goal_async(self.goal_msg)
+                return py_trees.common.Status.RUNNING
 
-            if self.send_goal_future and self.send_goal_future.done():
+            if self.send_goal_future.done():
                 goal_handle = self.send_goal_future.result()
                 if not goal_handle.accepted:
-                    return py_trees.common.Status.FAILURE
+                    # Retry in next tick (system busy or rejected)
+                    self.send_goal_future = None
+                    return py_trees.common.Status.RUNNING
                 self.get_result_future = goal_handle.get_result_async()
             return py_trees.common.Status.RUNNING
         
@@ -155,17 +148,14 @@ class PickActionClient(py_trees.behaviour.Behaviour):
             if result.success:
                 return py_trees.common.Status.SUCCESS
             
-            # --- HARDENING: YIELD & RETRY if planning failed (collision/IK) ---
+            # --- HARDENING: INFINITE PROBING for planning failed (collision/IK) ---
+            # We don't fail for obstruction; we just keep "interrogating" (Parallelismo Spinto)
             error_str = result.message.lower()
             if "no_ik_solution" in error_str or "planning_failed" in error_str or "no path found" in error_str:
-                if not hasattr(self, "planning_retries"): self.planning_retries = 0
-                if self.planning_retries < 10:
-                    self.logger.warning(f"[{self.name}] 🚧 Planning failed (likely obstruction). Yielding & Retrying... ({self.planning_retries+1}/10)")
-                    self.planning_retries += 1
-                    self.send_goal_future = None # Reset to trigger new send_goal after delay
-                    self.get_result_future = None
-                    self.handover_start_time = self.node.get_clock().now() # Re-use delay logic
-                    return py_trees.common.Status.RUNNING
+                self.logger.info(f"[{self.name}] ⏳ [BLOCKED] Path obstructed by {self.prefix[:-1]} arm. Retrying interrogation...")
+                self.send_goal_future = None # Reset to trigger new probe in next tick
+                self.get_result_future = None
+                return py_trees.common.Status.RUNNING
             
             setattr(self.blackboard, f"{self.prefix}last_error", result.message)
             return py_trees.common.Status.FAILURE

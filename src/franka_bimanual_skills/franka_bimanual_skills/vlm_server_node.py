@@ -111,6 +111,10 @@ class VlmServerNode(Node):
             "1. Donor Arm (Closest to Object): 'FIND_OBJECT' (if needed) -> 'PICK' (from source) -> 'PLACE' (at 'shared').\n"
             "2. Recipient Arm (Closest to Dest): 'WAIT' (for the donor to clear 'shared') -> 'PICK' (from 'shared') -> 'PLACE' (at dest).\n"
             "Both sequences must be in the same JSON array to be executed in parallel.\n"
+            "\n--- PARALLELISMO SPINTO (Advanced Coordination) ---\n"
+            "To maximize efficiency and demonstrate advanced bimanual skills:\n"
+            "- If an arm is waiting for the other (using 'WAIT'), always prepend it with a 'MOVE_HOME' action with 'target_pose_name': 'midway'.\n"
+            "- This pre-positions the arm closer to its next objective while simultaneous work occurs elsewhere.\n"
             "\nOutput strictly in JSON conform to the TaskPlan schema without external text."
         )
 

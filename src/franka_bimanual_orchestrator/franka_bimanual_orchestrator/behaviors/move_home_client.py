@@ -15,6 +15,7 @@ class MoveHomeClient(py_trees.behaviour.Behaviour):
         
         self.blackboard = py_trees.blackboard.Client(name=name)
         self.blackboard.register_key(key=f"{prefix}active_arm", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key=f"{prefix}target_pose_name", access=py_trees.common.Access.READ)
 
     def setup(self, **kwargs):
         try:
@@ -40,8 +41,20 @@ class MoveHomeClient(py_trees.behaviour.Behaviour):
         if target_arm not in ("left_arm", "right_arm"):
             target_arm = "left_arm"
 
+        pose_name = "ready"
+        try:
+            if hasattr(self.blackboard, f"{self.prefix}target_pose_name"):
+                pose_name = getattr(self.blackboard, f"{self.prefix}target_pose_name")
+        except KeyError:
+             self.logger.info(f"[{self.name}] No specific pose_name found, defaulting to 'ready'.")
+
         goal_msg = MoveHome.Goal()
         goal_msg.arm = target_arm
+        goal_msg.pose_name = pose_name
+        
+        # --- ENSURE NO-YOLO COMPATIBILITY ---
+        if pose_name == "midway":
+            self.logger.info(f"[{self.name}] 🚀 Initiating 'Parallelismo Spinto' Midway Pose.")
 
         self.logger.info(f"[{self.name}] Sending MoveHome Goal for {target_arm}")
         self.send_goal_future = self.action_client.send_goal_async(goal_msg)
@@ -61,7 +74,17 @@ class MoveHomeClient(py_trees.behaviour.Behaviour):
         
         if self.get_result_future.done():
             result = self.get_result_future.result().result
-            return py_trees.common.Status.SUCCESS if result.success else py_trees.common.Status.FAILURE
+            pose_name = getattr(self.blackboard, f"{self.prefix}target_pose_name", "ready")
+            
+            if result.success:
+                return py_trees.common.Status.SUCCESS
+            else:
+                if pose_name == "midway":
+                    self.logger.warning(f"[{self.name}] ⚠️ Midway move failed ({result.message}). Proceeding to next action anyway (Parallelismo Spinto Resilience).")
+                    return py_trees.common.Status.SUCCESS
+                else:
+                    self.logger.error(f"[{self.name}] ❌ Fatal MoveHome failed: {result.message}")
+                    return py_trees.common.Status.FAILURE
 
         return py_trees.common.Status.RUNNING
 

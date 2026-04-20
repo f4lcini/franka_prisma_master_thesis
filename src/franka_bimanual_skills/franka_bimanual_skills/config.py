@@ -26,7 +26,7 @@ MOVEIT_ERROR_CODES = {
 PREDEFINED_TARGETS = {
     "base_pose": (1.1, 0.2, 0.225),
     "shared":    (0.6, 0.5, 0.225),    # Table crossover point (aligned to Z=0.225)
-    "box":       (0.1, 0.1, 0.140),    # Receptacle
+    "box":       (0.1, 0.1, 0.220),    # Receptacle
     # "mid_air":   (0.5, 0.4, 0.5)     # REMOVED: Handover disabled
 }
 
@@ -43,7 +43,7 @@ GAZEBO_WORLD_POSES = {
 
 DEFAULT_OFFSETS = {
     'approach_clearance': 0.1,
-    'pick_z_offset': 0.09,      # Deeper engagement to avoid landing 'on top' of the cube
+    'pick_z_offset': 0.0885,      # Deeper engagement to avoid landing 'on top' of the cube
     'place_z_offset': 0.110,     # release 5mm above table
     'gripper_open_width': 0.08,
     'gripper_grasp_width': 0.048,
@@ -57,6 +57,10 @@ DEFAULT_OFFSETS = {
 
 READY_POSE_VALUES_RIGHT = [1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
 READY_POSE_VALUES_LEFT  = [-1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
+
+# Aggressive 'Parallelismo Spinto' Poses (Joint1 shifted 45 deg towards shared zone)
+MIDWAY_POSE_VALUES_RIGHT = [0.785, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
+MIDWAY_POSE_VALUES_LEFT  = [-0.785, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
 
 WORLD_FRAME = "world"
 

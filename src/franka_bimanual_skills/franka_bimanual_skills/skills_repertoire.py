@@ -39,6 +39,7 @@ class MoveHomeSkill(BaseModel):
     """Moves an arm back to its safe resting position."""
     action: Literal["MOVE_HOME"] = "MOVE_HOME"
     arm: ArmSelection
+    target_pose_name: Literal["ready", "midway"] = "ready"
 
 # --- MID-AIR HANDOVER SKILLS (TEMPORARILY DISABLED) ---
 # class GiveObjectSkill(BaseModel):

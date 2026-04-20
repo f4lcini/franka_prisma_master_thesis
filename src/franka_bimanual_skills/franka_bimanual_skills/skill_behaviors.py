@@ -11,7 +11,7 @@ import time
 import traceback
 import threading
 
-from .config import PREDEFINED_TARGETS, WORLD_FRAME, READY_POSE_VALUES_LEFT, READY_POSE_VALUES_RIGHT, get_arm_config, apply_top_down_orientation, apply_donor_handover_orientation, apply_recipient_handover_orientation, parse_error_code
+from .config import PREDEFINED_TARGETS, WORLD_FRAME, READY_POSE_VALUES_LEFT, READY_POSE_VALUES_RIGHT, MIDWAY_POSE_VALUES_LEFT, MIDWAY_POSE_VALUES_RIGHT, get_arm_config, apply_top_down_orientation, apply_donor_handover_orientation, apply_recipient_handover_orientation, parse_error_code
 
 class SkillBehaviors:
     def __init__(self, node, robot_control_api, server_cb_group):
@@ -77,10 +77,12 @@ class SkillBehaviors:
         req.allowed_planning_time = 5.0
         req.num_planning_attempts = 10
         
+        pose_target = goal_handle.request.pose_name.lower() or "ready"
+        
         if arm_group == "franka1_arm":
-            ready_values = READY_POSE_VALUES_RIGHT
+            ready_values = MIDWAY_POSE_VALUES_RIGHT if pose_target == "midway" else READY_POSE_VALUES_RIGHT
         else:
-            ready_values = READY_POSE_VALUES_LEFT
+            ready_values = MIDWAY_POSE_VALUES_LEFT if pose_target == "midway" else READY_POSE_VALUES_LEFT
             
         joint_names = [f"{arm_group.split('_')[0]}_fr3_joint{i+1}" for i in range(7)]
         
@@ -204,14 +206,20 @@ class SkillBehaviors:
         
         self.logger.info(f"🚀 Approach to Z={pre_grasp_z:.3f}...")
         
+        # --- INTERROGAZIONE SPINTA LOGGING ---
+        self.logger.info(f"🦾 [PLANNING] Searching Pick Path for {req_arm} to {fid}...")
+        
         feedback.status = "Step 1/4: Moving to Pre-Grasp"
         feedback.completion_percentage = 25.0
         goal_handle.publish_feedback(feedback)
         if not await self.robot_control_api.send_pose_goal(arm_group, pre_grasp, tcp_frame):
+            self.logger.warning(f"🚧 [BLOCKED] Pick path search FAILED for {arm_group}. Obstacle detected.")
             goal_handle.abort()
             result.success = False
-            result.message = "Pre-Grasp move failed"
+            result.message = "PLANNING_FAILED: Collision or IK failure during approach search"
             return result
+            
+        self.logger.info(f"✅ [SUCCESS] Pick path found for {req_arm}! Physical execution starting.")
             
         feedback.status = f"Step 2/4: Vertical Descent to Z={grasp_z}"
         feedback.completion_percentage = 50.0
@@ -307,13 +315,19 @@ class SkillBehaviors:
         pre_place.pose.position.z = pre_place_z
         apply_top_down_orientation(pre_place.pose)
         
+        # --- PARALLELISMO SPINTO LOGGING ---
+        self.logger.info(f"🦾 [PLANNING] Searching Place Path for {req_arm} to {fid}...")
+        
         feedback.status = f"Step 1/4: Moving to Pre-Place (Z={pre_place_z:.3f})"
         goal_handle.publish_feedback(feedback)
         if not await self.robot_control_api.send_pose_goal(arm_group, pre_place, tcp_frame):
+            self.logger.warning(f"🚧 [BLOCKED] Place search failed for {req_arm}. Obstacle detected.")
             goal_handle.abort()
             result.success = False
-            result.message = "Pre-Place move failed"
+            result.message = "PLANNING_FAILED: Collision or IK failure during place approach"
             return result
+            
+        self.logger.info(f"✅ [SUCCESS] Place path found for {req_arm}! Executing approach...")
             
         time.sleep(pause_s)
             
@@ -335,8 +349,15 @@ class SkillBehaviors:
         feedback.status = f"Step 3/4: Opening Gripper ({open_w}m)"
         goal_handle.publish_feedback(feedback)
         await self.robot_control_api.send_gripper_goal(arm_group, width=open_w, max_effort=10.0)
-        
         time.sleep(pause_l)
+        
+        # --- NEW: ANTICIPATORY HANDOVER (PARALLELISMO SPINTO) ---
+        # Signal the waiting arm AS SOON as the object is released, don't wait for retreat.
+        if fid == 'shared':
+            self.logger.info("📡 [ANTICIPATORY] Publishing /handover_ready to wake up recipient arm DURING retreat.")
+            msg = Bool()
+            msg.data = True
+            self._handover_ready_pub.publish(msg)
         
         feedback.status = "Step 4/4: Vertical Retreat"
         goal_handle.publish_feedback(feedback)
@@ -348,13 +369,6 @@ class SkillBehaviors:
         result.success = True
         result.message = f"Place successful with {arm_group}"
         self.logger.info("🎉 Strategic Place Sequence SUCCESS!")
-        
-        # If the object was placed at 'shared', signal the waiting arm
-        if fid == 'shared':
-            self.logger.info("📡 Publishing /handover_ready to wake up recipient arm.")
-            msg = Bool()
-            msg.data = True
-            self._handover_ready_pub.publish(msg)
         
         goal_handle.succeed()
         return result
