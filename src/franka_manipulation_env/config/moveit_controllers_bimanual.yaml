@@ -31,7 +31,7 @@ franka2_arm_controller:
     - franka2_fr3_joint7
 
 franka1_gripper:
-  action_ns: /franka1/franka_gripper/gripper_action
+  action_ns: franka1_gripper/gripper_action
   type: GripperCommand
   default: true
   joints:
@@ -39,7 +39,7 @@ franka1_gripper:
     - franka1_fr3_finger_joint2
 
 franka2_gripper:
-  action_ns: /franka2/franka_gripper/gripper_action
+  action_ns: franka2_gripper/gripper_action
   type: GripperCommand
   default: true
   joints:

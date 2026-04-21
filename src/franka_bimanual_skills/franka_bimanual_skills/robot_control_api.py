@@ -4,8 +4,7 @@ from moveit_msgs.action import MoveGroup, ExecuteTrajectory
 from moveit_msgs.srv import GetCartesianPath
 from moveit_msgs.msg import MotionPlanRequest, Constraints, PositionConstraint, OrientationConstraint, BoundingVolume, PlanningScene
 from shape_msgs.msg import SolidPrimitive
-from control_msgs.action import FollowJointTrajectory, GripperCommand
-from trajectory_msgs.msg import JointTrajectoryPoint
+from control_msgs.action import GripperCommand
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Pose
 import copy
@@ -43,15 +42,17 @@ class RobotControlAPI:
         if not self.gripper2_client.wait_for_server(timeout_sec=2.0):
              self.logger.warning("⚠️ Gripper 2 not ready yet.")
 
-        # --- DYNAMIC COLLISION TRACKING ---
+        # --- DYNAMIC COLLISION & FORCE TRACKING ---
         self.latest_joint_states = {}
+        self.latest_efforts = {}
         self.joint_state_sub = self.node.create_subscription(
             JointState, '/joint_states', self.joint_state_cb, 10, callback_group=client_cb_group)
         self.collision_pub = self.node.create_publisher(PlanningScene, '/planning_scene', 10)
 
     def joint_state_cb(self, msg):
-        for name, pos in zip(msg.name, msg.position):
+        for name, pos, eff in zip(msg.name, msg.position, msg.effort):
             self.latest_joint_states[name] = pos
+            self.latest_efforts[name] = eff
 
     def apply_safety_limits(self, req):
         if req.max_velocity_scaling_factor < 0.01:
@@ -109,35 +110,30 @@ class RobotControlAPI:
                 self.logger.error("Gripper Action Server not available")
                 return False
 
-            goal_handle_future = client.send_goal_async(goal_msg)
-            
-            start_t = time.time()
-            while not goal_handle_future.done() and (time.time() - start_t < 2.0):
-                time.sleep(0.01)
-                
-            goal_handle = goal_handle_future.result()
+            goal_handle = await client.send_goal_async(goal_msg)
             if not goal_handle.accepted:
                 self.logger.error("Gripper Goal Rejected")
                 return False
             
             self.logger.info("Gripper Goal Accepted, waiting for result...")
-            result_future = goal_handle.get_result_async()
-            
-            start_t = time.time()
-            while not result_future.done() and (time.time() - start_t < 10.0):
-                time.sleep(0.1)
-                
-            if result_future.done():
-                self.logger.info("Gripper Goal Completed SUCCESSFULLY")
-            else:
-                self.logger.warn("Gripper Goal Timeout (Continuing anyway)")
-                
+            await goal_handle.get_result_async()
             return True
         except Exception as e:
             self.logger.error(f"Error in send_gripper_goal: {e}")
             return False
 
+    def publish_planning_scene(self):
+        msg = PlanningScene()
+        msg.is_diff = True
+        msg.robot_state.joint_state.header.stamp = self.node.get_clock().now().to_msg()
+        for name, pos in self.latest_joint_states.items():
+            msg.robot_state.joint_state.name.append(name)
+            msg.robot_state.joint_state.position.append(pos)
+        self.collision_pub.publish(msg)
+        time.sleep(0.1)
+
     async def send_pose_goal_custom(self, group_name, pose_stamped, tcp_frame, planner="PTP", is_handover=False):
+        self.publish_planning_scene()
         self.logger.info(f"📍 Requesting {planner} Move for {group_name} using Pilz...")
         
         goal_msg = MoveGroup.Goal()
@@ -175,42 +171,36 @@ class RobotControlAPI:
         req.goal_constraints.append(c)
         
         self.apply_workspace_constraints(req, group_name, tcp_frame, is_handover=is_handover)
-        
         goal_msg.request = req
 
         try:
             goal_handle = await self.move_group_client.send_goal_async(goal_msg)
             if not goal_handle.accepted:
-                self.logger.error(f"❌ {planner} Goal REJECTED by MoveGroup for {group_name}.")
+                self.logger.error(f"❌ {planner} Goal REJECTED.")
                 return False
             result = await goal_handle.get_result_async()
-            error_val = result.result.error_code.val
-            if error_val == 1:
-                self.logger.info(f"✅ MoveIt {planner} SUCCESS for {group_name}!")
+            if result.result.error_code.val == 1:
                 return True
             else:
-                error_str = parse_error_code(error_val)
-                self.logger.error(f"❌ MoveIt {planner} FAILED: {error_str} ({error_val}) for {group_name}")
+                self.logger.error(f"❌ MoveIt {planner} FAILED: {result.result.error_code.val}")
                 return False
         except Exception as e:
             self.logger.error(f"❌ Pilz Exception: {e}")
             return False
 
     async def send_pose_goal(self, group_name, pose_stamped, tcp_frame, is_handover=False):
-        self.logger.info(f"📍 Requesting Cartesian Move for {group_name} to frame {pose_stamped.header.frame_id}")
+        self.publish_planning_scene()
+        self.logger.info(f"📍 Requesting Move for {group_name} to frame {pose_stamped.header.frame_id}")
         
         goal_msg = MoveGroup.Goal()
         req = MotionPlanRequest()
         req.group_name = group_name
         req.allowed_planning_time = 5.0
-        req.num_planning_attempts = 1
         self.apply_safety_limits(req)
-        
         req.pipeline_id = "pilz_industrial_motion_planner"
         req.planner_id = "PTP" 
         
         c = Constraints()
-        
         pc = PositionConstraint()
         pc.header = pose_stamped.header
         pc.link_name = tcp_frame
@@ -240,29 +230,16 @@ class RobotControlAPI:
         try:
             goal_handle = await self.move_group_client.send_goal_async(goal_msg)
             if not goal_handle.accepted:
-                self.logger.error("❌ Goal REJECTED by MoveGroup server.")
                 return False
-            self.logger.info("⏳ Goal accepted! Planning/Moving in progress...")
             result = await goal_handle.get_result_async()
-            error_val = result.result.error_code.val
-            error_str = parse_error_code(error_val)
-            if error_val == 1:
-                self.logger.info(f"✅ MoveIt Cartesian execution SUCCESS for {group_name}!")
-                return True
-            else:
-                self.logger.error(f"❌ MoveIt Execution FAILED: {error_str} ({error_val})")
-                return False
+            return result.result.error_code.val == 1
         except Exception as e:
-            self.logger.error(f"❌ Critical Exception during send_pose_goal: {e}")
-            self.logger.error(traceback.format_exc())
+            self.logger.error(f"❌ Exception in send_pose_goal: {e}")
             return False
 
     async def send_cartesian_move(self, group_name, waypoints, tcp_frame):
-        self.logger.info(f"📏 Requesting Linear (Cartesian) Move for {group_name} with {len(waypoints)} points...")
-        
         req = GetCartesianPath.Request()
         req.header.frame_id = WORLD_FRAME
-        req.header.stamp = self.node.get_clock().now().to_msg()
         req.group_name = group_name
         req.link_name = tcp_frame
         req.waypoints = waypoints
@@ -270,33 +247,32 @@ class RobotControlAPI:
         req.jump_threshold = 0.0
         req.avoid_collisions = True
         
-        if not self.cartesian_client.wait_for_service(timeout_sec=2.0):
-             self.logger.error("❌ Cartesian service not available!")
-             return False
-             
         res = await self.cartesian_client.call_async(req)
         if res.fraction < 0.5:
-            self.logger.error(f"❌ Cartesian path planning failed (only {res.fraction*100:.1f}% planned)")
             return False
             
-        self.logger.info(f"✅ Cartesian path computed ({res.fraction*100:.1f}%). Executing...")
-        
         goal = ExecuteTrajectory.Goal()
         goal.trajectory = res.solution
-        
-        try:
-            handle = await self.trajectory_executor.send_goal_async(goal)
-            if not handle.accepted:
-                self.logger.error("❌ Trajectory execution goal REJECTED")
-                return False
-            
-            exec_res = await handle.get_result_async()
-            if exec_res.result.error_code.val == 1:
-                self.logger.info("✅ Cartesian execution SUCCESS!")
-                return True
-            else:
-                self.logger.error(f"❌ Cartesian execution FAILED: {exec_res.result.error_code.val}")
-                return False
-        except Exception as e:
-            self.logger.error(f"❌ Exception in cartesian execution: {e}")
+        handle = await self.trajectory_executor.send_goal_async(goal)
+        if not handle.accepted:
             return False
+        exec_res = await handle.get_result_async()
+        return exec_res.result.error_code.val == 1
+
+    def check_grasp(self, arm_group, threshold=0.1, stall_threshold=0.001):
+        """Force-based grasp validation."""
+        prefix = "franka1" if "franka1" in arm_group else "franka2"
+        f1 = f"{prefix}_fr3_finger_joint1"
+        f2 = f"{prefix}_fr3_finger_joint2"
+        
+        verification_count = 0
+        for _ in range(5):
+            eff1 = self.latest_efforts.get(f1, 0.0)
+            eff2 = self.latest_efforts.get(f2, 0.0)
+            if (abs(eff1) + abs(eff2)) > threshold:
+                verification_count += 1
+            time.sleep(0.1)
+        
+        is_grasped = verification_count >= 3
+        self.logger.info(f"🔍 Grasp Check [{prefix}]: {is_grasped} (effort count {verification_count}/5)")
+        return is_grasped

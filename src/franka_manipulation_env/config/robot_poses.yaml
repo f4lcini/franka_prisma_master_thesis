@@ -1,0 +1,38 @@
+# Definitive robot and table reference frames
+# All values are in meters and radians
+
+table:
+  x: 0.0
+  y: 0.0
+  z: 0.73
+  size_x: 1.215
+  size_y: 0.6
+  size_z: 0.04
+  roll: 0.0
+  pitch: 0.0
+  yaw: 0.0
+
+franka1: # Right Arm
+  x: 0.4375
+  y: 0.205
+  z: 0.06
+  yaw: 3.14159265359 # Faces -X (center)
+
+franka2: # Left Arm
+  x: -0.4175
+  y: 0.205
+  z: 0.06
+  yaw: 0.0 # Faces +X (center)
+
+camera:
+  x: 0.6
+  y: 1.0
+  z: 1.3
+  roll: 0.0
+  pitch: 0.785
+  yaw: -1.57
+
+shared_zone:
+  x: 0.4
+  y: 0.0
+  z: 0.05 # Slightly above table surface

@@ -1,91 +1,93 @@
 /**:
-  ros__parameters:
-    update_rate: 1000
+  controller_manager:
+    ros__parameters:
+      update_rate: 1000
 
-controller_manager:
-  ros__parameters:
-    update_rate: 1000
-    
-    joint_state_broadcaster:
-      type: joint_state_broadcaster/JointStateBroadcaster
-    position_reader:
-      type: franka_mm_control/PositionReader
-    pose_reader:
-      type: franka_mm_control/PoseReader
-    franka1_arm_controller:
-      type: joint_trajectory_controller/JointTrajectoryController
-    franka2_arm_controller:
-      type: joint_trajectory_controller/JointTrajectoryController
-    cartesian_impedance_left:
-      type: forward_command_controller/ForwardCommandController
-    cartesian_impedance_right:
-      type: forward_command_controller/ForwardCommandController
+      joint_state_broadcaster:
+        type: joint_state_broadcaster/JointStateBroadcaster
+      position_reader:
+        type: franka_mm_control/PositionReader
+      pose_reader:
+        type: franka_mm_control/PoseReader
+      franka1_arm_controller:
+        type: joint_trajectory_controller/JointTrajectoryController
+      franka2_arm_controller:
+        type: joint_trajectory_controller/JointTrajectoryController
+      cartesian_impedance_left:
+        type: forward_command_controller/ForwardCommandController
+      cartesian_impedance_right:
+        type: forward_command_controller/ForwardCommandController
 
-# Formato per caricamento dinamico (Spawning)
-franka1_arm_controller:
-  ros__parameters:
-    command_interfaces:
-      - position 
-    state_interfaces:
-      - position
-      - velocity
-    joints:
-      - franka1_fr3_joint1
-      - franka1_fr3_joint2
-      - franka1_fr3_joint3
-      - franka1_fr3_joint4
-      - franka1_fr3_joint5
-      - franka1_fr3_joint6
-      - franka1_fr3_joint7
+/**:
+  franka1_arm_controller:
+    ros__parameters:
+      command_interfaces:
+        - position
+      state_interfaces:
+        - position
+        - velocity
+      joints:
+        - franka1_fr3_joint1
+        - franka1_fr3_joint2
+        - franka1_fr3_joint3
+        - franka1_fr3_joint4
+        - franka1_fr3_joint5
+        - franka1_fr3_joint6
+        - franka1_fr3_joint7
 
-franka2_arm_controller:
-  ros__parameters:
-    command_interfaces:
-      - position 
-    state_interfaces:
-      - position
-      - velocity
-    joints:
-      - franka2_fr3_joint1
-      - franka2_fr3_joint2
-      - franka2_fr3_joint3
-      - franka2_fr3_joint4
-      - franka2_fr3_joint5
-      - franka2_fr3_joint6
-      - franka2_fr3_joint7
+/**:
+  franka2_arm_controller:
+    ros__parameters:
+      command_interfaces:
+        - position
+      state_interfaces:
+        - position
+        - velocity
+      joints:
+        - franka2_fr3_joint1
+        - franka2_fr3_joint2
+        - franka2_fr3_joint3
+        - franka2_fr3_joint4
+        - franka2_fr3_joint5
+        - franka2_fr3_joint6
+        - franka2_fr3_joint7
 
-cartesian_impedance_left:
-  ros__parameters:
-    joints:
-      - franka2_x
-      - franka2_y
-      - franka2_z
-      - franka2_qw
-      - franka2_qx
-      - franka2_qy
-      - franka2_qz
-    interface_name: cartesian_pose
+/**:
+  cartesian_impedance_left:
+    ros__parameters:
+      joints:
+        - franka2_x
+        - franka2_y
+        - franka2_z
+        - franka2_qw
+        - franka2_qx
+        - franka2_qy
+        - franka2_qz
+      interface_name: cartesian_pose
 
-cartesian_impedance_right:
-  ros__parameters:
-    joints:
-      - franka1_x
-      - franka1_y
-      - franka1_z
-      - franka1_qw
-      - franka1_qx
-      - franka1_qy
-      - franka1_qz
-    interface_name: cartesian_pose
+/**:
+  cartesian_impedance_right:
+    ros__parameters:
+      joints:
+        - franka1_x
+        - franka1_y
+        - franka1_z
+        - franka1_qw
+        - franka1_qx
+        - franka1_qy
+        - franka1_qz
+      interface_name: cartesian_pose
 
-position_reader:
-  ros__parameters:
-    robot_names:
-      - franka1
-      - franka2
+/**:
+  position_reader:
+    ros__parameters:
+      robot_names:
+        - franka1
+        - franka2
 
-pose_reader:
-  ros__parameters:
-    robot_names:
-      - franka1
-      - franka2
+/**:
+  pose_reader:
+    ros__parameters:
+      robot_names:
+        - franka1
+        - franka2

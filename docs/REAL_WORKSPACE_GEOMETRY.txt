@@ -1,0 +1,57 @@
+================================================================================
+BIMANUAL FRANKA RESEARCH 3 - REAL WORKSPACE GEOMETRY (ROMOTIVE/IDRA)
+================================================================================
+Author: Antigravity AI Assistant
+Reference Branch: lab-testing-bimanual
+Last Updated: April 2026
+
+1. COORDINATE SYSTEM (World Frame)
+----------------------------------
+- Origin (0,0,0): Corner of the table floor area.
+- X-Axis: Along the long edge of the table (1.2m).
+- Y-Axis: Across the width of the table (0.8m).
+- Z-Axis: Vertical (Up).
+
+2. TABLE SURFACE
+----------------
+- Height: Z = 0.200 m
+- Dimensions: 1.2m x 0.8m
+
+3. ROBOT PLACEMENT (Link 0 - Base)
+----------------------------------
+Both robots are mounted side-by-side on the same long edge of the table.
+
+ROBOT DESTRO (franka1 / right_arm):
+- World X:  1.025 m
+- World Y:  0.587 m
+- World Z:  0.218 m
+- Yaw (Z): -1.571 rad (-90 deg) -> Looking towards -Y (center of table)
+
+ROBOT SINISTRO (franka2 / left_arm):
+- World X:  0.175 m
+- World Y:  0.587 m
+- World Z:  0.218 m
+- Yaw (Z): -1.571 rad (-90 deg) -> Looking towards -Y (center of table)
+
+Inter-robot distance: 0.850 m (along X)
+
+4. END-EFFECTOR CONVENTION (TCP)
+--------------------------------
+- Offset (rpy_ee): [0, 0, -0.785] rad (-45 deg).
+- Fingers are aligned with the table axes when J7 is at its home position.
+
+5. CAMERA CALIBRATION (Initial Extrinsics)
+------------------------------------------
+The camera is typically on a tripod looking from "behind" the robots.
+- Initial X: 0.6 m (Center of table X)
+- Initial Y: 1.0 m (Outside the table width, looking in)
+- Initial Z: 1.3 m
+- Initial Pitch: 0.785 rad (45 deg tilt down)
+- Initial Yaw:  -1.571 rad (Looking towards -Y)
+
+6. PREDEFINED TASK LOCATIONS (Lab Calibrated)
+---------------------------------------------
+- base_pose: (0.4, 0.3, 0.225)  -> Close to franka2 (Left)
+- shared:    (0.4, 0.0, 0.250)  -> Midpoint area
+- box:       (0.4, -0.3, 0.140) -> Close to franka1 (Right)
+================================================================================

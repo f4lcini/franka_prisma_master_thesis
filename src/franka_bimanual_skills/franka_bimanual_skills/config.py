@@ -23,6 +23,7 @@ MOVEIT_ERROR_CODES = {
     -31: "NO_IK_SOLUTION"
 }
 
+# --- LAB CALIBRATED TARGETS (PRESERVED) ---
 PREDEFINED_TARGETS = {
     "base_pose": (0.4, 0.3, 0.225),
     "shared":    (0.4, 0.0, 0.250),
@@ -30,19 +31,24 @@ PREDEFINED_TARGETS = {
     "mid_air":   (0.4, 0.0, 0.6)    
 }
 
+# NOTE: There is a ~15cm projection offset between the robot flange (link hand) 
+# and the TCP (link tcp) when the robot is rotated for handover. 
+# MoveIt targets the TCP. 
+
 # Actual positions extracted from bimanual_custom.world for tracking discrepancies
 GAZEBO_WORLD_POSES = {
-    "red_cube": (1.1, 0.2, 0.225), # Matches base_pose
-    "open_box": (0.1, 0.1, 0.23)   # Difference with 'box': (-0.1, -0.2, +0.09)
+    "red_cube": (1.1, 0.2, 0.225), 
+    "open_box": (0.1, 0.1, 0.23)   
 }
 
+# --- LAB CALIBRATED OFFSETS (PRESERVED) ---
 DEFAULT_OFFSETS = {
     'approach_clearance': 0.1,
     'pick_z_offset': 0.105,
     'place_z_offset': 0.140,
     'gripper_open_width': 0.08,
     'gripper_grasp_width': 0.048,
-    'safety_pause_short': 0.5,
+    'safety_pause_short': 0.5,   
     'safety_pause_long': 1.0,
     'handover_safety_offset': 0.25,
     'handover_donor_z_offset': 0.08,     # donor approaches from above (along Z)
@@ -50,6 +56,15 @@ DEFAULT_OFFSETS = {
     'handover_timeout_sec': 120.0        # rendezvous timeout
 }
 
+# --- NEW: SPLIT READY POSES (FROM MAIN) ---
+READY_POSE_VALUES_RIGHT = [1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
+READY_POSE_VALUES_LEFT  = [-1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
+
+# Aggressive 'Parallelismo Spinto' Poses (Joint1 shifted 45 deg towards shared zone)
+MIDWAY_POSE_VALUES_RIGHT = [0.785, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
+MIDWAY_POSE_VALUES_LEFT  = [-0.785, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
+
+# Compatibility for old code
 READY_POSE_VALUES = [0.0, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
 
 WORLD_FRAME = "world"
@@ -68,18 +83,18 @@ def get_arm_config(request_arm, logger=None):
         return None, None
 
 def apply_donor_handover_orientation(pose):
-    """Donor: Points along -X (towards other robot), fingers top/bottom."""
-    pose.orientation.x = 0.0
-    pose.orientation.y = -0.7071
+    """Donor: Points along -X, fingers Vertical."""
+    pose.orientation.x = 0.7071
+    pose.orientation.y = 0.7071
     pose.orientation.z = 0.0
-    pose.orientation.w = 0.7071
+    pose.orientation.w = 0.0
 
 def apply_recipient_handover_orientation(pose):
-    """Recipient: Points along +X (towards donor), fingers side-to-side."""
-    pose.orientation.x =  0.5
-    pose.orientation.y =  0.5
-    pose.orientation.z =  0.5
-    pose.orientation.w =  0.5
+    """Recipient: Points along +X, fingers Horizontal."""
+    pose.orientation.x = 0.0
+    pose.orientation.y = 0.0
+    pose.orientation.z = 0.7071
+    pose.orientation.w = 0.7071
 
 def apply_top_down_orientation(pose):
     """Standard Pick/Place orientation (TCP down)."""

@@ -158,7 +158,7 @@
   <disable_collisions link1="franka1_fr3_link7" link2="franka1_fr3_rightfinger" reason="Never" />
   <disable_collisions link1="franka1_fr3_link8" link2="franka1_fr3_rightfinger" reason="Never" />
 
-  <disable_collisions link1="franka1_fr3_hand" link2="robot1_plate" reason="Never" />
+
   <disable_collisions link1="franka1_fr3_leftfinger" link2="franka1_fr3_rightfinger"
     reason="Default" />
   <disable_collisions link1="franka1_fr3_hand" link2="franka1_fr3_leftfinger" reason="Adjacent" />
@@ -203,17 +203,13 @@
   <disable_collisions link1="franka2_fr3_link7" link2="franka2_fr3_rightfinger" reason="Never" />
   <disable_collisions link1="franka2_fr3_link8" link2="franka2_fr3_rightfinger" reason="Never" />
 
-  <disable_collisions link1="franka2_fr3_hand" link2="robot2_plate" reason="Never" />
+
   <disable_collisions link1="franka2_fr3_leftfinger" link2="franka2_fr3_rightfinger"
     reason="Default" />
   <disable_collisions link1="franka2_fr3_hand" link2="franka2_fr3_leftfinger" reason="Adjacent" />
   <disable_collisions link1="franka2_fr3_hand" link2="franka2_fr3_rightfinger" reason="Adjacent" />
 
-  <disable_collisions link1="table" link2="robot1_plate" reason="Adjacent" />
-  <disable_collisions link1="table" link2="robot2_plate" reason="Adjacent" />
 
-  <disable_collisions link1="franka1_fr3_link0" link2="robot1_plate" reason="Adjacent" />
-  <disable_collisions link1="franka2_fr3_link0" link2="robot2_plate" reason="Adjacent" />
 
   <disable_collisions link1="franka1_fr3_link0" link2="table" reason="Never" />
   <disable_collisions link1="franka2_fr3_link0" link2="table" reason="Never" />

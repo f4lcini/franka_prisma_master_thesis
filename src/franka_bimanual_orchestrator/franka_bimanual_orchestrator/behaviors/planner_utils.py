@@ -1,11 +1,8 @@
-#!/usr/bin/env python3
-
 import py_trees
-import operator
 
 class PlanSplitter(py_trees.behaviour.Behaviour):
     """
-    Takes the global 'vlm_plan' and splits it into 'left_arm_plan' and 'right_arm_plan'.
+    Takes the TaskPlan from 'vlm_plan' and populates 'left_arm_plan' and 'right_arm_plan'.
     """
     def __init__(self, name="Plan Splitter"):
         super().__init__(name=name)
@@ -22,19 +19,13 @@ class PlanSplitter(py_trees.behaviour.Behaviour):
         if plan is None:
             return py_trees.common.Status.FAILURE
         
-        left_plan = [a for a in plan if a.get("arm", "").lower().startswith("left")]
-        right_plan = [a for a in plan if a.get("arm", "").lower().startswith("right")]
+        # New TaskPlan structure has explicit lists
+        self.blackboard.left_arm_plan = plan.get("left_arm_sequence", [])
+        self.blackboard.right_arm_plan = plan.get("right_arm_sequence", [])
         
-        self.blackboard.left_arm_plan = left_plan
-        self.blackboard.right_arm_plan = right_plan
-        
-        self.node.get_logger().info(f"[{self.name}] Plan Split: Left({len(left_plan)}) | Right({len(right_plan)})")
         return py_trees.common.Status.SUCCESS
 
 class DynamicActionIterator(py_trees.behaviour.Behaviour):
-    """
-    Iterates through an arm-specific plan and populates namespaced blackboard keys.
-    """
     def __init__(self, name="Action Iterator", plan_key="left_arm_plan", prefix="left_"):
         super().__init__(name=name)
         self.plan_key = plan_key
@@ -42,8 +33,9 @@ class DynamicActionIterator(py_trees.behaviour.Behaviour):
         self.blackboard = py_trees.blackboard.Client(name=name)
         self.blackboard.register_key(key=plan_key, access=py_trees.common.Access.READ)
         
-        # Namespaced Parameters
-        for key in ["target_name", "active_arm", "active_action", "grasp_type", "target_location"]:
+        # Extended parameters for new skills
+        keys = ["target_name", "active_arm", "active_action", "grasp_type", "target_location", "target_pose_name"]
+        for key in keys:
             self.blackboard.register_key(key=f"{prefix}{key}", access=py_trees.common.Access.WRITE)
 
     def setup(self, **kwargs):
@@ -61,15 +53,20 @@ class DynamicActionIterator(py_trees.behaviour.Behaviour):
         current = plan[0]
         setattr(self.blackboard, f"{self.prefix}active_action", current.get("action"))
         setattr(self.blackboard, f"{self.prefix}target_name", current.get("target_name", "none"))
-        setattr(self.blackboard, f"{self.prefix}active_arm", current.get("arm", "any"))
+        
+        # Support both nested 'arm' object and flat string for flexibility
+        arm_data = current.get("arm", "any")
+        if isinstance(arm_data, dict):
+            arm_data = arm_data.get("arm", "any")
+        setattr(self.blackboard, f"{self.prefix}active_arm", arm_data)
+        
         setattr(self.blackboard, f"{self.prefix}grasp_type", current.get("grasp_type", "top"))
         setattr(self.blackboard, f"{self.prefix}target_location", current.get("target_location", "none"))
+        setattr(self.blackboard, f"{self.prefix}target_pose_name", current.get("target_pose_name", "ready"))
 
-        self.node.get_logger().info(f"[{self.name}] Next '{self.prefix}' Action: {current.get('action')}")
         return py_trees.common.Status.SUCCESS
 
 class PlanPopper(py_trees.behaviour.Behaviour):
-    """Simple behavior to remove the processed action from the plan."""
     def __init__(self, name="Plan Popper", plan_key="left_arm_plan"):
         super().__init__(name=name)
         self.plan_key = plan_key
@@ -83,10 +80,8 @@ class PlanPopper(py_trees.behaviour.Behaviour):
         try:
             plan = getattr(self.blackboard, self.plan_key)
             if plan and len(plan) > 0:
-                removed = plan.pop(0)
-                self.node.get_logger().info(f"[{self.name}] Action '{removed['action']}' completed. Popping from '{self.plan_key}'.")
+                plan.pop(0)
                 setattr(self.blackboard, self.plan_key, plan)
-        except Exception as e:
-            self.node.get_logger().error(f"[{self.name}] Popper error: {e}")
-            
+        except Exception:
+            pass
         return py_trees.common.Status.SUCCESS

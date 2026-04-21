@@ -1,5 +1,6 @@
 # Goal
 string arm # e.g. 'left_arm', 'right_arm'
+string pose_name # e.g. 'ready', 'midway'
 ---
 # Result
 bool success

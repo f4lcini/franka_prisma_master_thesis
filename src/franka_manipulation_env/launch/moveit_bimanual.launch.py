@@ -36,23 +36,60 @@ def generate_launch_description():
     # CUSTOM CONTROLLER PATH
     custom_controller_path = os.path.join(pkg_env_share, 'config', 'basic_controllers_custom.yaml')
     
-    robot_description_config = Command([
+    # Load Robot Poses from YAML
+    robot_poses_file = os.path.join(pkg_env_share, 'config', 'robot_poses.yaml')
+    with open(robot_poses_file, 'r') as f:
+        robot_poses = yaml.safe_load(f)
+
+    # Construct xacro command with all arguments
+    xacro_args = [
         'xacro ', xacro_file_urdf, 
         ' hand:=true', 
         ' gazebo:=', use_gazebo, 
         ' ros2_control:=true', 
-        ' controller_path:=', custom_controller_path
-    ])
+        ' controller_path:=', custom_controller_path,
+        f" table_x:={robot_poses['table']['x']}",
+        f" table_y:={robot_poses['table']['y']}",
+        f" table_z:={robot_poses['table']['z']}",
+        f" table_roll:={robot_poses['table']['roll']}",
+        f" table_pitch:={robot_poses['table']['pitch']}",
+        f" table_yaw:={robot_poses['table']['yaw']}",
+        f" table_size_x:={robot_poses['table']['size_x']}",
+        f" table_size_y:={robot_poses['table']['size_y']}",
+        f" table_size_z:={robot_poses['table']['size_z']}",
+        f" franka1_x:={robot_poses['franka1']['x']}",
+        f" franka1_y:={robot_poses['franka1']['y']}",
+        f" franka1_z:={robot_poses['franka1']['z']}",
+        f" franka1_yaw:={robot_poses['franka1']['yaw']}",
+        f" franka2_x:={robot_poses['franka2']['x']}",
+        f" franka2_y:={robot_poses['franka2']['y']}",
+        f" franka2_z:={robot_poses['franka2']['z']}",
+        f" franka2_yaw:={robot_poses['franka2']['yaw']}",
+        f" shared_x:={robot_poses['shared_zone']['x']}",
+        f" shared_y:={robot_poses['shared_zone']['y']}",
+        f" shared_z:={robot_poses['shared_zone']['z']}",
+        f" camera_x:={robot_poses['camera']['x']}",
+        f" camera_y:={robot_poses['camera']['y']}",
+        f" camera_z:={robot_poses['camera']['z']}",
+        f" camera_roll:={robot_poses['camera']['roll']}",
+        f" camera_pitch:={robot_poses['camera']['pitch']}",
+        f" camera_yaw:={robot_poses['camera']['yaw']}"
+    ]
+    
+    robot_description_config = Command(xacro_args)
     robot_description = {"robot_description": ParameterValue(robot_description_config, value_type=str)}
 
     # Bimanual SRDF
     xacro_file_srdf = os.path.join(pkg_env_share, 'srdf', 'bimanual_sim_srdf.xacro')
+    
+    # Process SRDF with xacro
     robot_description_semantic_config = Command([
         'xacro ', xacro_file_srdf, 
         ' name:=idra_bimanual_setup', 
         ' hand:=true',
         ' gazebo:=', use_gazebo
     ])
+    
     robot_description_semantic = {"robot_description_semantic": ParameterValue(robot_description_semantic_config, value_type=str)}
 
     # Kinematics

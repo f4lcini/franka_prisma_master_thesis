@@ -1,6 +1,7 @@
 import os
 import re
 import xacro
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext, LaunchDescription
@@ -96,7 +97,16 @@ def robot_description_dependent_nodes_spawner(
         get_package_share_directory('franka_bimanual_config'), 'urdf', 'bimanual_custom.urdf.xacro'
     )
 
-    franka_controllers = '/mm_ws/src/franka_manipulation_env/config/basic_controllers_custom.yaml'
+    # Load Robot Poses from YAML
+    robot_poses_file = os.path.join(
+        get_package_share_directory('franka_bimanual_config'), 'config', 'robot_poses.yaml'
+    )
+    with open(robot_poses_file, 'r') as f:
+        robot_poses = yaml.safe_load(f)
+
+    franka_controllers = os.path.join(
+        get_package_share_directory('franka_bimanual_config'), 'config', 'basic_controllers_custom.yaml'
+    )
     franka_controllers_str =  franka_controllers
 
     p = '\t' # Padding
@@ -116,7 +126,40 @@ def robot_description_dependent_nodes_spawner(
             'franka1_ip': left_ip_str,
             'franka2_ip': right_ip_str,
 
-            'controller_path': franka_controllers_str
+            'controller_path': franka_controllers_str,
+
+            # Pass table and robot poses from YAML
+            'table_x': str(robot_poses['table']['x']),
+            'table_y': str(robot_poses['table']['y']),
+            'table_z': str(robot_poses['table']['z']),
+            'table_roll': str(robot_poses['table']['roll']),
+            'table_pitch': str(robot_poses['table']['pitch']),
+            'table_yaw': str(robot_poses['table']['yaw']),
+
+            'table_size_x': str(robot_poses['table']['size_x']),
+            'table_size_y': str(robot_poses['table']['size_y']),
+            'table_size_z': str(robot_poses['table']['size_z']),
+
+            'franka1_x': str(robot_poses['franka1']['x']),
+            'franka1_y': str(robot_poses['franka1']['y']),
+            'franka1_z': str(robot_poses['franka1']['z']),
+            'franka1_yaw': str(robot_poses['franka1']['yaw']),
+
+            'franka2_x': str(robot_poses['franka2']['x']),
+            'franka2_y': str(robot_poses['franka2']['y']),
+            'franka2_z': str(robot_poses['franka2']['z']),
+            'franka2_yaw': str(robot_poses['franka2']['yaw']),
+
+            'shared_x': str(robot_poses['shared_zone']['x']),
+            'shared_y': str(robot_poses['shared_zone']['y']),
+            'shared_z': str(robot_poses['shared_zone']['z']),
+
+            'camera_x': str(robot_poses['camera']['x']),
+            'camera_y': str(robot_poses['camera']['y']),
+            'camera_z': str(robot_poses['camera']['z']),
+            'camera_roll': str(robot_poses['camera']['roll']),
+            'camera_pitch': str(robot_poses['camera']['pitch']),
+            'camera_yaw': str(robot_poses['camera']['yaw']),
         }
     ).toprettyxml(p)
 
@@ -137,6 +180,7 @@ def robot_description_dependent_nodes_spawner(
             name='controller_manager',
             parameters=[
                 franka_controllers_str,
+                {'robot_description': robot_description},
             ],
             remappings=[
                 ('~/robot_description', '/robot_description'),

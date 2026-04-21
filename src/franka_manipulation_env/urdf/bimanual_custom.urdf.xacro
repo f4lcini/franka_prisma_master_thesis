@@ -3,11 +3,86 @@
 
   <xacro:include filename="$(find franka_description)/robots/common/franka_robot.xacro" />
 
+  <!-- Reference Frame Arguments -->
+  <xacro:arg name="table_x" default="0.0" />
+  <xacro:arg name="table_y" default="0.0" />
+  <xacro:arg name="table_z" default="0.2" />
+  <xacro:arg name="table_roll" default="0.0" />
+  <xacro:arg name="table_pitch" default="0.0" />
+  <xacro:arg name="table_yaw" default="0.0" />
+
+  <xacro:arg name="franka1_x" default="0.4375" />
+  <xacro:arg name="franka1_y" default="0.0" />
+  <xacro:arg name="franka1_z" default="0.06" />
+  <xacro:arg name="franka1_yaw" default="${pi}" />
+
+  <xacro:arg name="franka2_x" default="-0.4175" />
+  <xacro:arg name="franka2_y" default="0.0" />
+  <xacro:arg name="franka2_z" default="0.06" />
+  <xacro:arg name="franka2_yaw" default="0.0" />
+
+  <xacro:arg name="shared_x" default="0.4" />
+  <xacro:arg name="shared_y" default="0.0" />
+  <xacro:arg name="shared_z" default="0.05" />
+
+  <xacro:arg name="camera_x" default="0.6" />
+  <xacro:arg name="camera_y" default="1.0" />
+  <xacro:arg name="camera_z" default="1.3" />
+  <xacro:arg name="camera_roll" default="0.0" />
+  <xacro:arg name="camera_pitch" default="0.785" />
+  <xacro:arg name="camera_yaw" default="-1.57" />
+
+  <xacro:arg name="table_size_x" default="1.215" />
+  <xacro:arg name="table_size_y" default="0.6" />
+  <xacro:arg name="table_size_z" default="0.04" />
+
   <link name="world" />
   <joint name="world_joint" type="fixed">
-    <origin rpy="0 0 0" xyz="0 0 0.2" />
+    <origin rpy="$(arg table_roll) $(arg table_pitch) $(arg table_yaw)" 
+            xyz="$(arg table_x) $(arg table_y) $(arg table_z)" />
     <parent link="world" />
     <child link="table" />
+  </joint>
+
+  <link name="shared_link">
+    <visual>
+      <geometry>
+        <sphere radius="0.02" />
+      </geometry>
+      <material name="shared_material">
+        <color rgba="0 1 0 0.5" />
+      </material>
+    </visual>
+  </link>
+  <joint name="table_to_shared" type="fixed">
+    <parent link="table" />
+    <child link="shared_link" />
+    <origin xyz="$(arg shared_x) $(arg shared_y) $(arg shared_z)" rpy="0 0 0" />
+  </joint>
+
+  <!-- AprilTag Fixed Reference -->
+  <link name="tag_0_fixed">
+    <visual>
+      <geometry>
+        <box size="0.05 0.05 0.001" />
+      </geometry>
+      <material name="tag_material">
+        <color rgba="0 0 0 1" />
+      </material>
+    </visual>
+  </link>
+  <joint name="table_to_tag_0" type="fixed">
+    <parent link="table" />
+    <child link="tag_0_fixed" />
+    <origin xyz="$(arg shared_x) $(arg shared_y) 0.0" rpy="0 0 0" />
+  </joint>
+
+  <link name="camera_link" />
+  <joint name="table_to_camera" type="fixed">
+    <parent link="table" />
+    <child link="camera_link" />
+    <origin xyz="$(arg camera_x) $(arg camera_y) $(arg camera_z)" 
+            rpy="$(arg camera_roll) $(arg camera_pitch) $(arg camera_yaw)" />
   </joint>
 
   <material name="tablematerial">
@@ -20,49 +95,38 @@
   <link name="table">
     <visual>
       <geometry>
-        <box size="0.8 1.6 0.04" />
+        <box size="$(arg table_size_x) $(arg table_size_y) $(arg table_size_z)" />
       </geometry>
-      <origin xyz="0 0 -0.02" />
+      <origin xyz="0 0 ${ -$(arg table_size_z) / 2 }" />
       <material name="tablematerial" />
+    </visual>
+    <!-- Visual marker for table center -->
+    <visual>
+      <geometry>
+        <sphere radius="0.03" />
+      </geometry>
+      <material name="center_marker">
+        <color rgba="1 0 0 0.8" />
+      </material>
     </visual>
     <collision>
       <geometry>
-        <box size="0.8 1.6 0.04" />
+        <box size="$(arg table_size_x) $(arg table_size_y) $(arg table_size_z)" />
       </geometry>
-      <origin xyz="0 0 -0.02" />
+      <origin xyz="0 0 ${ -$(arg table_size_z) / 2 }" />
     </collision>
   </link>
 
-  <link name="robot1_plate">
-    <visual>
-      <geometry>
-        <box size="0.29 0.29 0.018" />
-      </geometry>
-      <origin xyz="0.145 0.145 0.009" />
-      <material name="platematerial" />
-    </visual>
-  </link>
-
-  <joint name="table_to_plate1" type="fixed">
+  <joint name="table_to_franka1" type="fixed">
     <parent link="table" />
-    <child link="robot1_plate" />
-    <origin xyz="-0.2 0.6 0.0" />
+    <child link="franka1_fr3_link0" />
+    <origin xyz="$(arg franka1_x) $(arg franka1_y) $(arg franka1_z)" rpy="0 0 $(arg franka1_yaw)" />
   </joint>
 
-  <link name="robot2_plate">
-    <visual>
-      <geometry>
-        <box size="0.29 0.29 0.018" />
-      </geometry>
-      <origin xyz="0.145 0.145 0.009" />
-      <material name="platematerial" />
-    </visual>
-  </link>
-
-  <joint name="table_to_plate2" type="fixed">
+  <joint name="table_to_franka2" type="fixed">
     <parent link="table" />
-    <child link="robot2_plate" />
-    <origin xyz="-0.2 -0.6 0.0" />
+    <child link="franka2_fr3_link0" />
+    <origin xyz="$(arg franka2_x) $(arg franka2_y) $(arg franka2_z)" rpy="0 0 $(arg franka2_yaw)" />
   </joint>
 
   <!-- Configuration Arguments -->
@@ -104,11 +168,7 @@
     rpy_ee="0 0 ${-pi/4}"
   />
 
-  <joint name="plate_to_franka1" type="fixed">
-    <parent link="robot1_plate" />
-    <child link="franka1_fr3_link0" />
-    <origin xyz="0.145 0.107 0.018" rpy="0 0 ${-pi/2}" />
-  </joint>
+
 
   <!-- Franka Robot 2 -->
   <xacro:franka_robot arm_id="fr3"
@@ -132,11 +192,7 @@
     rpy_ee="0 0 ${-pi/4}"
   />
 
-  <joint name="plate_to_franka2" type="fixed">
-    <parent link="robot2_plate" />
-    <child link="franka2_fr3_link0" />
-    <origin xyz="0.145 0.107 0.018" rpy="0 0 ${pi/2}" />
-  </joint>
+
 
   <!-- Hardware Interface Spawner -->
   <xacro:macro name="interface_spawner" params="robot_name">

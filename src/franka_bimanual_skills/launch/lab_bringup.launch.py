@@ -37,7 +37,7 @@ def generate_launch_description():
     # --- External Launch Inclusions ---
     
     # 1. Hardware Bringup (using custom bimanual config to avoid modifying library defaults)
-    bringup_launch_dir = PathJoinSubstitution([FindPackageShare('franka_bimanual_config'), 'launch'])
+    bringup_launch_dir = os.path.join(get_package_share_directory('franka_bimanual_config'), 'launch')
     hardware_bringup = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution([bringup_launch_dir, 'custom_bimanual.launch.py'])),
         launch_arguments={
@@ -50,6 +50,21 @@ def generate_launch_description():
     )
 
 
+    # 2. MoveIt Bimanual Planning (Delayed like in simulation)
+    moveit_bimanual_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([bringup_launch_dir, 'moveit_bimanual.launch.py'])),
+        launch_arguments={
+            'use_rviz': LaunchConfiguration('use_rviz'),
+            'use_gazebo': 'false',
+        }.items(),
+    )
+
+    delayed_moveit_bimanual = TimerAction(
+        period=12.0,
+        actions=[moveit_bimanual_launch],
+        condition=IfCondition(LaunchConfiguration('use_rviz'))
+    )
+
     return LaunchDescription([
         # Declare arguments
         declare_left_ip,
@@ -57,6 +72,7 @@ def generate_launch_description():
         declare_use_rviz,
         declare_controller_type,
         
-        # Start hardware controllers
-        hardware_bringup
+        # Launch nodes
+        hardware_bringup,
+        delayed_moveit_bimanual
     ])
