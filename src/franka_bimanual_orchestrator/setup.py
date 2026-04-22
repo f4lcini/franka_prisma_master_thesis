@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
             'main_engine = franka_bimanual_orchestrator.main_engine:main',
             'test_engine = franka_bimanual_orchestrator.test_engine:main',
+            'scenario_engine = franka_bimanual_orchestrator.scenario_engine:main',
         ],
     },
 )

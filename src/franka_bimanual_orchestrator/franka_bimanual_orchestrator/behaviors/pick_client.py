@@ -151,7 +151,7 @@ class PickActionClient(py_trees.behaviour.Behaviour):
             # --- HARDENING: INFINITE PROBING for planning failed (collision/IK) ---
             # We don't fail for obstruction; we just keep "interrogating" (Parallelismo Spinto)
             error_str = result.message.lower()
-            if "no_ik_solution" in error_str or "planning_failed" in error_str or "no path found" in error_str:
+            if "no_ik_solution" in error_str or "planning failed" in error_str or "no path found" in error_str:
                 self.logger.info(f"[{self.name}] ⏳ [BLOCKED] Path obstructed by {self.prefix[:-1]} arm. Retrying interrogation...")
                 self.send_goal_future = None # Reset to trigger new probe in next tick
                 self.get_result_future = None

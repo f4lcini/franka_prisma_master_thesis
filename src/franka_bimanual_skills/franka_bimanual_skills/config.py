@@ -27,7 +27,7 @@ PREDEFINED_TARGETS = {
     "base_pose": (1.1, 0.2, 0.225),
     "shared":    (0.6, 0.5, 0.225),    # Table crossover point (aligned to Z=0.225)
     "box":       (0.1, 0.1, 0.220),    # Receptacle
-    # "mid_air":   (0.5, 0.4, 0.5)     # REMOVED: Handover disabled
+    "mid_air":   (0.45, 0.45, 0.45)    # High meeting point for Handover
 }
 
 # NOTE: There is a ~15cm projection offset between the robot flange (link hand) 
@@ -51,7 +51,7 @@ DEFAULT_OFFSETS = {
     'safety_pause_long': 1.0,
     'handover_safety_offset': 0.25,
     'handover_donor_z_offset': 0.20,     # Reduced slightly to keep elbow comfortable
-    'handover_recipient_x_offset': -0.25, # Adjusted to avoid self-collision at X=0.15
+    'handover_recipient_x_offset': -0.15, # Adjusted from -0.25 for better kinematic reach at X=0.70
     'handover_timeout_sec': 120.0        # rendezvous timeout
 }
 

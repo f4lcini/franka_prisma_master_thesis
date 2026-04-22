@@ -60,7 +60,7 @@ def generate_launch_description():
 
     planning_pipeline_parameters = {
         "planning_pipelines": ["ompl", "pilz_industrial_motion_planner"],
-        "default_planning_pipeline": "ompl",
+        "default_planning_pipeline": "pilz_industrial_motion_planner",
         "ompl": ompl_combined,
         "pilz_industrial_motion_planner": {
             "planning_plugin": "pilz_industrial_motion_planner/CommandPlanner",

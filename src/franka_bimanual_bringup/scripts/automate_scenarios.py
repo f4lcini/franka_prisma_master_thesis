@@ -21,9 +21,10 @@ class BimanualTAMPTestSuite:
 
     def _setup_params(self):
         if self.bypass:
-            # Set global parameter for behaviors to see
+            # Set global parameter for behaviors and VLM to see
             subprocess.run('ros2 param set /simple_moveit_server bypass_perception true', shell=True)
             subprocess.run('ros2 param set /bimanual_engine bypass_perception true', shell=True)
+            subprocess.run('ros2 param set /vlm_server_node bypass_perception true', shell=True)
 
     def scenario_relay(self):
         self._setup_params()

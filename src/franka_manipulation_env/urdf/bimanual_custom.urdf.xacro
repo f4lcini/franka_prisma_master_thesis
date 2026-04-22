@@ -71,6 +71,27 @@
     <child link="robot2_plate" />
     <origin xyz="0.03 0.48 0.0" />
   </joint>
+  <!-- SEMANTIC TARGET FRAMES (For MoveIt & Orchestrator) -->
+  <link name="shared" />
+  <joint name="table_to_shared" type="fixed">
+    <parent link="table" />
+    <child link="shared" />
+    <origin xyz="0.45 0.4 0.025" rpy="0 0 0" />
+  </joint>
+
+  <link name="box" />
+  <joint name="table_to_box" type="fixed">
+    <parent link="table" />
+    <child link="box" />
+    <origin xyz="0.1 0.1 0.03" rpy="0 0 0" />
+  </joint>
+
+  <link name="base_pose" />
+  <joint name="table_to_base" type="fixed">
+    <parent link="table" />
+    <child link="base_pose" />
+    <origin xyz="1.1 0.2 0.025" rpy="0 0 0" />
+  </joint>
 
 
   <!--  _____                _           ____                                -->
@@ -292,8 +313,8 @@
       </xacro:if>
     </hardware>
 
-    <xacro:interface_spawner robot_name="franka1" initial_j1="${pi/2}" />
-    <xacro:interface_spawner robot_name="franka2" initial_j1="${-pi/2}" />
+    <xacro:interface_spawner robot_name="franka1" initial_j1="0.0" />
+    <xacro:interface_spawner robot_name="franka2" initial_j1="0.0" />
 
   </ros2_control>
 
@@ -305,5 +326,22 @@
       </plugin>
     </gazebo>
   </xacro:if>
+
+  <!-- Gazebo Friction & Physics Overrides for Fingers -->
+  <xacro:macro name="finger_gazebo" params="arm_id finger_id">
+    <gazebo reference="${arm_id}_fr3_finger_joint${finger_id}">
+      <mu1>1000.0</mu1>
+      <mu2>1000.0</mu2>
+      <kp>1000000.0</kp>
+      <kd>1.0</kd>
+      <minDepth>0.001</minDepth>
+      <maxVel>0.1</maxVel>
+    </gazebo>
+  </xacro:macro>
+
+  <xacro:finger_gazebo arm_id="franka1" finger_id="1" />
+  <xacro:finger_gazebo arm_id="franka1" finger_id="2" />
+  <xacro:finger_gazebo arm_id="franka2" finger_id="1" />
+  <xacro:finger_gazebo arm_id="franka2" finger_id="2" />
 
 </robot>

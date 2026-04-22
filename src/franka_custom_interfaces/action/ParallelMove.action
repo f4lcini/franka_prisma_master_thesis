@@ -1,0 +1,14 @@
+# Goal
+string arm  # "left" or "right"
+geometry_msgs/PoseStamped target_pose
+float64[] joint_target
+string planner_id # "ompl" or "pilz" or "ptp"
+bool is_handover # to bypass constraints
+---
+# Result
+bool success
+string message
+---
+# Feedback
+float32 progress
+string status

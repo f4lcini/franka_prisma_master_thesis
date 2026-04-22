@@ -158,4 +158,24 @@ ros2 launch franka_bimanual_skills reasoning.launch.py use_hardware:=true
 
 # Terminal 5: Natural Language Command (User Input & BT Engine)
 cd /mm_ws && source install/setup.bash
-ros2 run franka_bimanual_orchestrator main_engine "Place the green ball in the box"
+# ------------------------------------------
+# 12. PARALLEL ARCHITECTURE & ATOMIC TESTING (MoveIt Bypass)
+# ------------------------------------------
+# Step 1: Build the parallel backend
+colcon build --packages-select franka_bimanual_planner franka_bimanual_bringup --symlink-install
+source install/setup.bash
+
+# Step 2: Start Parallel Backends (Planner C++ + Skill Servers)
+ros2 launch franka_bimanual_bringup parallel_test_backends.launch.py
+
+# Step 3: Run Atomic Tests (Behavior Trees)
+ros2 run franka_bimanual_bringup atom_synch_home.py           # Baseline Synchronous Home
+# ------------------------------------------
+# 13. AUTOMATION (One-Click Launch inside Docker)
+# ------------------------------------------
+# This script opens a tmux session with 3-panes:
+# Top: Gazebo/MoveIt | Bottom-Left: Backend | Bottom-Right: Tests
+./launcher.sh        # Shortcut: autobl
+
+# This script kills EVERYTHING (Tmux, ROS 2, Gazebo)
+./stopper.sh         # Shortcut: autokill

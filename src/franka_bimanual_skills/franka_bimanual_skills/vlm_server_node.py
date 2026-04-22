@@ -1,14 +1,6 @@
-"""
-================================================================================
-Author: Falco Robotics (with AI Assistant)
-Code Description: 
-[ROLE]: ACTION SERVER (Provides: /vlm_query)
-Generalized Bimanual Orchestrator version.
-================================================================================
-"""
-
 import os
 import time
+import json
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
@@ -32,6 +24,7 @@ class VlmServerNode(Node):
         
         self.get_logger().info("Initializing Generalized VLM Bimanual Orchestrator...")
         
+        self.declare_parameter('bypass_perception', False)
         self.cv_bridge = CvBridge()
         self.latest_image = None
         
@@ -78,9 +71,20 @@ class VlmServerNode(Node):
 
     async def execute_callback(self, goal_handle):
         task_description = goal_handle.request.task_description
-        self.get_logger().info(f"Executing VLM planning goal for: '{task_description}'")
+        bypass = self.get_parameter('bypass_perception').get_parameter_value().bool_value
+        
+        self.get_logger().info(f"Executing VLM planning goal for: '{task_description}' (Bypass: {bypass})")
         result = VlmQuery.Result()
         
+        if bypass:
+            self.get_logger().warn("🚀 [MOCK MODE] Perception Bypass active. Returning hardcoded plan...")
+            mock_plan = self.generate_mock_plan(task_description)
+            result.success = True
+            result.vlm_plan_json = json.dumps(mock_plan)
+            result.message = "MOCK PLAN (Bypass Perception)"
+            goal_handle.succeed()
+            return result
+
         # --- Safety Cache: Only use if task is identical ---
         if self.last_plan_cache is not None and getattr(self, "last_task_input", "") == task_description:
             self.get_logger().info("Using CACHED plan for matching task description.")
@@ -118,7 +122,6 @@ class VlmServerNode(Node):
             "\nOutput strictly in JSON conform to the TaskPlan schema without external text."
         )
 
-        
         contents = [system_prompt, f"User Command: {task_description}"]
         if self.latest_image:
             contents.append(self.latest_image)
@@ -141,7 +144,7 @@ class VlmServerNode(Node):
                 json_plan = response.text
                 self.get_logger().info(f"Generated Plan: {json_plan}")
                 
-                self.last_plan_cache = json_plan  # Save to cache
+                self.last_plan_cache = json_plan 
                 
                 result.success = True
                 result.vlm_plan_json = json_plan
@@ -160,6 +163,35 @@ class VlmServerNode(Node):
                     result.message = f"API Error: {str(e)}"
                     goal_handle.abort()
                     return result
+
+    def generate_mock_plan(self, task_description):
+        """Returns hardcoded plans for simulation testing when API is unavailable."""
+        task = task_description.lower()
+        
+        # Scenario 1: Relay via shared zone
+        if "relay" in task or "using the shared zone" in task:
+            return {
+                "reasoning": "Mock Relay: Right arm picks from base_pose, places in shared. Left arm waits then moves from shared to box.",
+                "sequence": [
+                    {"action": "PICK", "arm": "right_arm", "target_name": "base_pose", "grasp_type": "top"},
+                    {"action": "PLACE", "arm": "right_arm", "target_location": "shared"},
+                    {"action": "MOVE_HOME", "arm": "right_arm", "target_pose_name": "ready"},
+                    {"action": "WAIT", "arm": "left_arm", "message": "Wait for right arm to place in shared"},
+                    {"action": "PICK", "arm": "left_arm", "target_name": "shared", "grasp_type": "top"},
+                    {"action": "PLACE", "arm": "left_arm", "target_location": "box"},
+                    {"action": "MOVE_HOME", "arm": "left_arm", "target_pose_name": "ready"}
+                ]
+            }
+        
+        # Default fallback: Sequential Pick & Place
+        return {
+            "reasoning": "Mock Fallback: Standard pick and place with right arm.",
+            "sequence": [
+                {"action": "PICK", "arm": "right_arm", "target_name": "base_pose", "grasp_type": "top"},
+                {"action": "PLACE", "arm": "right_arm", "target_location": "box"},
+                {"action": "MOVE_HOME", "arm": "right_arm", "target_pose_name": "ready"}
+            ]
+        }
 
 def main(args=None):
     rclpy.init(args=args)

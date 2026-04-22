@@ -281,6 +281,18 @@ franka1_arm_controller:
       - franka1_fr3_joint5
       - franka1_fr3_joint6
       - franka1_fr3_joint7
+    action_monitor_rate: 20.0
+    allow_integration_in_goal_trajectories: true
+    constraints:
+      goal_time: 20.0 # Extra generous for simulation lag
+      stopped_velocity_tolerance: 0.2
+      franka1_fr3_joint1: {goal: 0.05}
+      franka1_fr3_joint2: {goal: 0.05}
+      franka1_fr3_joint3: {goal: 0.05}
+      franka1_fr3_joint4: {goal: 0.05}
+      franka1_fr3_joint5: {goal: 0.05}
+      franka1_fr3_joint6: {goal: 0.05}
+      franka1_fr3_joint7: {goal: 0.05}
 
 franka2_arm_controller:
   ros__parameters:
@@ -297,6 +309,18 @@ franka2_arm_controller:
       - franka2_fr3_joint5
       - franka2_fr3_joint6
       - franka2_fr3_joint7
+    action_monitor_rate: 20.0
+    allow_integration_in_goal_trajectories: true
+    constraints:
+      goal_time: 20.0
+      stopped_velocity_tolerance: 0.2
+      franka2_fr3_joint1: {goal: 0.05}
+      franka2_fr3_joint2: {goal: 0.05}
+      franka2_fr3_joint3: {goal: 0.05}
+      franka2_fr3_joint4: {goal: 0.05}
+      franka2_fr3_joint5: {goal: 0.05}
+      franka2_fr3_joint6: {goal: 0.05}
+      franka2_fr3_joint7: {goal: 0.05}
 
 franka1_gripper:
   ros__parameters:
@@ -308,6 +332,11 @@ franka1_gripper:
     state_interfaces:
       - position
       - velocity
+    action_monitor_rate: 20.0
+    constraints:
+      goal_time: 1.0
+      franka1_fr3_finger_joint1: {goal: 0.01}
+      franka1_fr3_finger_joint2: {goal: 0.01}
 
 franka2_gripper:
   ros__parameters:
@@ -319,3 +348,8 @@ franka2_gripper:
     state_interfaces:
       - position
       - velocity
+    action_monitor_rate: 20.0
+    constraints:
+      goal_time: 1.0
+      franka2_fr3_finger_joint1: {goal: 0.01}
+      franka2_fr3_finger_joint2: {goal: 0.01}

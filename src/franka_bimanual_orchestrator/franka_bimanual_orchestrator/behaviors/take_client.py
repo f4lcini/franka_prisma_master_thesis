@@ -39,22 +39,38 @@ class TakeActionClient(py_trees.behaviour.Behaviour):
         
         target_arm = "any"
         target_loc = "mid_air"
+        target_pose_dynamic = None
+
         try:
             target_arm = getattr(self.blackboard, f"{self.prefix}active_arm")
         except (AttributeError, KeyError):
             pass
+
+        # 1. Try to get a dynamic PoseStamped from the blackboard (best for VLM/Vision)
         try:
-            target_loc = getattr(self.blackboard, f"{self.prefix}target_name")
+            target_pose_dynamic = getattr(self.blackboard, "handover_target_pose")
         except (AttributeError, KeyError):
             pass
 
+        # 2. Fallback to a semantic label (target_name)
+        if not target_pose_dynamic:
+            try:
+                target_loc = getattr(self.blackboard, f"{self.prefix}target_name")
+            except (AttributeError, KeyError):
+                pass
+
         goal_msg = TakeObject.Goal()
         goal_msg.arm = target_arm
-        goal_msg.handover_pose = PoseStamped()
-        goal_msg.handover_pose.header.frame_id = target_loc
+        
+        if target_pose_dynamic:
+            self.logger.info(f"[{self.name}] Sending TAKE Goal with DYNAMIC Pose for {target_arm}")
+            goal_msg.handover_pose = target_pose_dynamic
+        else:
+            self.logger.info(f"[{self.name}] Sending TAKE Goal for {target_arm} using LABEL: {target_loc}")
+            goal_msg.handover_pose = PoseStamped()
+            goal_msg.handover_pose.header.frame_id = target_loc
+        
         goal_msg.handover_pose.header.stamp = self.node.get_clock().now().to_msg()
-
-        self.logger.info(f"[{self.name}] Sending TAKE Goal for {target_arm} to {target_loc}")
         self.send_goal_future = self.action_client.send_goal_async(goal_msg)
         self.status = py_trees.common.Status.RUNNING
 

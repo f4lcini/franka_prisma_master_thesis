@@ -96,6 +96,16 @@ class PlaceActionClient(py_trees.behaviour.Behaviour):
                     self.blackboard.handover_ready = True
                     self.logger.info(f"[{self.name}] Shared Placement logic complete. Signalling Handover.")
                 return py_trees.common.Status.SUCCESS
+            
+            # --- HARDENING: INFINITE PROBING for planning failed (collision/IK) ---
+            # We don't fail for obstruction; we just keep "interrogating" (Parallelismo Spinto)
+            error_str = result.message.lower()
+            if "no_ik_solution" in error_str or "planning failed" in error_str or "no path found" in error_str:
+                self.logger.info(f"[{self.name}] ⏳ [BLOCKED] Path obstructed by other arm. Retrying Place interrogation...")
+                self.send_goal_future = None # Reset to trigger new probe in next tick
+                self.get_result_future = None
+                return py_trees.common.Status.RUNNING
+
             return py_trees.common.Status.FAILURE
 
         return py_trees.common.Status.RUNNING
