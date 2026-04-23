@@ -50,8 +50,8 @@ DEFAULT_OFFSETS = {
     'safety_pause_short': 1.5,   # Increased for physics settlement
     'safety_pause_long': 1.0,
     'handover_safety_offset': 0.25,
-    'handover_donor_z_offset': 0.20,     # Reduced slightly to keep elbow comfortable
-    'handover_recipient_x_offset': -0.15, # Adjusted from -0.25 for better kinematic reach at X=0.70
+    'handover_donor_x_offset': 0.15,      # Face-to-face donor approach thrust
+    'handover_recipient_x_offset': -0.10, # Aligned with Optimizer Map
     'handover_timeout_sec': 120.0        # rendezvous timeout
 }
 
@@ -78,20 +78,18 @@ def get_arm_config(request_arm, logger=None):
         return None, None
 
 def apply_donor_handover_orientation(pose):
-    """Donor: Points along -X, fingers Vertical."""
-    # Canonical Handover Orientation for Franka Right
-    pose.orientation.x = 0.7071
-    pose.orientation.y = 0.7071
+    """Donor: Points towards +Y (face-to-face)."""
+    pose.orientation.x = -0.7071
+    pose.orientation.y = 0.0
     pose.orientation.z = 0.0
-    pose.orientation.w = 0.0
+    pose.orientation.w = 0.7071
 
 def apply_recipient_handover_orientation(pose):
-    """Recipient: Points along +X, fingers Horizontal."""
-    # Canonical Handover Orientation for Franka Left
-    pose.orientation.x = 0.0
-    pose.orientation.y = 0.0
-    pose.orientation.z = 0.7071
-    pose.orientation.w = 0.7071
+    """Recipient: Points towards -Y (symmetrical face) with 90 deg finger offset."""
+    pose.orientation.x = 0.5
+    pose.orientation.y = 0.5
+    pose.orientation.z = 0.5
+    pose.orientation.w = 0.5
 
 def apply_top_down_orientation(pose):
     """Standard Pick/Place orientation (TCP down)."""

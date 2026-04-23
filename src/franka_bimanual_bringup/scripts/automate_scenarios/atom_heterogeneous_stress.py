@@ -17,6 +17,7 @@ sys.path.append(os.path.join(workspace_path, "franka_bimanual_orchestrator"))
 from franka_bimanual_orchestrator.behaviors.move_home_client import MoveHomeClient
 from franka_bimanual_orchestrator.behaviors.pick_client import PickActionClient
 from franka_bimanual_orchestrator.behaviors.place_client import PlaceActionClient
+from franka_bimanual_orchestrator.behaviors.wait_client import WaitActionClient
 
 class SimpleTimer(py_trees.behaviour.Behaviour):
     def __init__(self, name="Timer", duration=3.0):
@@ -34,28 +35,33 @@ class SimpleTimer(py_trees.behaviour.Behaviour):
         return py_trees.common.Status.SUCCESS if elapsed >= self.duration else py_trees.common.Status.RUNNING
 
 def create_stress_tree():
+    """
+    Sequential Task with Parallel Execution (Independent Arms):
+    - Root: Parallel structure allows both arms to be active simultaneously.
+    - Sync: Done via 'shared' workspace logic in Pick/Place nodes.
+    
+    RIGHT: Pick(base_pose) -> Place(shared)
+    LEFT:  Pick(shared) -> Place(box)
+    """
     root = py_trees.composites.Parallel(
-        name="Atomic_Stress_Test",
+        name="Parallel_Handover_Stress",
         policy=py_trees.common.ParallelPolicy.SuccessOnAll()
     )
     
-    # ---------------------------------------------------------
-    # RIGHT ARM (HEAVY): Performs a full PICK and PLACE sequence
-    # ---------------------------------------------------------
-    right_seq = py_trees.composites.Sequence(name="Right_Heavy_Sequence", memory=True)
-    right_pick = PickActionClient(name="Right_Heavy_Pick", prefix="right_")
-    right_place = PlaceActionClient(name="Right_Heavy_Place", prefix="right_")
+    # RIGHT ARM SEQUENCE
+    right_seq = py_trees.composites.Sequence(name="Right_Arm_Sequence", memory=True)
+    right_pick = PickActionClient(name="Right_Pick_Base", prefix="right_")
+    right_place = PlaceActionClient(name="Right_Place_Shared", prefix="right_")
     right_seq.add_children([right_pick, right_place])
     
-    # ---------------------------------------------------------
-    # LEFT ARM (LIGHT): Performs sequence of JOINT moves and WAITS
-    # ---------------------------------------------------------
-    left_seq = py_trees.composites.Sequence(name="Left_Light_Sequence", memory=True)
+    # LEFT ARM SEQUENCE (FLUID HANDOVER)
+    # 1. Move to Midway + 2. Wait for Release Topic -> 3. Start Picking
+    left_seq = py_trees.composites.Sequence(name="Left_Arm_Sequence", memory=True)
     left_to_mid = MoveHomeClient(name="Left_to_Midway", prefix="left_")
-    left_wait = SimpleTimer(name="Left_Pause_2s", duration=2.0)
-    left_to_ready = MoveHomeClient(name="Left_to_Ready", prefix="left_")
-    
-    left_seq.add_children([left_to_mid, left_wait, left_to_ready])
+    left_wait = WaitActionClient(name="Wait_for_Right_Release", prefix="left_")
+    left_pick = PickActionClient(name="Left_Pick_Shared", prefix="left_")
+    left_place = PlaceActionClient(name="Left_Place_Box", prefix="left_")
+    left_seq.add_children([left_to_mid, left_wait, left_pick, left_place])
     
     root.add_children([right_seq, left_seq])
     return root
@@ -67,49 +73,55 @@ def main():
     blackboard = py_trees.blackboard.Client(name="Atomic_Stress")
     blackboard.register_key(key="left_active_arm", access=py_trees.common.Access.WRITE)
     blackboard.register_key(key="right_active_arm", access=py_trees.common.Access.WRITE)
-    blackboard.register_key(key="left_target_pose_name", access=py_trees.common.Access.WRITE)
+    blackboard.register_key(key="left_target_name", access=py_trees.common.Access.WRITE)
     blackboard.register_key(key="right_target_name", access=py_trees.common.Access.WRITE)
+    blackboard.register_key(key="left_target_location", access=py_trees.common.Access.WRITE)
     blackboard.register_key(key="right_target_location", access=py_trees.common.Access.WRITE)
+    blackboard.register_key(key="left_target_pose_name", access=py_trees.common.Access.WRITE)
     blackboard.register_key(key="vlm_plan", access=py_trees.common.Access.WRITE)
+    blackboard.register_key(key="handover_starting", access=py_trees.common.Access.WRITE)
+    blackboard.register_key(key="handover_ready", access=py_trees.common.Access.WRITE)
     
-    # Set targets
+    # Set targets for sequential bimanual handover
     blackboard.left_active_arm = "left_arm"
     blackboard.right_active_arm = "right_arm"
-    blackboard.right_target_name = "base_pose"  # For Pick
-    blackboard.right_target_location = "shared"   # For Place
     blackboard.left_target_pose_name = "midway"
-    blackboard.vlm_plan = ["stress_test"]
+    
+    blackboard.handover_starting = False
+    blackboard.handover_ready = False
+    
+    blackboard.right_target_name = "base_pose"  # Right Arm pick
+    blackboard.right_target_location = "shared"   # Right Arm place
+    
+    blackboard.left_target_name = "shared"     # Left Arm pick
+    blackboard.left_target_location = "box"      # Left Arm place
+    
+    blackboard.vlm_plan = ["handover_sequence"]
 
     # Build and run
     root = create_stress_tree()
     tree = py_trees_ros.trees.BehaviourTree(root=root, unicode_tree_debug=False)
     tree.visitors.append(py_trees.visitors.DisplaySnapshotVisitor())
     
-    print("🚀 Running ATOMIC STRESS TEST (Right=Pick, Left=MoveHome)...")
-    print("RIGHT: Complex Picking at 'base_pose' (Red Cube)")
-    print("LEFT:  Joint Move sequence (Midway -> Ready)")
-    
-    # Switch left pose
-    def pre_tick_handler(tree):
-        if root.children[1].children[0].status == py_trees.common.Status.SUCCESS:
-             blackboard.left_target_pose_name = "ready"
+    print("🚀 Running SEQUENTIAL HANDOVER TEST...")
+    print("1. RIGHT: Pick at 'base_pose'")
+    print("2. RIGHT: Place at 'shared'")
+    print("3. LEFT:  Pick at 'shared'")
+    print("4. LEFT:  Place at 'box'")
 
     try:
         tree.setup(node_name="atomic_stress_engine", timeout=15.0)
         
-        # We use a managed loop to avoid duplicate spinning of the same node/handles
         while rclpy.ok():
-            pre_tick_handler(tree)
-            
             # Tick the tree once
             tree.tick()
             
             # Exit conditions
             if root.status == py_trees.common.Status.SUCCESS:
-                print("\n✅ STRESS TEST COMPLETED SUCCESSFULLY!")
+                print("\n✅ SEQUENTIAL HANDOVER COMPLETED SUCCESSFULLY!")
                 break
             if root.status == py_trees.common.Status.FAILURE:
-                print("\n❌ STRESS TEST FAILED.")
+                print("\n❌ SEQUENTIAL HANDOVER FAILED.")
                 break
             
             # Spin to allow ROS 2 communication to process

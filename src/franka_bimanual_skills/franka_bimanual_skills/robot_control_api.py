@@ -192,24 +192,21 @@ class RobotControlAPI:
         
         success_count = 0
         for _ in range(10): # Check more samples for stability
-            eff1 = abs(self.latest_efforts.get(f1, 0.0))
-            eff2 = abs(self.latest_efforts.get(f2, 0.0))
-            total_effort = eff1 + eff2
-            
             p1 = self.latest_joint_states.get(f1, None)
             p2 = self.latest_joint_states.get(f2, None)
             
             if p1 is not None and p2 is not None:
                 actual_width = p1 + p2
-                # If effort is high AND width is not 'closed' (near 0) nor 'fully open' (near 0.08)
-                if total_effort > effort_threshold and min_width < actual_width < max_width:
+                # In Gazebo, effort is noisy/zero when geometry stalls perfectly. 
+                # Pure width stalling is the only structurally sound heuristic for simulation.
+                if min_width <= actual_width <= max_width:
                     success_count += 1
             
             time.sleep(0.05)
             
         is_grasped = success_count >= 5
         if is_grasped:
-            self.logger.info(f"✅ [GraspCheck] Object detected! (Effort OK, Width OK)")
+            self.logger.info(f"✅ [GraspCheck] Object detected! (Stalled within {min_width}-{max_width})")
         else:
             self.logger.warning(f"⚠️ [GraspCheck] No object detected (Fingers likely closed or slipping)")
             

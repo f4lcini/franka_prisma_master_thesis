@@ -27,10 +27,19 @@ tmux send-keys -t $SESSION:Bimanual "source $BASHRC && ros_source && ros2 launch
 tmux split-window -v -t $SESSION:Bimanual
 tmux send-keys -t $SESSION:Bimanual.1 "source $BASHRC && ros_source && echo \"Waiting ${SIM_WAIT}s for Gazebo...\" && sleep ${SIM_WAIT} && ros2 launch franka_bimanual_bringup parallel_test_backends.launch.py" C-m
 
+# Identify target scenario
+SCENARIO="atom_bimanual_handshake.py"
+if [ "$1" == "optimize" ]; then
+    SCENARIO="handover_optimizer.py"
+elif [ "$1" == "stress" ]; then
+    SCENARIO="atom_heterogeneous_stress.py"
+elif [ "$1" == "sync" ]; then
+    SCENARIO="atom_synch_home.py"
+fi
+
 # Pane 2 (Bottom-Right): Tests
 tmux split-window -h -t $SESSION:Bimanual.1
-#tmux send-keys -t $SESSION:Bimanual.2 "source $BASHRC && ros_source && echo \"Waiting ${BACKEND_WAIT}s for Backend...\" && sleep ${BACKEND_WAIT} && ros2 run franka_bimanual_bringup atom_heterogeneous_stress.py" C-m
-tmux send-keys -t $SESSION:Bimanual.2 "source $BASHRC && ros_source && echo \"Waiting ${BACKEND_WAIT}s for Backend...\" && sleep ${BACKEND_WAIT} && ros2 run franka_bimanual_bringup atom_bimanual_handshake.py" C-m
+tmux send-keys -t $SESSION:Bimanual.2 "source $BASHRC && ros_source && pip install seaborn && echo \"Waiting ${BACKEND_WAIT}s for Backend...\" && sleep ${BACKEND_WAIT} && ros2 run franka_bimanual_bringup ${SCENARIO}" C-m
 
 # 4. Attach to session
 tmux attach-session -t $SESSION

@@ -123,10 +123,11 @@ def main():
     
     handover_pose = PoseStamped()
     handover_pose.header.frame_id = "world"
-    # Move exactly in the center of the table (X=0.6) so Franka2's pre-take (X - 0.25) is at X=0.35 (reachable)
-    handover_pose.pose.position.x = 0.78
-    handover_pose.pose.position.y = 0.40
-    handover_pose.pose.position.z = 0.45
+    # Optimized rigorously via Joint Penalty Minimization (Heatmap Algorithm)
+    # Face-to-Face Symmetrical Configuration (Final Result)
+    handover_pose.pose.position.x = 0.62
+    handover_pose.pose.position.y = 0.587
+    handover_pose.pose.position.z = 0.19
     # Override for handover (Pick behavior reads it once on initialization)
     # The Give/Take behaviors will read their specific keys during their tick
     blackboard.handover_target_pose = handover_pose 

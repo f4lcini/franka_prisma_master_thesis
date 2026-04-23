@@ -33,7 +33,8 @@ class PickActionClient(py_trees.behaviour.Behaviour):
         self.blackboard.register_key(key=f"{prefix}target_pose", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key=f"{prefix}active_arm", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="vlm_plan", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="handover_ready", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="handover_starting", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="handover_ready", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key=f"{prefix}last_error", access=py_trees.common.Access.WRITE)
 
     def setup(self, **kwargs):

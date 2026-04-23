@@ -271,9 +271,9 @@ class SkillBehaviors:
         give_pose.header.frame_id = WORLD_FRAME
         give_pose.pose = target_pose
 
-        donor_z_offset = self.node.get_parameter('handover_donor_z_offset').value
+        donor_x_offset = self.node.get_parameter('handover_donor_x_offset').value
         pre_give_pose = copy.deepcopy(give_pose)
-        pre_give_pose.pose.position.z += donor_z_offset
+        pre_give_pose.pose.position.x += donor_x_offset
         
         if not self.robot_control_api.send_pose_goal(arm_group, pre_give_pose, tcp_frame, is_handover=True):
             self.safe_abort(goal_handle)

@@ -79,7 +79,7 @@ private:
     
     shape_msgs::msg::SolidPrimitive sp;
     sp.type = sp.BOX;
-    sp.dimensions = {1.8, 2.0, 2.2};
+    sp.dimensions = {2.2, 2.0, 2.2};
     
     geometry_msgs::msg::Pose center;
     center.position.y = 0.5;
