@@ -20,6 +20,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/GiveObject.action"
   "action/TakeObject.action"
   "action/VlmQuery.action"
+  "action/ParallelMove.action"
   "srv/ClearOctomap.srv"
   "srv/HandoverReady.srv"
   DEPENDENCIES geometry_msgs sensor_msgs

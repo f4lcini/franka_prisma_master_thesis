@@ -37,9 +37,9 @@ def generate_launch_description():
         output='screen',
         emulate_tty=True,
         parameters=[common_parameters, {
-            'image_topic': '/camera/camera/color/image_raw',
-            'depth_topic': '/camera/camera/depth/image_rect_raw',
-            'camera_info_topic': '/camera/camera/color/camera_info',
+            'image_topic': '/camera/color/image_raw',
+            'depth_topic': '/camera/aligned_depth_to_color/image_raw',
+            'camera_info_topic': '/camera/color/camera_info',
             'use_sensor_data_qos': True
         }],
         condition=IfCondition(use_hardware)

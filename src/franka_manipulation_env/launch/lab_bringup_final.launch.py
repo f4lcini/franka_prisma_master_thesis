@@ -165,7 +165,6 @@ def robot_description_dependent_nodes_spawner(
             on_exit=Shutdown(),
         ),
 
-        # MoveGroup Node
         Node(
             package='moveit_ros_move_group',
             executable='move_group',
@@ -180,6 +179,7 @@ def robot_description_dependent_nodes_spawner(
                 trajectory_execution,
             ],
         ),
+        
 
         # RViz with MoveIt parameters
         Node(
@@ -256,12 +256,15 @@ def generate_launch_description():
         ),
 
         # Sequence controllers
-        TimerAction(period=2.0, actions=[load_jsb]),
+        TimerAction(period=1.0, actions=[load_jsb]),
 
         RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=load_jsb,
-                on_exit=[load_franka1_controller, load_franka2_controller],
+                on_exit=[
+                    load_franka1_controller, 
+                    load_franka2_controller
+                ],
             )
         ),
     ])

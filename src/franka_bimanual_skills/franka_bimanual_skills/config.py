@@ -48,8 +48,8 @@ DEFAULT_OFFSETS = {
     'place_z_offset': 0.140,
     'gripper_open_width': 0.08,
     'gripper_grasp_width': 0.048,
-    'safety_pause_short': 0.5,   
-    'safety_pause_long': 1.0,
+    'safety_pause_short': 0.2,   
+    'safety_pause_long': 0.5,
     'handover_safety_offset': 0.25,
     'handover_donor_z_offset': 0.08,     # donor approaches from above (along Z)
     'handover_recipient_x_offset': -0.30, # Increased clearance to avoid finger collision during PTP

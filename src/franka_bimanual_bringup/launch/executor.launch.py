@@ -2,7 +2,7 @@ import os
 import yaml
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import DeclareLaunchArgument
+from launch.actions import SetEnvironmentVariable
 from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
@@ -16,49 +16,12 @@ def load_yaml(package_name, file_path):
         return None
 
 def generate_launch_description():
-    use_sim_time = LaunchConfiguration('use_sim_time', default='false')
-
-    declare_use_sim_time = DeclareLaunchArgument(
-        'use_sim_time',
-        default_value='false',
-        description='Use simulation clock. Set true for Gazebo, false for real hardware.'
-    )
-
     pkg_idra_share = get_package_share_directory('idra_franka_launch')
     pkg_env_share = get_package_share_directory('franka_bimanual_config')
 
-    # Load Robot Poses from YAML
-    robot_poses_file = os.path.join(pkg_env_share, 'config', 'robot_poses.yaml')
-    with open(robot_poses_file, 'r') as f:
-        robot_poses = yaml.safe_load(f)
-
     # Bimanual Robot Description (URDF)
     xacro_file_urdf = os.path.join(pkg_env_share, 'urdf', 'bimanual_custom.urdf.xacro')
-    
-    # Construct xacro command with all arguments
-    xacro_args = [
-        'xacro', xacro_file_urdf,
-        'hand:=true', 'gazebo:=true', 'ros2_control:=false',
-        f"table_x:={robot_poses['table']['x']}",
-        f"table_y:={robot_poses['table']['y']}",
-        f"table_z:={robot_poses['table']['z']}",
-        f"table_roll:={robot_poses['table']['roll']}",
-        f"table_pitch:={robot_poses['table']['pitch']}",
-        f"table_yaw:={robot_poses['table']['yaw']}",
-        f"franka1_x:={robot_poses['franka1']['x']}",
-        f"franka1_y:={robot_poses['franka1']['y']}",
-        f"franka1_z:={robot_poses['franka1']['z']}",
-        f"franka1_yaw:={robot_poses['franka1']['yaw']}",
-        f"franka2_x:={robot_poses['franka2']['x']}",
-        f"franka2_y:={robot_poses['franka2']['y']}",
-        f"franka2_z:={robot_poses['franka2']['z']}",
-        f"franka2_yaw:={robot_poses['franka2']['yaw']}",
-        f"shared_x:={robot_poses['shared_zone']['x']}",
-        f"shared_y:={robot_poses['shared_zone']['y']}",
-        f"shared_z:={robot_poses['shared_zone']['z']}"
-    ]
-    
-    robot_description_config = Command(xacro_args)
+    robot_description_config = Command(['xacro', ' ', xacro_file_urdf, ' ', 'hand:=true', ' ', 'gazebo:=true', ' ', 'ros2_control:=false'])
     robot_description = {"robot_description": ParameterValue(robot_description_config, value_type=str)}
 
     # Bimanual SRDF
@@ -110,14 +73,14 @@ def generate_launch_description():
         robot_description_semantic,
         {"robot_description_kinematics": kinematics_yaml} if kinematics_yaml else None,
         {"robot_description_planning": joint_limits_yaml} if joint_limits_yaml else None,
-        {"use_sim_time": use_sim_time},
+        {"use_sim_time": True}, # Essential for Gazebo Execution Acceptance
         trajectory_execution_parameters,
         moveit_controller_parameters,
         planning_pipeline_parameters,
     ] if p is not None]
 
-    # ── MoveIt Python Action Server ──────────────────────────────────────────
-    # Serves: /pick, /place, /move_home, /give_object, /take_object actions
+    # Note: Skill-level parameters (approach_clearance, etc.) are loaded 
+    # as defaults from franka_bimanual_skills/config.py, but can be overridden here.
     moveit_server_node = Node(
         package="franka_bimanual_skills",
         executable="simple_moveit_server",
@@ -126,44 +89,25 @@ def generate_launch_description():
         parameters=valid_params
     )
 
-    # ── Handover Coordinator ─────────────────────────────────────────────────
-    # Services: /donor_ready + /recipient_ready  (rendezvous sync for handover)
-    handover_coordinator_node = Node(
-        package="franka_bimanual_skills",
-        executable="handover_coordinator",
-        name="handover_coordinator",
-        output="screen",
-        parameters=[{"use_sim_time": use_sim_time}]
-    )
+    # ── Static Transform Publishers (RViz visualization only) ──────────────────
+    # Chain: world → camera/link (SDF body pose)
+    #               → camera/link/rgb_camera (ROS optical rotation Rx(-π/2)Rz(-π/2))
+    # ────────────────────────────────────────────────────────────────────────────
 
-    # ── Static Transform Publishers (camera TF for RViz) ─────────────────────
-    # Exposed as arguments for calibration alignment
-    cam_x = LaunchConfiguration('camera_x', default='0.6')
-    cam_y = LaunchConfiguration('camera_y', default='1.0')
-    cam_z = LaunchConfiguration('camera_z', default='1.3')
-    cam_roll = LaunchConfiguration('camera_roll', default='0.0')
-    cam_pitch = LaunchConfiguration('camera_pitch', default='0.785')
-    cam_yaw = LaunchConfiguration('camera_yaw', default='-1.57')
-
-    declare_cam_x = DeclareLaunchArgument('camera_x', default_value='0.6')
-    declare_cam_y = DeclareLaunchArgument('camera_y', default_value='1.0')
-    declare_cam_z = DeclareLaunchArgument('camera_z', default_value='1.3')
-    declare_cam_roll = DeclareLaunchArgument('camera_roll', default_value='0.0')
-    declare_cam_pitch = DeclareLaunchArgument('camera_pitch', default_value='0.785')
-    declare_cam_yaw = DeclareLaunchArgument('camera_yaw', default_value='-1.57')
-
+    # 1) world → camera/link  (body pose from SDF)
     static_tf_body = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         name='camera_body_broadcaster',
         arguments=[
-            '--x', cam_x, '--y', cam_y, '--z', cam_z,
-            '--roll', cam_roll, '--pitch', cam_pitch, '--yaw', cam_yaw,
+            '--x', '0.6', '--y', '-0.6', '--z', '1.3',
+            '--roll', '0', '--pitch', '0.785', '--yaw', '1.57',
             '--frame-id', 'world',
             '--child-frame-id', 'camera/link'
         ]
     )
 
+    # 2) camera/link → camera/link/rgb_camera  (ROS optical frame rotation)
     static_tf_optical = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
@@ -177,15 +121,8 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        declare_use_sim_time,
-        declare_cam_x,
-        declare_cam_y,
-        declare_cam_z,
-        declare_cam_roll,
-        declare_cam_pitch,
-        declare_cam_yaw,
         moveit_server_node,
-        handover_coordinator_node,
-        static_tf_body,
+        static_tf_body, 
         static_tf_optical
     ])
+

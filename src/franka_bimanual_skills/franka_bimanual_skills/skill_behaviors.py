@@ -3,7 +3,7 @@ from rclpy.action import ActionServer
 from rclpy.callback_groups import ReentrantCallbackGroup
 from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import MotionPlanRequest, Constraints, JointConstraint
-from franka_custom_interfaces.action import MoveHome, PickObject, PlaceObject, GiveObject, TakeObject
+from franka_custom_interfaces.action import MoveHome, PickObject, PlaceObject, GiveObject, TakeObject, ParallelMove
 from franka_custom_interfaces.srv import HandoverReady
 from std_msgs.msg import Bool
 import copy
@@ -26,55 +26,68 @@ class SkillBehaviors:
         self._recipient_ready = threading.Event()
         self._recipient_grasped = threading.Event()
 
+        self.cb_groups = {
+            'home': rclpy.callback_groups.MutuallyExclusiveCallbackGroup(),
+            'pick': rclpy.callback_groups.MutuallyExclusiveCallbackGroup(),
+            'place': rclpy.callback_groups.MutuallyExclusiveCallbackGroup(),
+            'give': rclpy.callback_groups.MutuallyExclusiveCallbackGroup(),
+            'take': rclpy.callback_groups.MutuallyExclusiveCallbackGroup()
+        }
+
         self.home_server = ActionServer(
             self.node, MoveHome, 'move_home',
-            execute_callback=self.execute_home, callback_group=server_cb_group)
+            execute_callback=self.execute_home, callback_group=self.cb_groups['home'])
         
         self.pick_server = ActionServer(
             self.node, PickObject, 'pick_object',
-            execute_callback=self.execute_pick, callback_group=server_cb_group)
+            execute_callback=self.execute_pick, callback_group=self.cb_groups['pick'])
             
         self.place_server = ActionServer(
             self.node, PlaceObject, 'place_object',
-            execute_callback=self.execute_place, callback_group=server_cb_group)
- 
+            execute_callback=self.execute_place, callback_group=self.cb_groups['place'])
+
         self.give_server = ActionServer(
             self.node, GiveObject, 'give_object',
-            execute_callback=self.execute_give, callback_group=server_cb_group)
+            execute_callback=self.execute_give, callback_group=self.cb_groups['give'])
 
         self.take_server = ActionServer(
             self.node, TakeObject, 'take_object',
-            execute_callback=self.execute_take, callback_group=server_cb_group)
+            execute_callback=self.execute_take, callback_group=self.cb_groups['take'])
 
         # Publisher: fires when an object has been placed at 'shared' → wakes up the waiting arm
         self._handover_ready_pub = node.create_publisher(Bool, '/handover_ready', 10)
             
         self.logger.info("✅ Python Servers (Home, Pick, Place, Give, Take) Advertised!")
 
-    async def execute_home(self, goal_handle):
+
+    def safe_publish_feedback(self, goal_handle, feedback):
+        try:
+            if goal_handle.is_active:
+                goal_handle.publish_feedback(feedback)
+        except Exception:
+            pass
+
+    def safe_abort(self, goal_handle):
+        try:
+            if goal_handle.is_active:
+                goal_handle.abort()
+        except Exception:
+            pass
+
+    def safe_succeed(self, goal_handle):
+        try:
+            if goal_handle.is_active:
+                goal_handle.succeed()
+        except Exception:
+            pass
+
+    def execute_home(self, goal_handle):
         req_arm = goal_handle.request.arm
-        self.logger.info(f"🔄 ---> Received MoveHome Action for: '{req_arm}' <---")
+        self.logger.info(f"🔄 [Paradigm 1] Received Unified MoveHome for: '{req_arm}'")
         result = MoveHome.Result()
         feedback = MoveHome.Feedback()
         
         arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
-        if not arm_group:
-            self.logger.error("Aborting MoveHome: Invalid Arm Group.")
-            goal_handle.abort()
-            result.success = False
-            result.message = f"Invalid arm group: '{req_arm}'"
-            return result
-        
-        feedback.status = f"Planning MoveHome for {arm_group}"
-        feedback.completion_percentage = 10.0
-        goal_handle.publish_feedback(feedback)
-            
-        goal_msg = MoveGroup.Goal()
-        req = MotionPlanRequest()
-        req.group_name = arm_group
-        req.allowed_planning_time = 5.0
-        req.num_planning_attempts = 10
-        
         pose_target = goal_handle.request.pose_name.lower() or "ready"
         
         if arm_group == "franka1_arm":
@@ -82,459 +95,282 @@ class SkillBehaviors:
         else:
             ready_values = MIDWAY_POSE_VALUES_LEFT if pose_target == "midway" else READY_POSE_VALUES_LEFT
             
-        joint_names = [f"{arm_group.split('_')[0]}_fr3_joint{i+1}" for i in range(7)]
-        
-        c = Constraints()
-        for name, val in zip(joint_names, ready_values):
-            jc = JointConstraint()
-            jc.joint_name = name
-            jc.position = val
-            jc.tolerance_above = 0.01
-            jc.tolerance_below = 0.01
-            jc.weight = 1.0
-            c.joint_constraints.append(jc)
-            
-        req.goal_constraints.append(c)
-        self.robot_control_api.apply_safety_limits(req)
-        
-        req.pipeline_id = "pilz_industrial_motion_planner"
-        req.planner_id = "PTP"
-        
-        goal_msg.request = req
-        
-        self.logger.info(f"📍 Requesting Joint Move (READY Pose) for {arm_group}...")
-        feedback.status = f"Executing MoveHome for {arm_group}"
-        feedback.completion_percentage = 50.0
-        goal_handle.publish_feedback(feedback)
-        
-        try:
-            handle = await self.robot_control_api.move_group_client.send_goal_async(goal_msg)
-            if handle.accepted:
-                self.logger.info("⏳ Goal accepted! Planning and moving...")
-                res = await handle.get_result_async()
-                error_val = res.result.error_code.val
-                error_str = parse_error_code(error_val)
-                success = (error_val == 1)
-                if success:
-                    self.logger.info(f"✅ MoveHome execution SUCCESS for {arm_group}!")
-                    result.message = f"MoveHome completed for {arm_group}"
-                else:
-                    self.logger.error(f"❌ MoveHome FAILED: {error_str} ({error_val})")
-                    result.message = f"MoveHome failed: {error_str} ({error_val})"
-            else:
-                self.logger.error("❌ MoveHome Goal REJECTED by MoveGroup server.")
-                success = False
-                result.message = "MoveHome goal rejected by MoveGroup"
-        except Exception as e:
-            self.logger.error(f"❌ Critical Exception during MoveHome: {e}")
-            self.logger.error(traceback.format_exc())
-            success = False
-            result.message = f"Exception during MoveHome: {e}"
+        feedback.status = f"Planning ParallelMove (Joints) for {req_arm}"
+        self.safe_publish_feedback(goal_handle, feedback)
+
+        # Call the unified ParallelMove action (Synchronous API)
+        success = self.robot_control_api.send_joint_goal(arm_group, ready_values, planner="PTP")
 
         result.success = success
-        feedback.status = "Completed" if success else "Failed"
-        feedback.completion_percentage = 100.0
-        goal_handle.publish_feedback(feedback)
-        
         if success:
-            self.logger.info(f"👐 Opening gripper for {arm_group}...")
-            # Use Lab calibration for gripper width
-            from .config import DEFAULT_OFFSETS
-            await self.robot_control_api.send_gripper_goal(arm_group, width=DEFAULT_OFFSETS['gripper_open_width'], max_effort=10.0)
-            goal_handle.succeed()
+            open_w = self.node.get_parameter('gripper_open_width').value if self.node.has_parameter('gripper_open_width') else 0.08
+            self.logger.info(f"👐 Opening gripper for {arm_group} to {open_w}m...")
+            self.robot_control_api.send_gripper_goal(arm_group, width=open_w, max_effort=10.0)
+            self.safe_succeed(goal_handle)
         else:
-            goal_handle.abort()
+            self.safe_abort(goal_handle)
         return result
 
-    async def execute_pick(self, goal_handle):
+    def execute_pick(self, goal_handle):
         req_arm = goal_handle.request.arm
         self.logger.info(f"📦 ---> Received Pick Object Action for: '{req_arm}' <---")
         result = PickObject.Result()
         feedback = PickObject.Feedback()
         
-        # Load Parameters from Config
-        from .config import DEFAULT_OFFSETS
-        clearance = DEFAULT_OFFSETS['approach_clearance']
-        z_offset = DEFAULT_OFFSETS['pick_z_offset']
-        open_w = DEFAULT_OFFSETS['gripper_open_width']
-        grasp_w = DEFAULT_OFFSETS['gripper_grasp_width']
-        pause_s = DEFAULT_OFFSETS['safety_pause_short']
-        pause_l = DEFAULT_OFFSETS['safety_pause_long']
+        clearance = self.node.get_parameter('approach_clearance').value
+        z_offset = self.node.get_parameter('pick_z_offset').value
+        open_w = self.node.get_parameter('gripper_open_width').value
+        grasp_w = self.node.get_parameter('gripper_grasp_width').value
+        pause_s = self.node.get_parameter('safety_pause_short').value
+        pause_l = self.node.get_parameter('safety_pause_long').value
 
         arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
         if not arm_group:
-            goal_handle.abort()
+            self.safe_abort(goal_handle)
             result.success = False
-            result.message = f"Invalid arm group: '{req_arm}'"
             return result
         
         req = goal_handle.request
         target_pose = req.target_pose.pose
-        
         fid = req.target_pose.header.frame_id.lower()
+        
         if fid in PREDEFINED_TARGETS:
             px, py, pz = PREDEFINED_TARGETS[fid]
-            self.logger.info(f"📍 Overriding Pick with Predefined '{fid}': [{px}, {py}, {pz}]")
-            target_pose.position.x = px
-            target_pose.position.y = py
-            target_pose.position.z = pz
-        else:
-            self.logger.info(f'🤖 Using Dynamic/YOLO Pose for Pick: [{target_pose.position.x:.3f}, {target_pose.position.y:.3f}]')
-
-        apply_top_down_orientation(target_pose)
+            target_pose.position.x, target_pose.position.y, target_pose.position.z = px, py, pz
+            req.target_pose.header.frame_id = WORLD_FRAME # Normalize to world
         
+        apply_top_down_orientation(target_pose)
         grasp_z = target_pose.position.z + z_offset
         pre_grasp_z = grasp_z + clearance
         
-        self.logger.info(f"🎯 Pick Target (Base Z={target_pose.position.z:.3f}, Final Z={grasp_z:.3f})")
+        self.logger.info(f"🎯 Pick Target (Final Z={grasp_z:.3f})")
 
+        # 1. Open Gripper
         feedback.status = f"Pre-Step: Opening Gripper fully ({open_w}m)"
-        goal_handle.publish_feedback(feedback)
-        await self.robot_control_api.send_gripper_goal(arm_group, width=open_w, max_effort=10.0)
-        time.sleep(1.0) # Physical settlement
+        self.safe_publish_feedback(goal_handle, feedback)
+        
+        for attempt in range(3):
+            if self.robot_control_api.send_gripper_goal(arm_group, width=open_w):
+                break
+            time.sleep(0.5)
+        time.sleep(1.0) # Wait for simulation physics
 
+        # 2. Approach
         pre_grasp = copy.deepcopy(req.target_pose)
         pre_grasp.pose.position.z = pre_grasp_z
         apply_top_down_orientation(pre_grasp.pose)
         
-        self.logger.info(f"🚀 Approach to Z={pre_grasp_z:.3f}...")
-        
         feedback.status = "Step 1/4: Moving to Pre-Grasp"
-        feedback.completion_percentage = 25.0
-        goal_handle.publish_feedback(feedback)
-        if not await self.robot_control_api.send_pose_goal(arm_group, pre_grasp, tcp_frame):
-            goal_handle.abort()
+        self.safe_publish_feedback(goal_handle, feedback)
+        if not self.robot_control_api.send_pose_goal(arm_group, pre_grasp, tcp_frame, planner="PTP"):
+            self.safe_abort(goal_handle)
             result.success = False
-            result.message = "PLANNING_FAILED during approach"
             return result
+        time.sleep(0.5) # Settling time
             
+        # 3. Descent (LIN)
         feedback.status = f"Step 2/4: Vertical Descent to Z={grasp_z}"
-        feedback.completion_percentage = 50.0
-        goal_handle.publish_feedback(feedback)
-        
+        self.safe_publish_feedback(goal_handle, feedback)
         grasp_pose = copy.deepcopy(req.target_pose)
         grasp_pose.pose.position.z = grasp_z
-        
-        self.logger.info(f"📍 Executing Linear Descent (LIN) to Z={grasp_z}...")
-        if not await self.robot_control_api.send_pose_goal_custom(arm_group, grasp_pose, tcp_frame, planner="LIN"):
-            goal_handle.abort()
-            result.success = False
-            result.message = "Vertical descent (LIN) failed"
+        if not self.robot_control_api.send_pose_goal(arm_group, grasp_pose, tcp_frame, planner="LIN"):
+            self.safe_abort(goal_handle)
             return result
+        time.sleep(0.5) # Final settle before grasp
 
+        # 4. Grasp
         feedback.status = f"Step 3/4: Closing Gripper to {grasp_w}m"
-        feedback.completion_percentage = 75.0
-        goal_handle.publish_feedback(feedback)
-        await self.robot_control_api.send_gripper_goal(arm_group, width=grasp_w, max_effort=30.0)
-
-        # --- FORCE-BASED GRASP VALIDATION ---
+        self.safe_publish_feedback(goal_handle, feedback)
+        self.robot_control_api.send_gripper_goal(arm_group, width=grasp_w)
         time.sleep(pause_s)
+        
         if not self.robot_control_api.check_grasp(arm_group):
-            self.logger.error(f"❌ Grasp FAILED for {arm_group}. No object detected.")
-            goal_handle.abort()
+            self.logger.error(f"❌ Grasp FAILED for {arm_group}.")
+            self.safe_abort(goal_handle)
             result.success = False
-            result.message = "Object missed during grasp"
             return result
-        self.logger.info(f"✅ Grasp CONFIRMED via feedback for {arm_group}.")
-
-        time.sleep(pause_l) 
-            
+        
+        # 5. Lift (LIN)
         feedback.status = "Step 4/4: Vertical Lift (Pilz LIN)"
-        feedback.completion_percentage = 90.0
-        goal_handle.publish_feedback(feedback)
-        if not await self.robot_control_api.send_pose_goal_custom(arm_group, pre_grasp, tcp_frame, planner="LIN"):
-            goal_handle.abort()
-            result.success = False
-            result.message = "Vertical lift (LIN) failed"
+        self.safe_publish_feedback(goal_handle, feedback)
+        if not self.robot_control_api.send_pose_goal(arm_group, pre_grasp, tcp_frame, planner="LIN"):
+            self.safe_abort(goal_handle)
             return result
             
-        time.sleep(pause_s)
-
-        feedback.status = "Pick sequence completed"
-        feedback.completion_percentage = 100.0
-        goal_handle.publish_feedback(feedback)
-        self.logger.info("🎉 Strategic Pick Sequence SUCCESS!")
         result.success = True
-        result.message = f"Pick successful with {arm_group}"
-        goal_handle.succeed()
+        self.safe_succeed(goal_handle)
         return result
 
-    async def execute_place(self, goal_handle):
+    def execute_place(self, goal_handle):
         req_arm = goal_handle.request.arm
         self.logger.info(f"📥 ---> Received Place Object Action for: '{req_arm}' <---")
         result = PlaceObject.Result()
-        feedback = PlaceObject.Feedback()
         
-        from .config import DEFAULT_OFFSETS
-        clearance = DEFAULT_OFFSETS['approach_clearance']
-        z_offset = DEFAULT_OFFSETS['place_z_offset']
-        open_w = DEFAULT_OFFSETS['gripper_open_width']
-        pause_s = DEFAULT_OFFSETS['safety_pause_short']
-        pause_l = DEFAULT_OFFSETS['safety_pause_long']
+        clearance = self.node.get_parameter('approach_clearance').value
+        z_offset = self.node.get_parameter('place_z_offset').value
+        open_w = self.node.get_parameter('gripper_open_width').value
+        pause_s = self.node.get_parameter('safety_pause_short').value
 
         arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
-        if not arm_group:
-            goal_handle.abort()
-            result.success = False
-            result.message = f"Invalid arm group: '{req_arm}'"
-            return result
-            
         req = goal_handle.request
         place_pose = req.place_pose.pose
-        
-        fid = req.place_pose.header.frame_id.lower()
-        if fid in PREDEFINED_TARGETS:
-            px, py, pz = PREDEFINED_TARGETS[fid]
-            self.logger.info(f"📍 Overriding Place with Predefined '{fid}': [{px}, {py}, {pz}]")
-            place_pose.position.x = px
-            place_pose.position.y = py
-            place_pose.position.z = pz
-        else:
-            self.logger.info(f'🤖 Using Dynamic Pose for Place: [{place_pose.position.x:.3f}, {place_pose.position.y:.3f}]')
-
         apply_top_down_orientation(place_pose)
         
         final_place_z = place_pose.position.z + z_offset
         pre_place_z = final_place_z + clearance
         
-        self.logger.info(f"🎯 Place Target (Base Z={place_pose.position.z:.3f}, Final Z={final_place_z:.3f})")
-
         pre_place = copy.deepcopy(req.place_pose)
         pre_place.pose.position.z = pre_place_z
         apply_top_down_orientation(pre_place.pose)
         
-        feedback.status = f"Step 1/4: Moving to Pre-Place (Z={pre_place_z:.3f})"
-        goal_handle.publish_feedback(feedback)
-        if not await self.robot_control_api.send_pose_goal(arm_group, pre_place, tcp_frame):
-            goal_handle.abort()
-            result.success = False
-            result.message = "Pre-Place move failed"
+        # 1. Approach
+        if not self.robot_control_api.send_pose_goal(arm_group, pre_place, tcp_frame):
+            self.safe_abort(goal_handle)
             return result
             
-        time.sleep(pause_s)
-            
-        feedback.status = f"Step 2/4: Vertical Descent to Z={final_place_z}"
-        goal_handle.publish_feedback(feedback)
-        
+        # 2. Descent
         place_target = copy.deepcopy(req.place_pose)
         place_target.pose.position.z = final_place_z
-        
-        self.logger.info(f"📍 Executing Linear Descent (LIN) to Z={final_place_z} for Place...")
-        if not await self.robot_control_api.send_pose_goal_custom(arm_group, place_target, tcp_frame, planner="LIN"):
-            goal_handle.abort()
-            result.success = False
-            result.message = "Vertical descent (LIN) failed for Place"
+        if not self.robot_control_api.send_pose_goal(arm_group, place_target, tcp_frame, planner="LIN"):
+            self.safe_abort(goal_handle)
             return result
+        time.sleep(0.5) # Settle before release
             
-        time.sleep(pause_s)
-
-        feedback.status = f"Step 3/4: Opening Gripper ({open_w}m)"
-        goal_handle.publish_feedback(feedback)
-        await self.robot_control_api.send_gripper_goal(arm_group, width=open_w, max_effort=10.0)
-        time.sleep(pause_l)
+        # 3. Release
+        self.robot_control_api.send_gripper_goal(arm_group, width=open_w)
         
-        # Signal the waiting arm AS SOON as the object is released
+        # Handover signal
+        fid = req.place_pose.header.frame_id.lower()
+        if fid in PREDEFINED_TARGETS:
+            px, py, pz = PREDEFINED_TARGETS[fid]
+            place_pose.position.x, place_pose.position.y, place_pose.position.z = px, py, pz
+            req.place_pose.header.frame_id = WORLD_FRAME # Normalize to world
+
         if fid == 'shared':
-            self.logger.info("📡 Publishing /handover_ready to wake up recipient arm.")
             msg = Bool()
             msg.data = True
             self._handover_ready_pub.publish(msg)
         
-        feedback.status = "Step 4/4: Vertical Retreat"
-        goal_handle.publish_feedback(feedback)
-        if not await self.robot_control_api.send_pose_goal_custom(arm_group, pre_place, tcp_frame, planner="LIN"):
-             self.logger.warn("Retreat failed, but object placed.")
-             
-        time.sleep(pause_s)
+        # 4. Retreat
+        self.robot_control_api.send_pose_goal(arm_group, pre_place, tcp_frame, planner="LIN")
              
         result.success = True
-        result.message = f"Place successful with {arm_group}"
-        self.logger.info("🎉 Strategic Place Sequence SUCCESS!")
-        goal_handle.succeed()
+        self.safe_succeed(goal_handle)
         return result
 
-    async def execute_give(self, goal_handle):
+    def execute_give(self, goal_handle):
         req_arm = goal_handle.request.arm
         self.logger.info(f"🎁 ---> [GIVE] Action for: '{req_arm}' <---")
         result = GiveObject.Result()
         
         arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
         target_pose = goal_handle.request.handover_pose.pose
-        
-        fid = goal_handle.request.handover_pose.header.frame_id.lower()
-        if fid in PREDEFINED_TARGETS:
-            px, py, pz = PREDEFINED_TARGETS[fid]
-            target_pose.position.x, target_pose.position.y, target_pose.position.z = px, py, pz
-            goal_handle.request.handover_pose.header.frame_id = WORLD_FRAME
-        else:
-            self.logger.info(f'🤖 Using Dynamic Pose for Give: [{target_pose.position.x:.3f}, {target_pose.position.y:.3f}]')
-
         apply_donor_handover_orientation(target_pose)
         
         give_pose = copy.deepcopy(goal_handle.request.handover_pose)
         give_pose.header.frame_id = WORLD_FRAME
         give_pose.pose = target_pose
 
-        # Donor approaches from ABOVE along Z axis
-        from .config import DEFAULT_OFFSETS
-        donor_z_offset = DEFAULT_OFFSETS['handover_donor_z_offset']
+        donor_x_offset = self.node.get_parameter('handover_donor_x_offset').value
         pre_give_pose = copy.deepcopy(give_pose)
-        pre_give_pose.pose.position.z += donor_z_offset
+        pre_give_pose.pose.position.x += donor_x_offset
         
-        self.logger.info(f"[{req_arm}] Moving to Pre-Handover Position (above, Z+{donor_z_offset})...")
-        if not await self.robot_control_api.send_pose_goal(arm_group, pre_give_pose, tcp_frame, is_handover=True):
-            goal_handle.abort()
+        if not self.robot_control_api.send_pose_goal(arm_group, pre_give_pose, tcp_frame, is_handover=True):
+            self.safe_abort(goal_handle)
             return result
 
-        # --- HANDSHAKE STAGE 1: SIGNAL DONOR AT PRE-POSE ---
-        self.logger.info(f"[{req_arm}] At Pre-Pose. Signaling DONOR_PRE_POS...")
         self._donor_pre_pos_ready.set()
         
-        timeout = DEFAULT_OFFSETS['handover_timeout_sec']
-        self.logger.info(f"[{req_arm}] Waiting for RECIPIENT_PRE_POS...")
+        timeout = self.node.get_parameter('handover_timeout_sec').value
         if not self._recipient_pre_pos_ready.wait(timeout=timeout):
-            self.logger.error("[Handshake] Timeout: recipient never reached pre-pose!")
             self._donor_pre_pos_ready.clear()
-            goal_handle.abort()
+            self.safe_abort(goal_handle)
             return result
 
-        # --- HANDSHAKE STAGE 2: MOVE TO HANDOVER POINT ---
-        self.logger.info(f"[{req_arm}] Both at Pre-Pose. Linear Approach (LIN) down to Handover Point...")
-        if not await self.robot_control_api.send_pose_goal_custom(arm_group, give_pose, tcp_frame, planner="LIN", is_handover=True):
+        if not self.robot_control_api.send_pose_goal(arm_group, give_pose, tcp_frame, planner="LIN", is_handover=True):
             self._donor_pre_pos_ready.clear()
-            goal_handle.abort()
+            self.safe_abort(goal_handle)
             return result
 
-        # --- HANDSHAKE STAGE 3: SIGNAL DONOR READY ---
-        self.logger.info(f"[{req_arm}] At handover point. Signaling DONOR_READY...")
         self._donor_ready.set()
         
-        # --- HANDSHAKE STAGE 4: WAIT FOR RECIPIENT TO ARRIVE AT POINT ---
-        self.logger.info(f"[{req_arm}] Waiting for RECIPIENT_READY...")
         if not self._recipient_ready.wait(timeout=timeout):
-            self.logger.error("[Handshake] Timeout: recipient never reached handover point!")
             self._donor_ready.clear()
             self._donor_pre_pos_ready.clear()
-            goal_handle.abort()
+            self.safe_abort(goal_handle)
             return result
 
-        # --- HANDSHAKE STAGE 5: RELEASE OBJECT ---
-        self.logger.info(f"[{req_arm}] Recipient ready. Releasing object...")
-        open_w = DEFAULT_OFFSETS['gripper_open_width']
-        await self.robot_control_api.send_gripper_goal(arm_group, width=open_w)
+        open_w = self.node.get_parameter('gripper_open_width').value
+        self.robot_control_api.send_gripper_goal(arm_group, width=open_w)
         
-        # --- HANDSHAKE STAGE 6: WAIT FOR RECIPIENT TO GRASP ---
-        self.logger.info(f"[{req_arm}] Object released. Waiting for RECIPIENT_GRASPED signal...")
         if not self._recipient_grasped.wait(timeout=timeout):
-            self.logger.warning("[Handshake] Warning: recipient never signaled GRASPED. Retreating anyway.")
+            self.logger.warning("[Handshake] recipient never signaled GRASPED.")
 
-        self.logger.info(f"[{req_arm}] Starting Linear Retreat (LIN)...")
-        await self.robot_control_api.send_pose_goal_custom(arm_group, pre_give_pose, tcp_frame, planner="LIN", is_handover=True)
+        self.robot_control_api.send_pose_goal(arm_group, pre_give_pose, tcp_frame, planner="LIN", is_handover=True)
 
-        # Final cleanup for donor arm
         self._donor_ready.clear()
         self._donor_pre_pos_ready.clear()
         
-        self.logger.info(f"✅ [GIVE] SUCCESS for {req_arm}")
-        goal_handle.succeed()
+        self.safe_succeed(goal_handle)
         result.success = True
         return result
 
-    async def execute_take(self, goal_handle):
+    def execute_take(self, goal_handle):
         req_arm = goal_handle.request.arm
         self.logger.info(f"🤝 ---> [TAKE] Action for: '{req_arm}' <---")
         result = TakeObject.Result()
         
         arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
         target_pose = goal_handle.request.handover_pose.pose
-        
-        fid = goal_handle.request.handover_pose.header.frame_id.lower()
-        if fid in PREDEFINED_TARGETS:
-            px, py, pz = PREDEFINED_TARGETS[fid]
-            target_pose.position.x, target_pose.position.y, target_pose.position.z = px, py, pz
-            goal_handle.request.handover_pose.header.frame_id = WORLD_FRAME
-        else:
-            self.logger.info(f'🤖 Using Dynamic Pose for Take: [{target_pose.position.x:.3f}, {target_pose.position.y:.3f}]')
-
         apply_recipient_handover_orientation(target_pose)
         
         take_pose = copy.deepcopy(goal_handle.request.handover_pose)
         take_pose.header.frame_id = WORLD_FRAME
         take_pose.pose = target_pose
 
-        # Recipient approaches LATERALLY
-        from .config import DEFAULT_OFFSETS
-        recipient_x_offset = DEFAULT_OFFSETS['handover_recipient_x_offset']
+        recipient_x_offset = self.node.get_parameter('handover_recipient_x_offset').value
         pre_take_pose = copy.deepcopy(take_pose)
-        pre_take_pose.pose.position.x += recipient_x_offset  
+        pre_take_pose.pose.position.x += recipient_x_offset
 
-        # --- HANDSHAKE STAGE 1: MOVE TO PRE-POSE ---
-        self.logger.info(f"[{req_arm}] Moving to Pre-Handover Position (lateral, X+{recipient_x_offset})...")
-        if not await self.robot_control_api.send_pose_goal(arm_group, pre_take_pose, tcp_frame, is_handover=True):
-            goal_handle.abort()
+        if not self.robot_control_api.send_pose_goal(arm_group, pre_take_pose, tcp_frame, is_handover=True):
+            self.safe_abort(goal_handle)
             return result
         
-        # --- HANDSHAKE STAGE 2: SIGNAL RECIPIENT AT PRE-POSE ---
-        self.logger.info(f"[{req_arm}] At Pre-Pose. Signaling RECIPIENT_PRE_POS...")
         self._recipient_pre_pos_ready.set()
         
-        timeout = DEFAULT_OFFSETS['handover_timeout_sec']
-        self.logger.info(f"[{req_arm}] Waiting for DONOR_PRE_POS...")
+        timeout = self.node.get_parameter('handover_timeout_sec').value
         if not self._donor_pre_pos_ready.wait(timeout=timeout):
-            self.logger.error("[Handshake] Timeout: donor never reached pre-pose!")
             self._recipient_pre_pos_ready.clear()
-            goal_handle.abort()
+            self.safe_abort(goal_handle)
             return result
 
-        # --- HANDSHAKE STAGE 3: WAIT FOR DONOR TO BE AT HANDOVER POINT ---
-        self.logger.info(f"[{req_arm}] Waiting for DONOR_READY (at handover point)...")
         if not self._donor_ready.wait(timeout=timeout):
-             self.logger.error("[Handshake] Timeout: donor never reached handover point!")
              self._recipient_pre_pos_ready.clear()
-             goal_handle.abort()
+             self.safe_abort(goal_handle)
              return result
 
-        # --- HANDSHAKE STAGE 4: MOVE TO HANDOVER POINT ---
-        self.logger.info(f"[{req_arm}] Starting Linear Approach (LIN) along X to Handover Point...")
-        if not await self.robot_control_api.send_pose_goal_custom(arm_group, take_pose, tcp_frame, planner="LIN", is_handover=True):
-            self.logger.error(f"[{req_arm}] Linear Approach FAILED!")
+        if not self.robot_control_api.send_pose_goal(arm_group, take_pose, tcp_frame, planner="LIN", is_handover=True):
             self._recipient_pre_pos_ready.clear()
-            goal_handle.abort()
+            self.safe_abort(goal_handle)
             return result
 
-        # --- HANDSHAKE STAGE 5: SIGNAL RECIPIENT READY AND GRASP ---
-        self.logger.info(f"[{req_arm}] At point. Signaling RECIPIENT_READY and grasping...")
         self._recipient_ready.set()
+        grasp_w = self.node.get_parameter('gripper_grasp_width').value
+        self.robot_control_api.send_gripper_goal(arm_group, width=grasp_w)
         
-        grasp_w = DEFAULT_OFFSETS['gripper_grasp_width']
-        await self.robot_control_api.send_gripper_goal(arm_group, width=grasp_w)
-        
-        # --- FORCE-BASED GRASP VALIDATION ---
-        time.sleep(0.5)
         if not self.robot_control_api.check_grasp(arm_group):
-            self.logger.error(f"❌ Take FAILED for {arm_group}. No object detected.")
             self._recipient_ready.clear()
             self._recipient_pre_pos_ready.clear()
-            goal_handle.abort()
-            result.success = False
-            result.message = "Object missed during take"
+            self.safe_abort(goal_handle)
             return result
-        self.logger.info(f"✅ Take grasp CONFIRMED via feedback for {arm_group}.")
 
-        self.logger.info(f"[{req_arm}] Grasp complete. Signaling RECIPIENT_GRASPED...")
         self._recipient_grasped.set()
+        self.robot_control_api.send_pose_goal(arm_group, pre_take_pose, tcp_frame, planner="LIN", is_handover=True)
 
-        # ─── STEP 6: Retreat ───
-        time.sleep(0.5)
-        self.logger.info(f"[{req_arm}] Starting Linear Retreat (LIN) along X...")
-        await self.robot_control_api.send_pose_goal_custom(arm_group, pre_take_pose, tcp_frame, planner="LIN", is_handover=True)
-
-        # Final cleanup for recipient arm
         self._recipient_ready.clear()
         self._recipient_grasped.clear()
         self._recipient_pre_pos_ready.clear()
         
-        self.logger.info(f"✅ [TAKE] SUCCESS for {req_arm}")
-        goal_handle.succeed()
+        self.safe_succeed(goal_handle)
         result.success = True
         return result

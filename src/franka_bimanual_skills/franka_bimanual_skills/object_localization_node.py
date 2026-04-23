@@ -113,7 +113,7 @@ class ObjectLocalizationNode(Node):
             try:
                 cv_image = self.cv_bridge.imgmsg_to_cv2(msg, 'bgr8')
                 depth_image = self.cv_bridge.imgmsg_to_cv2(self.latest_depth, 'passthrough')
-                results = self.model(cv_image, verbose=False, conf=0.5)
+                results = self.model(cv_image, verbose=False, conf=0.3)
                 
                 debug_img = cv_image.copy()
                 marker_array = MarkerArray()
@@ -244,12 +244,32 @@ class ObjectLocalizationNode(Node):
         
         u, v = (x1 + x2) // 2, (y1 + y2) // 2
         depth_image = self.cv_bridge.imgmsg_to_cv2(self.latest_depth, 'passthrough')
-        depth_value = float(depth_image[v, u])
+        
+        # Robust depth estimation: take a 5x5 window and use the median
+        h, w = depth_image.shape
+        u_min, u_max = max(0, u-2), min(w, u+3)
+        v_min, v_max = max(0, v-2), min(h, v+3)
+        depth_window = depth_image[v_min:v_max, u_min:u_max]
+        
+        valid_depths = depth_window[depth_window > 0]
+        if valid_depths.size > 0:
+            depth_value = np.median(valid_depths)
+        else:
+            depth_value = 0.0 # Will trigger fallback below
+            
         if depth_value <= 0.0 or np.isnan(depth_value):
-            depth_value = 0.5 # Fallback
+            self.get_logger().warn(f"Invalid depth at ({u}, {v}), using fallback!")
+            depth_value = 1000.0 # Fallback 1 meter if in mm, or 1.0 if in meters
             
         is_metric = depth_image.dtype in (np.float32, np.float64)
         Z_opt = depth_value if is_metric else depth_value / 1000.0
+        
+        # Safety check: if depth is too small or too large, something is wrong
+        if Z_opt < 0.2 or Z_opt > 2.0:
+            self.get_logger().error(f"Absurd depth detected: {Z_opt}m. Aborting.")
+            goal_handle.abort()
+            return result
+
         fx, fy = self.camera_intrinsics['fx'], self.camera_intrinsics['fy']
         cx, cy = self.camera_intrinsics['cx'], self.camera_intrinsics['cy']
         P_optical = np.array([(u - cx) * Z_opt / fx, (v - cy) * Z_opt / fy, Z_opt])
