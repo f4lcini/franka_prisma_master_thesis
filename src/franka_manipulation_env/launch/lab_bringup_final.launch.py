@@ -60,6 +60,12 @@ def robot_description_dependent_nodes_spawner(
             'table_size_y': str(robot_poses['table']['size_y']),
             'table_size_z': str(robot_poses['table']['size_z']),
             'table_z': str(robot_poses['table']['z']),
+            'camera_x': str(robot_poses['camera']['x']),
+            'camera_y': str(robot_poses['camera']['y']),
+            'camera_z': str(robot_poses['camera']['z']),
+            'camera_roll': str(robot_poses['camera']['roll']),
+            'camera_pitch': str(robot_poses['camera']['pitch']),
+            'camera_yaw': str(robot_poses['camera']['yaw']),
         }
     ).toprettyxml('\t')
     robot_description = {'robot_description': robot_description_config}

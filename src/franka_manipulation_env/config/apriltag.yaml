@@ -1,17 +1,18 @@
 apriltag:
   ros__parameters:
     image_transport: raw
+    publish_tfs: true
     family: 36h11
-    size: 0.05
+    size: 0.074
     max_hamming: 0
     detector:
       threads: 1
-      decimate: 2.0
+      decimate: 1.0
       blur: 0.0
-      refine: 1
+      refine: true
       sharpening: 0.25
-      debug: 0
+      debug: false
     tag:
       ids: [0]
       frames: [tag_0]
-      sizes: [0.05]
+      sizes: [0.074]

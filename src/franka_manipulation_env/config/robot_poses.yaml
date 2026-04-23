@@ -23,16 +23,15 @@ franka2: # Left Arm
   y: 0.205
   z: 0.06
   yaw: 0.0 # Faces +X (center)
-
 camera:
-  x: 0.6
-  y: 1.0
-  z: 1.3
-  roll: 0.0
-  pitch: 0.785
-  yaw: -1.57
+  x: -0.8493
+  y: -1.2624
+  z: 0.7559
+  roll: -3.1133
+  pitch: 0.5749
+  yaw: 1.0335
 
 shared_zone:
-  x: 0.4
+  x: 0.0
   y: 0.0
-  z: 0.05 # Slightly above table surface
+  z: 0.05

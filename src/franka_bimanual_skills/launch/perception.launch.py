@@ -9,36 +9,26 @@ from launch.conditions import IfCondition, UnlessCondition
 def generate_launch_description():
     use_hardware = LaunchConfiguration('use_hardware')
     
-    # Camera Extrinsics parameters
-    cam_x = LaunchConfiguration('camera_x')
-    cam_y = LaunchConfiguration('camera_y')
-    cam_z = LaunchConfiguration('camera_z')
-    cam_roll = LaunchConfiguration('camera_roll')
-    cam_pitch = LaunchConfiguration('camera_pitch')
-    cam_yaw = LaunchConfiguration('camera_yaw')
+    # Load robot poses from YAML
+    pkg_env = get_package_share_directory('franka_bimanual_config')
+    import yaml
+    with open(os.path.join(pkg_env, 'config', 'robot_poses.yaml'), 'r') as f:
+        robot_poses = yaml.safe_load(f)
+
+    common_parameters = {
+        'camera_x': float(robot_poses['camera']['x']),
+        'camera_y': float(robot_poses['camera']['y']),
+        'camera_z': float(robot_poses['camera']['z']),
+        'camera_roll': float(robot_poses['camera']['roll']),
+        'camera_pitch': float(robot_poses['camera']['pitch']),
+        'camera_yaw': float(robot_poses['camera']['yaw']),
+    }
 
     declare_use_hardware = DeclareLaunchArgument(
         'use_hardware', 
         default_value='false',
         description='If true, use hardware-specific topics.'
     )
-
-    # Declare Camera Parameters for easy runtime calibration
-    declare_cam_x = DeclareLaunchArgument('camera_x', default_value='0.6')
-    declare_cam_y = DeclareLaunchArgument('camera_y', default_value='-0.6')
-    declare_cam_z = DeclareLaunchArgument('camera_z', default_value='1.3')
-    declare_cam_roll = DeclareLaunchArgument('camera_roll', default_value='0.0')
-    declare_cam_pitch = DeclareLaunchArgument('camera_pitch', default_value='0.785')
-    declare_cam_yaw = DeclareLaunchArgument('camera_yaw', default_value='1.57')
-
-    common_parameters = {
-        'camera_x': cam_x,
-        'camera_y': cam_y,
-        'camera_z': cam_z,
-        'camera_roll': cam_roll,
-        'camera_pitch': cam_pitch,
-        'camera_yaw': cam_yaw,
-    }
 
     perception_node_hw = Node(
         package='franka_bimanual_skills',
@@ -47,9 +37,9 @@ def generate_launch_description():
         output='screen',
         emulate_tty=True,
         parameters=[common_parameters, {
-            'image_topic': '/camera/color/image_raw',
-            'depth_topic': '/camera/depth/image_rect_raw',
-            'camera_info_topic': '/camera/depth/camera_info',
+            'image_topic': '/camera/camera/color/image_raw',
+            'depth_topic': '/camera/camera/depth/image_rect_raw',
+            'camera_info_topic': '/camera/camera/color/camera_info',
             'use_sensor_data_qos': True
         }],
         condition=IfCondition(use_hardware)
@@ -74,7 +64,7 @@ def generate_launch_description():
         package='apriltag_ros',
         executable='apriltag_node',
         name='apriltag',
-        parameters=[os.path.join(get_package_share_directory('franka_manipulation_env'), 'config', 'apriltag.yaml')],
+        parameters=[os.path.join(get_package_share_directory('franka_bimanual_config'), 'config', 'apriltag.yaml')],
         remappings=[
             ('image_rect', '/camera/color/image_raw'),
             ('camera_info', '/camera/color/camera_info')
@@ -84,12 +74,6 @@ def generate_launch_description():
 
     return LaunchDescription([
         declare_use_hardware,
-        declare_cam_x,
-        declare_cam_y,
-        declare_cam_z,
-        declare_cam_roll,
-        declare_cam_pitch,
-        declare_cam_yaw,
         perception_node_hw,
         perception_node_sim,
         apriltag_node,

@@ -6,7 +6,8 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 from sensor_msgs.msg import Image, CameraInfo
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Point
+from visualization_msgs.msg import Marker, MarkerArray
 from franka_custom_interfaces.action import DetectObject
 
 from cv_bridge import CvBridge, CvBridgeError
@@ -60,9 +61,26 @@ class ObjectLocalizationNode(Node):
         self.sensor_cb_group = ReentrantCallbackGroup()
         self.action_cb_group = ReentrantCallbackGroup()
 
-        self.create_subscription(Image, '/camera/image_raw', self.image_callback, qos, callback_group=self.sensor_cb_group)
-        self.create_subscription(Image, '/camera/depth', self.depth_callback, qos, callback_group=self.sensor_cb_group)
-        self.create_subscription(CameraInfo, '/camera/camera_info', self.camera_info_callback, qos, callback_group=self.sensor_cb_group)
+        # Debug Image and Marker Publishers
+        self.debug_image_pub = self.create_publisher(Image, '/yolo_debug_image', 10)
+        self.pose_pub = self.create_publisher(PoseStamped, '/yolo_detected_pose', 10)
+        self.marker_pub = self.create_publisher(MarkerArray, '/yolo_markers', 10)
+
+        # Declare Topic Parameters
+        self.declare_parameter('image_topic', '/camera/camera/color/image_raw')
+        self.declare_parameter('depth_topic', '/camera/camera/depth/image_rect_raw')
+        self.declare_parameter('camera_info_topic', '/camera/camera/color/camera_info')
+
+        image_topic = self.get_parameter('image_topic').value
+        depth_topic = self.get_parameter('depth_topic').value
+        info_topic = self.get_parameter('camera_info_topic').value
+
+        self.get_logger().info(f'Subscribing to Image: {image_topic}')
+        self.get_logger().info(f'Subscribing to Depth: {depth_topic}')
+
+        self.create_subscription(Image, image_topic, self.image_callback, qos, callback_group=self.sensor_cb_group)
+        self.create_subscription(Image, depth_topic, self.depth_callback, qos, callback_group=self.sensor_cb_group)
+        self.create_subscription(CameraInfo, info_topic, self.camera_info_callback, qos, callback_group=self.sensor_cb_group)
 
         self.detect_object_server = ActionServer(
             self, DetectObject, 'detect_object',
@@ -89,6 +107,64 @@ class ObjectLocalizationNode(Node):
     def image_callback(self, msg):
         self.latest_image = msg
         self.latest_image_time = msg.header.stamp
+        
+        # Continuous Live Detection for Debugging
+        if self.model is not None and self.camera_intrinsics is not None and self.latest_depth is not None:
+            try:
+                cv_image = self.cv_bridge.imgmsg_to_cv2(msg, 'bgr8')
+                depth_image = self.cv_bridge.imgmsg_to_cv2(self.latest_depth, 'passthrough')
+                results = self.model(cv_image, verbose=False, conf=0.5)
+                
+                debug_img = cv_image.copy()
+                marker_array = MarkerArray()
+                
+                for i, box in enumerate(results[0].boxes):
+                    x1, y1, x2, y2 = [int(c) for c in box.xyxy[0].tolist()]
+                    cls_id = int(box.cls[0].item())
+                    cls_name = self.model.names[cls_id]
+                    conf = float(box.conf[0].item())
+                    
+                    # Draw 2D
+                    cv2.rectangle(debug_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.putText(debug_img, f"{cls_name} {conf:.2f}", (x1, y1 - 10), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    
+                    # Calculate 3D Position (simple centroid depth)
+                    u, v = (x1 + x2) // 2, (y1 + y2) // 2
+                    if 0 <= v < depth_image.shape[0] and 0 <= u < depth_image.shape[1]:
+                        d = float(depth_image[v, u])
+                        if d > 0.001 and not np.isnan(d):
+                            z_opt = d if depth_image.dtype in (np.float32, np.float64) else d / 1000.0
+                            fx, fy = self.camera_intrinsics['fx'], self.camera_intrinsics['fy']
+                            cx, cy = self.camera_intrinsics['cx'], self.camera_intrinsics['cy']
+                            p_opt = np.array([(u - cx) * z_opt / fx, (v - cy) * z_opt / fy, z_opt])
+                            p_world = self._R_optical_to_world @ p_opt + self._cam_pos
+                            
+                            # Publish PoseStamped
+                            ps = PoseStamped()
+                            ps.header.frame_id = 'world'
+                            ps.header.stamp = msg.header.stamp
+                            ps.pose.position.x, ps.pose.position.y, ps.pose.position.z = p_world
+                            self.pose_pub.publish(ps)
+                            
+                            # Add Marker for RViz
+                            marker = Marker()
+                            marker.header.frame_id = 'world'
+                            marker.header.stamp = msg.header.stamp
+                            marker.ns = "yolo_detections"
+                            marker.id = i
+                            marker.type = Marker.SPHERE
+                            marker.action = Marker.ADD
+                            marker.pose.position.x, marker.pose.position.y, marker.pose.position.z = p_world
+                            marker.scale.x = marker.scale.y = marker.scale.z = 0.05
+                            marker.color.a = 1.0
+                            marker.color.r = 0.0; marker.color.g = 1.0; marker.color.b = 0.0
+                            marker_array.markers.append(marker)
+                
+                self.debug_image_pub.publish(self.cv_bridge.cv2_to_imgmsg(debug_img, 'bgr8'))
+                self.marker_pub.publish(marker_array)
+            except Exception as e:
+                self.get_logger().warn(f"Error in live detection: {e}")
 
     def depth_callback(self, msg):
         self.latest_depth = msg
@@ -154,14 +230,18 @@ class ObjectLocalizationNode(Node):
                 if red_ratio > best_red_ratio and red_ratio > 0.1:
                     best_red_ratio = red_ratio
                     best_box = box
-            elif conf > best_conf:
-                best_box, best_conf = box, conf
+            else:
+                cls_id = int(box.cls[0].item())
+                cls_name = self.model.names[cls_id]
+                if object_name.lower() in cls_name.lower() and conf > best_conf:
+                    best_box, best_conf = box, conf
 
         if best_box is None:
             goal_handle.abort()
             return result
 
         x1, y1, x2, y2 = [int(c) for c in best_box.xyxy[0].tolist()]
+        
         u, v = (x1 + x2) // 2, (y1 + y2) // 2
         depth_image = self.cv_bridge.imgmsg_to_cv2(self.latest_depth, 'passthrough')
         depth_value = float(depth_image[v, u])
