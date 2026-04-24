@@ -25,7 +25,7 @@ class RobotDecision(BaseModel):
 # 2. VLM Inference Function
 # ---------------------------------------------------------
 def run_vlm_query():
-    # Argument Setup (Matching Yigit's workflow)
+    # Argument Setup 
     parser = argparse.ArgumentParser(description="VLM Query for Bimanual Robot Decisions.")
     parser.add_argument("--image", default="/home/falco_robotics/mm_ws/target-image.jpeg", help="Path to input image")
     parser.add_argument("--model", default="models/gemini-3-flash-preview", help="Full model name string")
@@ -43,7 +43,7 @@ def run_vlm_query():
     # Client Initialization
     client = genai.Client()
     
-    # Image Loading and Pre-processing (Critical to avoid 429 Errors)
+    # Image Loading and Pre-processing
     try:
         img = Image.open(args.image)
         if args.max_side > 0:

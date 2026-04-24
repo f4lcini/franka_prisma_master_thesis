@@ -36,7 +36,7 @@ class VlmServerNode(Node):
         
         self.image_sub = self.create_subscription(
             Image,
-            '/camera/image_raw',
+            '/camera/color/image_raw',
             self.image_callback,
             10,
             callback_group=self.cb_group

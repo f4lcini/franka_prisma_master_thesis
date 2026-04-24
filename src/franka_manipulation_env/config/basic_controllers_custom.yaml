@@ -12,12 +12,6 @@ controller_manager:
     franka2_arm_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
-    franka1_gripper:
-      type: joint_trajectory_controller/JointTrajectoryController
-
-    franka2_gripper:
-      type: joint_trajectory_controller/JointTrajectoryController
-
     pose_reader:
       type: franka_mm_control/PoseReader 
     joint_state_broadcaster:
@@ -322,34 +316,3 @@ franka2_arm_controller:
       franka2_fr3_joint6: {goal: 0.05}
       franka2_fr3_joint7: {goal: 0.05}
 
-franka1_gripper:
-  ros__parameters:
-    joints:
-      - franka1_fr3_finger_joint1
-      - franka1_fr3_finger_joint2
-    command_interfaces:
-      - position
-    state_interfaces:
-      - position
-      - velocity
-    action_monitor_rate: 20.0
-    constraints:
-      goal_time: 1.0
-      franka1_fr3_finger_joint1: {goal: 0.01}
-      franka1_fr3_finger_joint2: {goal: 0.01}
-
-franka2_gripper:
-  ros__parameters:
-    joints:
-      - franka2_fr3_finger_joint1
-      - franka2_fr3_finger_joint2
-    command_interfaces:
-      - position
-    state_interfaces:
-      - position
-      - velocity
-    action_monitor_rate: 20.0
-    constraints:
-      goal_time: 1.0
-      franka2_fr3_finger_joint1: {goal: 0.01}
-      franka2_fr3_finger_joint2: {goal: 0.01}

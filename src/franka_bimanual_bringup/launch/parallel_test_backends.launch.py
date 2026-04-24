@@ -30,7 +30,7 @@ def generate_launch_description():
     
     # URDF (Robot Description)
     xacro_file_urdf = os.path.join(pkg_env_share, 'urdf', 'bimanual_custom.urdf.xacro')
-    robot_description_config = Command(['xacro', ' ', xacro_file_urdf, ' ', 'hand:=true', ' ', 'gazebo:=true', ' ', 'ros2_control:=false'])
+    robot_description_config = Command(['xacro', ' ', xacro_file_urdf, ' ', 'hand:=true', ' ', 'gazebo:=false', ' ', 'ros2_control:=false'])
     robot_description = {"robot_description": ParameterValue(robot_description_config, value_type=str)}
 
     # SRDF (Robot Description Semantic)

@@ -89,6 +89,7 @@ class ObjectLocalizationNode(Node):
             cancel_callback=self.cancel_callback,
             callback_group=self.action_cb_group
         )
+        self._frame_counter = 0
 
     def _build_camera_transform(self):
         cam_pos = np.array([
@@ -108,6 +109,11 @@ class ObjectLocalizationNode(Node):
         self.latest_image = msg
         self.latest_image_time = msg.header.stamp
         
+        # Latency Optimization: Skip frames to avoid backlog
+        self._frame_counter += 1
+        if self._frame_counter % 9 != 0: # Process at ~3.3Hz instead of 30Hz
+            return
+
         # Continuous Live Detection for Debugging
         if self.model is not None and self.camera_intrinsics is not None and self.latest_depth is not None:
             try:

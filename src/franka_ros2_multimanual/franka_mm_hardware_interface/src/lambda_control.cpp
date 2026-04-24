@@ -44,7 +44,7 @@ std::function<void()> LambdaControl::startJointPositionControl(FrankaRobotWrappe
                     out.q = franka::limitRate(
                         franka::computeUpperLimitsJointVelocity(robot.current_state.q_d),
                         franka::computeLowerLimitsJointVelocity(robot.current_state.q_d),
-                        franka::kMaxJointAcceleration, franka::kMaxJointJerk, out.q,
+                        {{10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0}}, franka::kMaxJointJerk, out.q,
                         robot.current_state.q_d, robot.current_state.dq_d, robot.current_state.ddq_d);
                 }
 
@@ -74,7 +74,7 @@ std::function<void()> LambdaControl::startJointVelocityControl(FrankaRobotWrappe
                     out.dq = franka::limitRate(
                         franka::computeUpperLimitsJointVelocity(robot.current_state.q_d),
                         franka::computeLowerLimitsJointVelocity(robot.current_state.q_d), 
-                        franka::kMaxJointAcceleration, franka::kMaxJointJerk, 
+                        {{10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0}}, franka::kMaxJointJerk, 
                         out.dq, robot.current_state.dq_d, robot.current_state.ddq_d);
                 }
 

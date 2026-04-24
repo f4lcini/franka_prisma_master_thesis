@@ -148,7 +148,7 @@
 
   <!-- Franka Robot 1 -->
   <xacro:franka_robot arm_id="fr3"
-    joint_limits="${xacro.load_yaml('$(find franka_description)/robots/fr3/joint_limits.yaml')}"
+    joint_limits="${xacro.load_yaml('$(find franka_bimanual_config)/config/joint_limits_fr3_custom.yaml')}"
     inertials="${xacro.load_yaml('$(find franka_description)/robots/fr3/inertials.yaml')}"
     kinematics="${xacro.load_yaml('$(find franka_description)/robots/fr3/kinematics.yaml')}"
     dynamics="${xacro.load_yaml('$(find franka_description)/robots/fr3/dynamics.yaml')}"
@@ -172,7 +172,7 @@
 
   <!-- Franka Robot 2 -->
   <xacro:franka_robot arm_id="fr3"
-    joint_limits="${xacro.load_yaml('$(find franka_description)/robots/fr3/joint_limits.yaml')}"
+    joint_limits="${xacro.load_yaml('$(find franka_bimanual_config)/config/joint_limits_fr3_custom.yaml')}"
     inertials="${xacro.load_yaml('$(find franka_description)/robots/fr3/inertials.yaml')}"
     kinematics="${xacro.load_yaml('$(find franka_description)/robots/fr3/kinematics.yaml')}"
     dynamics="${xacro.load_yaml('$(find franka_description)/robots/fr3/dynamics.yaml')}"

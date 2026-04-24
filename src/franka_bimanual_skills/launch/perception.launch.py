@@ -37,9 +37,9 @@ def generate_launch_description():
         output='screen',
         emulate_tty=True,
         parameters=[common_parameters, {
-            'image_topic': '/camera/color/image_raw',
-            'depth_topic': '/camera/aligned_depth_to_color/image_raw',
-            'camera_info_topic': '/camera/color/camera_info',
+            'image_topic': '/camera/camera/color/image_raw',
+            'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
+            'camera_info_topic': '/camera/camera/color/camera_info',
             'use_sensor_data_qos': True
         }],
         condition=IfCondition(use_hardware)
@@ -66,8 +66,8 @@ def generate_launch_description():
         name='apriltag',
         parameters=[os.path.join(get_package_share_directory('franka_bimanual_config'), 'config', 'apriltag.yaml')],
         remappings=[
-            ('image_rect', '/camera/color/image_raw'),
-            ('camera_info', '/camera/color/camera_info')
+            ('image_rect', '/camera/camera/color/image_raw'),
+            ('camera_info', '/camera/camera/color/camera_info')
         ],
         condition=IfCondition(use_hardware)
     )

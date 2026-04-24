@@ -47,6 +47,7 @@ def robot_description_dependent_nodes_spawner(
             'use_fake_hardware': use_fake_hardware_str,
             'franka1_ip': right_ip_str,
             'franka2_ip': left_ip_str,
+            'limit_override': 'true',
             'controller_path': franka_controllers,
             'franka1_x': str(robot_poses['franka1']['x']),
             'franka1_y': str(robot_poses['franka1']['y']),
@@ -121,11 +122,12 @@ def robot_description_dependent_nodes_spawner(
 
     trajectory_execution = {
         'moveit_manage_controllers': True,
-        'trajectory_execution.allowed_execution_duration_scaling': 1.2,
-        'trajectory_execution.allowed_goal_duration_margin': 0.5,
+        'trajectory_execution.execution_duration_monitoring': False,
+        'trajectory_execution.allowed_execution_duration_scaling': 1.0,
+        'trajectory_execution.allowed_goal_duration_margin': 5.0,
         'trajectory_execution.allowed_start_tolerance': 0.01,
-        'default_velocity_scaling_factor': 0.5,
-        'default_acceleration_scaling_factor': 0.5,
+        'default_velocity_scaling_factor': 1.0,
+        'default_acceleration_scaling_factor': 1.0,
     }
 
     return [
@@ -133,13 +135,19 @@ def robot_description_dependent_nodes_spawner(
             package='franka_gripper',
             executable='franka_gripper_node',
             name='franka1_gripper',
-            parameters=[{'robot_ip': right_ip_str}],
+            parameters=[{
+                'robot_ip': right_ip_str,
+                'joint_names': ['franka1_fr3_finger_joint1', 'franka1_fr3_finger_joint2']
+            }],
         ),
         Node(
             package='franka_gripper',
             executable='franka_gripper_node',
             name='franka2_gripper',
-            parameters=[{'robot_ip': left_ip_str}],
+            parameters=[{
+                'robot_ip': left_ip_str,
+                'joint_names': ['franka2_fr3_finger_joint1', 'franka2_fr3_finger_joint2']
+            }],
         ),
         Node(
             package='robot_state_publisher',
