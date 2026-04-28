@@ -278,15 +278,16 @@ franka1_arm_controller:
     action_monitor_rate: 20.0
     allow_integration_in_goal_trajectories: true
     constraints:
-      goal_time: 20.0 # Extra generous for simulation lag
+      goal_time: 30.0
       stopped_velocity_tolerance: 0.2
-      franka1_fr3_joint1: {goal: 0.05}
-      franka1_fr3_joint2: {goal: 0.05}
-      franka1_fr3_joint3: {goal: 0.05}
-      franka1_fr3_joint4: {goal: 0.05}
-      franka1_fr3_joint5: {goal: 0.05}
-      franka1_fr3_joint6: {goal: 0.05}
-      franka1_fr3_joint7: {goal: 0.05}
+      trajectory:
+        franka1_fr3_joint1: {trajectory: 0.2, goal: 0.2}
+        franka1_fr3_joint2: {trajectory: 0.2, goal: 0.2}
+        franka1_fr3_joint3: {trajectory: 0.2, goal: 0.2}
+        franka1_fr3_joint4: {trajectory: 0.2, goal: 0.2}
+        franka1_fr3_joint5: {trajectory: 0.2, goal: 0.2}
+        franka1_fr3_joint6: {trajectory: 0.2, goal: 0.2}
+        franka1_fr3_joint7: {trajectory: 0.2, goal: 0.2}
 
 franka2_arm_controller:
   ros__parameters:
@@ -306,13 +307,14 @@ franka2_arm_controller:
     action_monitor_rate: 20.0
     allow_integration_in_goal_trajectories: true
     constraints:
-      goal_time: 20.0
+      goal_time: 30.0
       stopped_velocity_tolerance: 0.2
-      franka2_fr3_joint1: {goal: 0.05}
-      franka2_fr3_joint2: {goal: 0.05}
-      franka2_fr3_joint3: {goal: 0.05}
-      franka2_fr3_joint4: {goal: 0.05}
-      franka2_fr3_joint5: {goal: 0.05}
-      franka2_fr3_joint6: {goal: 0.05}
-      franka2_fr3_joint7: {goal: 0.05}
+      trajectory:
+        franka2_fr3_joint1: {trajectory: 0.2, goal: 0.2}
+        franka2_fr3_joint2: {trajectory: 0.2, goal: 0.2}
+        franka2_fr3_joint3: {trajectory: 0.2, goal: 0.2}
+        franka2_fr3_joint4: {trajectory: 0.2, goal: 0.2}
+        franka2_fr3_joint5: {trajectory: 0.2, goal: 0.2}
+        franka2_fr3_joint6: {trajectory: 0.2, goal: 0.2}
+        franka2_fr3_joint7: {trajectory: 0.2, goal: 0.2}
 

@@ -99,7 +99,7 @@ class SkillBehaviors:
         self.safe_publish_feedback(goal_handle, feedback)
 
         # Call the unified ParallelMove action (Synchronous API)
-        success = self.robot_control_api.send_joint_goal(arm_group, ready_values, planner="PTP")
+        success = self.robot_control_api.send_joint_goal(arm_group, ready_values, planner="ompl")
 
         result.success = success
         if success:

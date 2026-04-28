@@ -102,12 +102,33 @@ def robot_description_dependent_nodes_spawner(
         'RRTstarkConfigDefault': {'type': 'geometric::RRTstar', 'range': 0.0}
     }
 
+    # Planning adapters for smoothing (Ruckig provides C2 continuity, preventing acceleration reflexes)
+    adapters = [
+        'default_planner_request_adapters/AddTimeOptimalParameterization',
+        'default_planner_request_adapters/AddRuckigTrajectorySmoothing',
+        'default_planner_request_adapters/ResolveConstraintFrames',
+        'default_planner_request_adapters/FixWorkspaceBounds',
+        'default_planner_request_adapters/FixStartStateBounds',
+        'default_planner_request_adapters/FixStartStateCollision',
+        'default_planner_request_adapters/FixStartStatePathConstraints',
+    ]
+
     # Force OMPL as the ONLY and DEFAULT pipeline
     planning_pipeline_config = {
-        'planning_pipelines': ['ompl'],
+        'planning_pipelines': ['ompl', 'pilz_industrial_motion_planner'],
         'default_planning_pipeline': 'ompl',
-        'ompl': ompl_config_data,
-        'moveit_manage_controllers': True,
+        'ompl': {
+            **ompl_config_data,
+            'request_adapters': ' '.join(adapters),
+        },
+        'pilz_industrial_motion_planner': {
+            'planning_plugin': 'pilz_industrial_motion_planner/CommandPlanner',
+            'request_adapters': ' '.join(adapters),
+            'start_state_max_bounds_error': 0.1,
+            'default_acceleration_scaling_factor': 1.0,
+            'default_velocity_scaling_factor': 1.0,
+        },
+        'moveit_manage_controllers': False,
     }
 
     # 4. Controllers (MoveIt side)
@@ -121,11 +142,11 @@ def robot_description_dependent_nodes_spawner(
     }
 
     trajectory_execution = {
-        'moveit_manage_controllers': True,
+        'moveit_manage_controllers': False,
         'trajectory_execution.execution_duration_monitoring': False,
-        'trajectory_execution.allowed_execution_duration_scaling': 1.0,
+        'trajectory_execution.allowed_execution_duration_scaling': 10.0,
         'trajectory_execution.allowed_goal_duration_margin': 5.0,
-        'trajectory_execution.allowed_start_tolerance': 0.01,
+        'trajectory_execution.allowed_start_tolerance': 0.1,
         'default_velocity_scaling_factor': 1.0,
         'default_acceleration_scaling_factor': 1.0,
     }
@@ -137,6 +158,7 @@ def robot_description_dependent_nodes_spawner(
             name='franka1_gripper',
             parameters=[{
                 'robot_ip': right_ip_str,
+                'limit_override': 'true',
                 'joint_names': ['franka1_fr3_finger_joint1', 'franka1_fr3_finger_joint2']
             }],
         ),

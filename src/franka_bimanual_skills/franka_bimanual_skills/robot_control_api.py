@@ -58,7 +58,7 @@ class RobotControlAPI:
             time.sleep(0.01)
         return future.result()
 
-    def send_gripper_goal(self, arm_group, width, force=20.0):
+    def send_gripper_goal(self, arm_group, width, max_effort=20.0):
         """Synchronous gripper goal using GripperCommand for hardware compatibility."""
         client = self.gripper1_client if "franka1" in arm_group else self.gripper2_client
         
@@ -67,8 +67,11 @@ class RobotControlAPI:
             return False
 
         goal = GripperCommand.Goal()
-        goal.command.position = float(width)
-        goal.command.max_effort = float(force)
+        # Franka gripper action expects per-finger position (width / 2)
+        # Added safety margin (0.075 max) to avoid out-of-range errors on hardware
+        safe_width = min(float(width), 0.075)
+        goal.command.position = safe_width / 2.0
+        goal.command.max_effort = float(max_effort)
 
         self.logger.info(f"🦾 Sending gripper goal to {arm_group}: width={width}m")
         try:
@@ -86,7 +89,7 @@ class RobotControlAPI:
 
     def send_pose_goal(self, arm_group, target_pose, tcp_frame, planner="PTP", is_handover=False):
         """Send a synchronous goal to the Bimanual Planner C++ node."""
-        self.logger.info(f"🚀 Sending ParallelMove goal for {arm_group} to {planner}...")
+        self.logger.info(f"🚀 Sending ParallelMove goal (Pose) for {arm_group} to {planner}...")
         
         goal = ParallelMove.Goal()
         goal.arm = "right" if "franka1" in arm_group else "left"
@@ -94,6 +97,21 @@ class RobotControlAPI:
         goal.planner_id = planner
         goal.is_handover = is_handover
 
+        return self._send_parallel_move(goal, arm_group)
+
+    def send_joint_goal(self, arm_group, joint_values, planner="PTP"):
+        """Send a synchronous joint-space goal to the Bimanual Planner C++ node."""
+        self.logger.info(f"🚀 Sending ParallelMove goal (Joints) for {arm_group} to {planner}...")
+        
+        goal = ParallelMove.Goal()
+        goal.arm = "right" if "franka1" in arm_group else "left"
+        goal.joint_target = [float(v) for v in joint_values]
+        goal.planner_id = planner
+
+        return self._send_parallel_move(goal, arm_group)
+
+    def _send_parallel_move(self, goal, arm_group):
+        """Internal helper to send ParallelMove goals and wait for results."""
         try:
             future = self.parallel_move_client.send_goal_async(goal)
             handle = self.wait_for_future(future, timeout_sec=5.0, label="ParallelMoveGoal")

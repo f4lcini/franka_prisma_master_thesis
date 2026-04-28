@@ -11,6 +11,7 @@
 #include "moveit_msgs/msg/constraints.hpp"
 #include "moveit_msgs/msg/position_constraint.hpp"
 #include "shape_msgs/msg/solid_primitive.hpp"
+#include "moveit_msgs/srv/get_motion_plan.hpp"
 #include "control_msgs/action/follow_joint_trajectory.hpp"
 
 using namespace std::placeholders;
@@ -32,6 +33,8 @@ public:
 
     move_group_right_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, "franka1_manipulator");
     move_group_left_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, "franka2_manipulator");
+
+    planning_client_ = this->create_client<moveit_msgs::srv::GetMotionPlan>("plan_kinematic_path");
 
     move_group_right_->setPlanningPipelineId("pilz_industrial_motion_planner");
     move_group_left_->setPlanningPipelineId("pilz_industrial_motion_planner");
@@ -61,6 +64,7 @@ private:
 
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_right_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_left_;
+  rclcpp::Client<moveit_msgs::srv::GetMotionPlan>::SharedPtr planning_client_;
   
   // Direct Controller Clients
   rclcpp_action::Client<control_msgs::action::FollowJointTrajectory>::SharedPtr fjt_client_right_;
@@ -130,6 +134,7 @@ private:
 
     try {
         move_group_ptr->setPlanningTime(10.0);
+        move_group_ptr->setStartStateToCurrentState();
 
         if (!goal->joint_target.empty()) {
             move_group_ptr->setJointValueTarget(goal->joint_target);
@@ -145,13 +150,20 @@ private:
         else move_group_ptr->clearPathConstraints();
 
         // Explicitly re-set and verify Pilz usage
-        std::string active_planner = goal->planner_id.empty() ? "PTP" : goal->planner_id;
-        move_group_ptr->setPlanningPipelineId("pilz_industrial_motion_planner");
+        std::string active_planner = goal->planner_id;
+        if (active_planner.empty()) active_planner = "PTP";
+
+        // Dynamic Pipeline Selection
+        if (active_planner == "ompl" || active_planner == "RRTConnect") {
+            move_group_ptr->setPlanningPipelineId("ompl");
+            // If it's ompl, let it use the default algorithm or RRTConnect
+            if (active_planner == "ompl") active_planner = "RRTConnectkConfigDefault";
+        } else {
+            move_group_ptr->setPlanningPipelineId("pilz_industrial_motion_planner");
+        }
+        
         move_group_ptr->setPlannerId(active_planner);
         
-        RCLCPP_INFO(this->get_logger(), "🔍 [%s] Requesting Plan via [%s] Pipeline (Algorithm: %s)", 
-                    arm_group.c_str(), move_group_ptr->getPlanningPipelineId().c_str(), active_planner.c_str());
-
         moveit::planning_interface::MoveGroupInterface::Plan plan;
         auto plan_result = move_group_ptr->plan(plan);
 
@@ -162,6 +174,25 @@ private:
           // Send to Controller directly
           control_msgs::action::FollowJointTrajectory::Goal fjt_goal;
           fjt_goal.trajectory = plan.trajectory_.joint_trajectory;
+          
+          RCLCPP_INFO(this->get_logger(), "📦 Sending Trajectory for [%s] with %zu points", 
+                      arm_group.c_str(), fjt_goal.trajectory.points.size());
+          for (const auto & name : fjt_goal.trajectory.joint_names) {
+              RCLCPP_INFO(this->get_logger(), "🔗 Joint: %s", name.c_str());
+          }
+        
+        // --- Standard MoveIt Synchronization ---
+        // Just ensure the start state matches the current configuration
+        auto current_state = move_group_ptr->getCurrentState();
+        std::vector<double> current_joints;
+        current_state->copyJointGroupPositions(move_group_ptr->getName(), current_joints);
+
+        if (fjt_goal.trajectory.points.size() > 0) {
+            fjt_goal.trajectory.points[0].positions = current_joints;
+            fjt_goal.trajectory.points[0].velocities.assign(current_joints.size(), 0.0);
+            fjt_goal.trajectory.points[0].accelerations.assign(current_joints.size(), 0.0);
+            fjt_goal.trajectory.points[0].time_from_start = rclcpp::Duration::from_seconds(0.0);
+        }
           
           if (!fjt_client->wait_for_action_server(5s)) {
               RCLCPP_ERROR(this->get_logger(), "❌ [%s] Controller Action Server not available!", arm_group.c_str());
