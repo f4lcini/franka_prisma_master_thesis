@@ -11,7 +11,7 @@ import time
 import traceback
 import threading
 
-from .config import PREDEFINED_TARGETS, WORLD_FRAME, READY_POSE_VALUES_LEFT, READY_POSE_VALUES_RIGHT, MIDWAY_POSE_VALUES_LEFT, MIDWAY_POSE_VALUES_RIGHT, get_arm_config, apply_top_down_orientation, apply_donor_handover_orientation, apply_recipient_handover_orientation, parse_error_code
+from .config import PREDEFINED_TARGETS, WORLD_FRAME, READY_POSE_VALUES_LEFT, READY_POSE_VALUES_RIGHT, MIDWAY_POSE_VALUES_LEFT, MIDWAY_POSE_VALUES_RIGHT, OFFSET_POSE_VALUES_LEFT, OFFSET_POSE_VALUES_RIGHT, get_arm_config, apply_top_down_orientation, apply_donor_handover_orientation, apply_recipient_handover_orientation, parse_error_code
 
 class SkillBehaviors:
     def __init__(self, node, robot_control_api, server_cb_group):
@@ -91,9 +91,19 @@ class SkillBehaviors:
         pose_target = goal_handle.request.pose_name.lower() or "ready"
         
         if arm_group == "franka1_arm":
-            ready_values = MIDWAY_POSE_VALUES_RIGHT if pose_target == "midway" else READY_POSE_VALUES_RIGHT
+            if pose_target == "midway":
+                ready_values = MIDWAY_POSE_VALUES_RIGHT
+            elif pose_target == "offset_ready":
+                ready_values = OFFSET_POSE_VALUES_RIGHT
+            else:
+                ready_values = READY_POSE_VALUES_RIGHT
         else:
-            ready_values = MIDWAY_POSE_VALUES_LEFT if pose_target == "midway" else READY_POSE_VALUES_LEFT
+            if pose_target == "midway":
+                ready_values = MIDWAY_POSE_VALUES_LEFT
+            elif pose_target == "offset_ready":
+                ready_values = OFFSET_POSE_VALUES_LEFT
+            else:
+                ready_values = READY_POSE_VALUES_LEFT
             
         feedback.status = f"Planning ParallelMove (Joints) for {req_arm}"
         self.safe_publish_feedback(goal_handle, feedback)

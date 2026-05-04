@@ -8,6 +8,7 @@ from launch.conditions import IfCondition, UnlessCondition
 
 def generate_launch_description():
     use_hardware = LaunchConfiguration('use_hardware')
+    use_apriltag = LaunchConfiguration('use_apriltag')
     
     # Load robot poses from YAML
     pkg_env = get_package_share_directory('franka_bimanual_config')
@@ -28,6 +29,12 @@ def generate_launch_description():
         'use_hardware', 
         default_value='false',
         description='If true, use hardware-specific topics.'
+    )
+
+    declare_use_apriltag = DeclareLaunchArgument(
+        'use_apriltag', 
+        default_value='false',
+        description='If true, launch apriltag_ros node.'
     )
 
     perception_node_hw = Node(
@@ -69,11 +76,12 @@ def generate_launch_description():
             ('image_rect', '/camera/camera/color/image_raw'),
             ('camera_info', '/camera/camera/color/camera_info')
         ],
-        condition=IfCondition(use_hardware)
+        condition=IfCondition(use_apriltag)
     )
 
     return LaunchDescription([
         declare_use_hardware,
+        declare_use_apriltag,
         perception_node_hw,
         perception_node_sim,
         apriltag_node,
