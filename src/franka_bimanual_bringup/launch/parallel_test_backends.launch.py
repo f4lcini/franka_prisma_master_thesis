@@ -60,11 +60,12 @@ def generate_launch_description():
 
     # --- 2. Define Nodes ---
 
-    # Bimanual C++ Planner (Action Server: /parallel_move)
-    planner_node = Node(
-        package='franka_bimanual_planner',
-        executable='bimanual_planner_node',
-        name='bimanual_planner_node',
+    # Cartesian Bridge Node: replaces bimanual_planner_node (C++ JTC path)
+    # Exposes the same /parallel_move action but executes via Cartesian Impedance
+    bridge_node = Node(
+        package='franka_bimanual_skills',
+        executable='cartesian_bridge_node',
+        name='cartesian_bridge_node',
         output='screen',
         parameters=[
             robot_description,
@@ -87,6 +88,6 @@ def generate_launch_description():
 
     return LaunchDescription([
         declare_use_sim_time,
-        planner_node,
+        bridge_node,
         skill_server_node
     ])

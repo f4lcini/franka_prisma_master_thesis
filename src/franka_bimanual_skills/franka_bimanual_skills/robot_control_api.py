@@ -2,7 +2,7 @@ import rclpy
 from rclpy.action import ActionClient
 from moveit_msgs.action import MoveGroup, ExecuteTrajectory
 from moveit_msgs.srv import GetCartesianPath
-from moveit_msgs.msg import MotionPlanRequest, Constraints, PositionConstraint, OrientationConstraint, BoundingVolume, PlanningScene
+from moveit_msgs.msg import MotionPlanRequest, Constraints, JointConstraint, PositionConstraint, OrientationConstraint, BoundingVolume, PlanningScene
 from franka_custom_interfaces.action import ParallelMove
 from shape_msgs.msg import SolidPrimitive
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
@@ -37,8 +37,15 @@ class RobotControlAPI:
             GetCartesianPath, 'compute_cartesian_path', callback_group=client_cb_group)
         self.trajectory_executor = ActionClient(
             self.node, ExecuteTrajectory, 'execute_trajectory', callback_group=client_cb_group)
+        self.move_group_client = ActionClient(
+            self.node, MoveGroup, 'move_action', callback_group=client_cb_group)
+        
+        self.jtc_clients = {
+            "franka1_arm": ActionClient(self.node, FollowJointTrajectory, 'franka1_arm_controller/follow_joint_trajectory', callback_group=client_cb_group),
+            "franka2_arm": ActionClient(self.node, FollowJointTrajectory, 'franka2_arm_controller/follow_joint_trajectory', callback_group=client_cb_group)
+        }
 
-        self.logger.info("⏳ Checking backends (Planner, Grippers)...")
+        self.logger.info("⏳ Checking backends (Planner, Grippers, MoveGroup, JTCs)...")
         
         if not self.parallel_move_client.wait_for_server(timeout_sec=2.0):
              self.logger.warning("⚠️ ParallelMove (/parallel_move) not ready yet.")
@@ -47,6 +54,8 @@ class RobotControlAPI:
             self.logger.warning("⚠️ franka1_gripper not ready yet.")
         if not self.gripper2_client.wait_for_server(timeout_sec=5.0):
             self.logger.warning("⚠️ franka2_gripper not ready yet.")
+        if not self.move_group_client.wait_for_server(timeout_sec=5.0):
+            self.logger.warning("⚠️ MoveGroup action server not ready yet.")
 
     def wait_for_future(self, future, timeout_sec=None, label="Action"):
         """Simple synchronous wait for a rclpy future."""
@@ -133,6 +142,118 @@ class RobotControlAPI:
         except Exception as e:
             self.logger.error(f"❌ ParallelMove exception: {e}")
             traceback.print_exc()
+            return False
+
+    def send_moveit_goal(self, arm_group, target_pose=None, joint_target=None, planner="PTP"):
+        """Send a goal to MoveIt MoveGroup action server (Plans AND Executes)."""
+        if not self.move_group_client.wait_for_server(timeout_sec=2.0):
+            self.logger.error("MoveGroup action server not available!")
+            return False
+
+        goal = MoveGroup.Goal()
+        req = MotionPlanRequest()
+        req.group_name = arm_group
+        req.num_planning_attempts = 5
+        req.allowed_planning_time = 10.0
+        req.max_velocity_scaling_factor = 0.3
+        req.max_acceleration_scaling_factor = 0.2
+
+        if planner in ["PTP", "LIN", "CIRC"]:
+            req.pipeline_id = "pilz_industrial_motion_planner"
+            req.planner_id = planner
+        else:
+            req.pipeline_id = "ompl"
+            req.planner_id = "RRTConnectkConfigDefault"
+
+        constraints = Constraints()
+        if joint_target:
+            # Joint target
+            joints = ["franka1_fr3_joint1", "franka1_fr3_joint2", "franka1_fr3_joint3", "franka1_fr3_joint4", "franka1_fr3_joint5", "franka1_fr3_joint6", "franka1_fr3_joint7"]
+            if "franka2" in arm_group:
+                joints = [j.replace("franka1", "franka2") for j in joints]
+            
+            for jname, jval in zip(joints, joint_target):
+                jc = JointConstraint()
+                jc.joint_name = jname
+                jc.position = float(jval)
+                jc.tolerance_above = 0.01
+                jc.tolerance_below = 0.01
+                jc.weight = 1.0
+                constraints.joint_constraints.append(jc)
+        elif target_pose:
+            # Pose target
+            # (Note: For simplicity, we assume the target_pose is a PoseStamped)
+            # This is a basic implementation; more complex constraints can be added.
+            from moveit_msgs.msg import PositionConstraint, OrientationConstraint
+            from shape_msgs.msg import SolidPrimitive
+            from moveit_msgs.msg import BoundingVolume
+
+            pc = PositionConstraint()
+            pc.header = target_pose.header
+            pc.link_name = "franka1_fr3_hand_tcp" if "franka1" in arm_group else "franka2_fr3_hand_tcp"
+            region = BoundingVolume()
+            sp = SolidPrimitive()
+            sp.type = SolidPrimitive.SPHERE
+            sp.dimensions = [0.01]
+            region.primitives.append(sp)
+            region.primitive_poses.append(target_pose.pose)
+            pc.constraint_region = region
+            pc.weight = 1.0
+            constraints.position_constraints.append(pc)
+
+            oc = OrientationConstraint()
+            oc.header = target_pose.header
+            oc.link_name = pc.link_name
+            oc.orientation = target_pose.pose.orientation
+            oc.absolute_x_axis_tolerance = 0.05
+            oc.absolute_y_axis_tolerance = 0.05
+            oc.absolute_z_axis_tolerance = 0.05
+            oc.weight = 1.0
+            constraints.orientation_constraints.append(oc)
+        
+        req.goal_constraints.append(constraints)
+        goal.request = req
+        goal.planning_options.plan_only = True # PLAN ONLY!
+
+        self.logger.info(f"🔮 Planning MoveGroup goal for {arm_group} via {planner}...")
+        try:
+            future = self.move_group_client.send_goal_async(goal)
+            handle = self.wait_for_future(future, timeout_sec=5.0, label="MoveGroupGoal")
+            if not handle or not handle.accepted:
+                return False
+
+            result_future = handle.get_result_async()
+            res = self.wait_for_future(result_future, timeout_sec=10.0, label="MoveGroupResult")
+            
+            if res is None or res.result.error_code.val != 1:
+                self.logger.error(f"❌ Planning failed for {arm_group}")
+                return False
+
+            # ---- EXECUTION VIA JTC (Parallel Path) ----
+            trajectory = res.result.planned_trajectory.joint_trajectory
+            if not trajectory.points:
+                self.logger.warning(f"⚠️ Planned trajectory for {arm_group} is empty.")
+                return True
+
+            jtc_client = self.jtc_clients.get(arm_group)
+            if not jtc_client:
+                self.logger.error(f"❌ No JTC client for {arm_group}")
+                return False
+
+            self.logger.info(f"🚀 Executing trajectory on {arm_group} JTC...")
+            jtc_goal = FollowJointTrajectory.Goal()
+            jtc_goal.trajectory = trajectory
+            
+            jtc_future = jtc_client.send_goal_async(jtc_goal)
+            jtc_handle = self.wait_for_future(jtc_future, timeout_sec=5.0, label="JTCGoal")
+            if not jtc_handle or not jtc_handle.accepted:
+                return False
+
+            jtc_result_future = jtc_handle.get_result_async()
+            jtc_res = self.wait_for_future(jtc_result_future, timeout_sec=30.0, label="JTCResult")
+            return jtc_res is not None
+        except Exception as e:
+            self.logger.error(f"❌ MoveGroup/JTC exception: {e}")
             return False
 
     def check_grasp(self, arm_group):

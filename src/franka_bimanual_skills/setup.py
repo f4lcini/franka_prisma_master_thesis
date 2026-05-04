@@ -34,7 +34,8 @@ setup(
             'vlm_server_node = franka_bimanual_skills.vlm_server_node:main',
             'object_localization_node = franka_bimanual_skills.object_localization_node:main',
             'simple_moveit_server = franka_bimanual_skills.simple_moveit_server:main',
-            'handover_coordinator = franka_bimanual_skills.handover_coordinator:main'
+            'handover_coordinator = franka_bimanual_skills.handover_coordinator:main',
+            'cartesian_bridge_node = franka_bimanual_skills.cartesian_bridge_node:main'
         ],
     },
 )

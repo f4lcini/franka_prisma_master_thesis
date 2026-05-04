@@ -1,3 +1,4 @@
+# MoveIt controller configuration
 controller_names:
   - franka1_arm_controller
   - franka2_arm_controller

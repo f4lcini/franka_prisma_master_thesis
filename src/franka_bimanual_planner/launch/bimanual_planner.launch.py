@@ -16,7 +16,7 @@ def load_yaml(package_name, file_path):
         return None
 
 def generate_launch_description():
-    pkg_env_share = get_package_share_directory('franka_manipulation_env')
+    pkg_env_share = get_package_share_directory('franka_bimanual_config')
 
     # Manual but robust loading of MoveIt parameters
     # This avoids MoveItConfigsBuilder naming convention issues
@@ -32,12 +32,12 @@ def generate_launch_description():
     robot_description_semantic = {"robot_description_semantic": ParameterValue(robot_description_semantic_config, value_type=str)}
 
     # 3. Kinematics & Joint Limits
-    kinematics_yaml = load_yaml('franka_manipulation_env', 'config/kinematics_bimanual.yaml')
-    joint_limits_yaml = load_yaml('franka_manipulation_env', 'config/joint_limits_bimanual.yaml')
+    kinematics_yaml = load_yaml('franka_bimanual_config', 'config/kinematics_bimanual.yaml')
+    joint_limits_yaml = load_yaml('franka_bimanual_config', 'config/joint_limits_bimanual.yaml')
 
     # 4. Planning Pipelines (Needed for setPlannerId)
     ompl_base_yaml = load_yaml('franka_fr3_moveit_config', 'config/ompl_planning.yaml')
-    ompl_override_yaml = load_yaml('franka_manipulation_env', 'config/ompl_planning_bimanual_override.yaml')
+    ompl_override_yaml = load_yaml('franka_bimanual_config', 'config/ompl_planning_bimanual_override.yaml')
     ompl_combined = {}
     if ompl_base_yaml: ompl_combined.update(ompl_base_yaml)
     if ompl_override_yaml: ompl_combined.update(ompl_override_yaml)
@@ -68,6 +68,21 @@ def generate_launch_description():
         ]
     )
 
+    # JTC Bridge: enables RViz "Plan & Execute" by acting as a fake JTC
+    # and internally converting trajectories to Cartesian impedance setpoints
+    jtc_bridge_node = Node(
+        package="franka_bimanual_planner",
+        executable="jtc_bridge_node",
+        name="jtc_bridge",
+        output="screen",
+        parameters=[
+            robot_description,
+            robot_description_semantic,
+            kinematics_yaml,
+        ]
+    )
+
     return LaunchDescription([
-        bimanual_planner_node
+        bimanual_planner_node,
+        jtc_bridge_node,
     ])

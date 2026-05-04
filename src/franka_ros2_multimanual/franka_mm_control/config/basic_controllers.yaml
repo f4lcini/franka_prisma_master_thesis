@@ -281,6 +281,18 @@ franka1_arm_controller:
       - franka1_fr3_joint5
       - franka1_fr3_joint6
       - franka1_fr3_joint7
+    state_publish_rate: 100.0
+    action_monitor_rate: 20.0
+    constraints:
+      stopped_velocity_tolerance: 0.05
+      goal_time: 0.0
+      franka1_fr3_joint1: { trajectory: 0.05, goal: 0.02 }
+      franka1_fr3_joint2: { trajectory: 0.05, goal: 0.02 }
+      franka1_fr3_joint3: { trajectory: 0.05, goal: 0.02 }
+      franka1_fr3_joint4: { trajectory: 0.05, goal: 0.02 }
+      franka1_fr3_joint5: { trajectory: 0.05, goal: 0.02 }
+      franka1_fr3_joint6: { trajectory: 0.05, goal: 0.02 }
+      franka1_fr3_joint7: { trajectory: 0.05, goal: 0.02 }
 
 franka2_arm_controller:
   ros__parameters:

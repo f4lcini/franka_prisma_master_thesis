@@ -10,6 +10,15 @@ services:
 
     tty: true
     stdin_open: true
+    
+    # --- REAL-TIME REQUIREMENTS FOR LIBFRANKA ---
+    cap_add:
+      - SYS_NICE
+      - IPC_LOCK
+    ulimits:
+      rtprio: 99
+      memlock: -1
+    # --------------------------------
     # --------------------------------
     environment:
       - DISPLAY=${DISPLAY}

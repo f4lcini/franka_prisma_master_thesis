@@ -27,11 +27,11 @@ class SkillBehaviors:
         self._recipient_grasped = threading.Event()
 
         self.cb_groups = {
-            'home': rclpy.callback_groups.MutuallyExclusiveCallbackGroup(),
-            'pick': rclpy.callback_groups.MutuallyExclusiveCallbackGroup(),
-            'place': rclpy.callback_groups.MutuallyExclusiveCallbackGroup(),
-            'give': rclpy.callback_groups.MutuallyExclusiveCallbackGroup(),
-            'take': rclpy.callback_groups.MutuallyExclusiveCallbackGroup()
+            'home': rclpy.callback_groups.ReentrantCallbackGroup(),
+            'pick': rclpy.callback_groups.ReentrantCallbackGroup(),
+            'place': rclpy.callback_groups.ReentrantCallbackGroup(),
+            'give': rclpy.callback_groups.ReentrantCallbackGroup(),
+            'take': rclpy.callback_groups.ReentrantCallbackGroup()
         }
 
         self.home_server = ActionServer(
@@ -98,8 +98,8 @@ class SkillBehaviors:
         feedback.status = f"Planning ParallelMove (Joints) for {req_arm}"
         self.safe_publish_feedback(goal_handle, feedback)
 
-        # Call the unified ParallelMove action (Synchronous API)
-        success = self.robot_control_api.send_joint_goal(arm_group, ready_values, planner="ompl")
+        # Call MoveIt directly (Plans AND Executes via JTC)
+        success = self.robot_control_api.send_moveit_goal(arm_group, joint_target=ready_values, planner="PTP")
 
         result.success = success
         if success:
@@ -160,20 +160,20 @@ class SkillBehaviors:
         pre_grasp.pose.position.z = pre_grasp_z
         apply_top_down_orientation(pre_grasp.pose)
         
-        feedback.status = "Step 1/4: Moving to Pre-Grasp"
+        feedback.status = "Step 1/4: Moving to Pre-Grasp (MoveIt JTC)"
         self.safe_publish_feedback(goal_handle, feedback)
-        if not self.robot_control_api.send_pose_goal(arm_group, pre_grasp, tcp_frame, planner="PTP"):
+        if not self.robot_control_api.send_moveit_goal(arm_group, target_pose=pre_grasp, planner="PTP"):
             self.safe_abort(goal_handle)
             result.success = False
             return result
         time.sleep(0.5) # Settling time
             
         # 3. Descent (LIN)
-        feedback.status = f"Step 2/4: Vertical Descent to Z={grasp_z}"
+        feedback.status = f"Step 2/4: Vertical Descent to Z={grasp_z} (MoveIt LIN)"
         self.safe_publish_feedback(goal_handle, feedback)
         grasp_pose = copy.deepcopy(req.target_pose)
         grasp_pose.pose.position.z = grasp_z
-        if not self.robot_control_api.send_pose_goal(arm_group, grasp_pose, tcp_frame, planner="LIN"):
+        if not self.robot_control_api.send_moveit_goal(arm_group, target_pose=grasp_pose, planner="LIN"):
             self.safe_abort(goal_handle)
             return result
         time.sleep(0.5) # Final settle before grasp
@@ -191,9 +191,9 @@ class SkillBehaviors:
             return result
         
         # 5. Lift (LIN)
-        feedback.status = "Step 4/4: Vertical Lift (Pilz LIN)"
+        feedback.status = "Step 4/4: Vertical Lift (MoveIt LIN)"
         self.safe_publish_feedback(goal_handle, feedback)
-        if not self.robot_control_api.send_pose_goal(arm_group, pre_grasp, tcp_frame, planner="LIN"):
+        if not self.robot_control_api.send_moveit_goal(arm_group, target_pose=pre_grasp, planner="LIN"):
             self.safe_abort(goal_handle)
             return result
             
@@ -224,14 +224,14 @@ class SkillBehaviors:
         apply_top_down_orientation(pre_place.pose)
         
         # 1. Approach
-        if not self.robot_control_api.send_pose_goal(arm_group, pre_place, tcp_frame):
+        if not self.robot_control_api.send_moveit_goal(arm_group, target_pose=pre_place, planner="PTP"):
             self.safe_abort(goal_handle)
             return result
             
         # 2. Descent
         place_target = copy.deepcopy(req.place_pose)
         place_target.pose.position.z = final_place_z
-        if not self.robot_control_api.send_pose_goal(arm_group, place_target, tcp_frame, planner="LIN"):
+        if not self.robot_control_api.send_moveit_goal(arm_group, target_pose=place_target, planner="LIN"):
             self.safe_abort(goal_handle)
             return result
         time.sleep(0.5) # Settle before release
@@ -252,7 +252,7 @@ class SkillBehaviors:
             self._handover_ready_pub.publish(msg)
         
         # 4. Retreat
-        self.robot_control_api.send_pose_goal(arm_group, pre_place, tcp_frame, planner="LIN")
+        self.robot_control_api.send_moveit_goal(arm_group, target_pose=pre_place, planner="LIN")
              
         result.success = True
         self.safe_succeed(goal_handle)

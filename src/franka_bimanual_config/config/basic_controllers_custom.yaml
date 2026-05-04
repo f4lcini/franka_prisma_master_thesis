@@ -1,7 +1,7 @@
 controller_manager:
   ros__parameters:
     thread_priority: 98
-    update_rate: 1000  # Hz
+    update_rate: 1000  # Hz — must match libfranka's 1kHz loop to avoid velocity spikes
 
     position_reader:
       type: franka_mm_control/PositionReader
@@ -263,7 +263,7 @@ elbow_right:
 franka1_arm_controller:
   ros__parameters:
     command_interfaces:
-      - position 
+      - effort 
     state_interfaces:
       - position
       - velocity
@@ -275,24 +275,33 @@ franka1_arm_controller:
       - franka1_fr3_joint5
       - franka1_fr3_joint6
       - franka1_fr3_joint7
+    gains:
+      franka1_fr3_joint1: {p: 600.0, d: 30.0, i: 0.0}
+      franka1_fr3_joint2: {p: 600.0, d: 30.0, i: 0.0}
+      franka1_fr3_joint3: {p: 600.0, d: 30.0, i: 0.0}
+      franka1_fr3_joint4: {p: 600.0, d: 30.0, i: 0.0}
+      franka1_fr3_joint5: {p: 250.0, d: 10.0, i: 0.0}
+      franka1_fr3_joint6: {p: 150.0, d: 10.0, i: 0.0}
+      franka1_fr3_joint7: {p: 50.0,  d: 5.0,  i: 0.0}
     action_monitor_rate: 20.0
     allow_integration_in_goal_trajectories: true
+    open_loop_control: false
+    allow_nonzero_velocity_at_trajectory_start: true
     constraints:
-      goal_time: 30.0
-      stopped_velocity_tolerance: 0.2
-      trajectory:
-        franka1_fr3_joint1: {trajectory: 0.2, goal: 0.2}
-        franka1_fr3_joint2: {trajectory: 0.2, goal: 0.2}
-        franka1_fr3_joint3: {trajectory: 0.2, goal: 0.2}
-        franka1_fr3_joint4: {trajectory: 0.2, goal: 0.2}
-        franka1_fr3_joint5: {trajectory: 0.2, goal: 0.2}
-        franka1_fr3_joint6: {trajectory: 0.2, goal: 0.2}
-        franka1_fr3_joint7: {trajectory: 0.2, goal: 0.2}
+      goal_time: 0.0
+      stopped_velocity_tolerance: 0.05
+      franka1_fr3_joint1: {trajectory: 0.1, goal: 0.1}
+      franka1_fr3_joint2: {trajectory: 0.1, goal: 0.1}
+      franka1_fr3_joint3: {trajectory: 0.1, goal: 0.1}
+      franka1_fr3_joint4: {trajectory: 0.1, goal: 0.1}
+      franka1_fr3_joint5: {trajectory: 0.1, goal: 0.1}
+      franka1_fr3_joint6: {trajectory: 0.1, goal: 0.1}
+      franka1_fr3_joint7: {trajectory: 0.1, goal: 0.1}
 
 franka2_arm_controller:
   ros__parameters:
     command_interfaces:
-      - position 
+      - effort 
     state_interfaces:
       - position
       - velocity
@@ -304,17 +313,26 @@ franka2_arm_controller:
       - franka2_fr3_joint5
       - franka2_fr3_joint6
       - franka2_fr3_joint7
+    gains:
+      franka2_fr3_joint1: {p: 600.0, d: 30.0, i: 0.0}
+      franka2_fr3_joint2: {p: 600.0, d: 30.0, i: 0.0}
+      franka2_fr3_joint3: {p: 600.0, d: 30.0, i: 0.0}
+      franka2_fr3_joint4: {p: 600.0, d: 30.0, i: 0.0}
+      franka2_fr3_joint5: {p: 250.0, d: 10.0, i: 0.0}
+      franka2_fr3_joint6: {p: 150.0, d: 10.0, i: 0.0}
+      franka2_fr3_joint7: {p: 50.0,  d: 5.0,  i: 0.0}
     action_monitor_rate: 20.0
     allow_integration_in_goal_trajectories: true
+    open_loop_control: false
+    allow_nonzero_velocity_at_trajectory_start: true
     constraints:
-      goal_time: 30.0
-      stopped_velocity_tolerance: 0.2
-      trajectory:
-        franka2_fr3_joint1: {trajectory: 0.2, goal: 0.2}
-        franka2_fr3_joint2: {trajectory: 0.2, goal: 0.2}
-        franka2_fr3_joint3: {trajectory: 0.2, goal: 0.2}
-        franka2_fr3_joint4: {trajectory: 0.2, goal: 0.2}
-        franka2_fr3_joint5: {trajectory: 0.2, goal: 0.2}
-        franka2_fr3_joint6: {trajectory: 0.2, goal: 0.2}
-        franka2_fr3_joint7: {trajectory: 0.2, goal: 0.2}
+      goal_time: 0.0
+      stopped_velocity_tolerance: 0.05
+      franka2_fr3_joint1: {trajectory: 0.1, goal: 0.1}
+      franka2_fr3_joint2: {trajectory: 0.1, goal: 0.1}
+      franka2_fr3_joint3: {trajectory: 0.1, goal: 0.1}
+      franka2_fr3_joint4: {trajectory: 0.1, goal: 0.1}
+      franka2_fr3_joint5: {trajectory: 0.1, goal: 0.1}
+      franka2_fr3_joint6: {trajectory: 0.1, goal: 0.1}
+      franka2_fr3_joint7: {trajectory: 0.1, goal: 0.1}
 

@@ -105,7 +105,6 @@ def robot_description_dependent_nodes_spawner(
     # Planning adapters for smoothing (Ruckig provides C2 continuity, preventing acceleration reflexes)
     adapters = [
         'default_planner_request_adapters/AddTimeOptimalParameterization',
-        'default_planner_request_adapters/AddRuckigTrajectorySmoothing',
         'default_planner_request_adapters/ResolveConstraintFrames',
         'default_planner_request_adapters/FixWorkspaceBounds',
         'default_planner_request_adapters/FixStartStateBounds',
@@ -252,14 +251,44 @@ def generate_launch_description():
         output='screen'
     )
 
-    load_franka1_controller = Node(
+    load_position_reader = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['position_reader', '--controller-manager', '/controller_manager'],
+        output='screen'
+    )
+
+    load_pose_reader = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['pose_reader', '--controller-manager', '/controller_manager'],
+        output='screen'
+    )
+
+    # Cartesian Impedance Controllers (for smooth streaming execution)
+    load_cartesian_impedance_left = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['cartesian_impedance_left', '--controller-manager', '/controller_manager', '--stopped'],
+        output='screen'
+    )
+
+    load_cartesian_impedance_right = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['cartesian_impedance_right', '--controller-manager', '/controller_manager', '--stopped'],
+        output='screen'
+    )
+
+    # JTC Controllers (for MoveIt execution)
+    load_franka1_arm_controller = Node(
         package='controller_manager',
         executable='spawner',
         arguments=['franka1_arm_controller', '--controller-manager', '/controller_manager'],
         output='screen'
     )
 
-    load_franka2_controller = Node(
+    load_franka2_arm_controller = Node(
         package='controller_manager',
         executable='spawner',
         arguments=['franka2_arm_controller', '--controller-manager', '/controller_manager'],
@@ -279,21 +308,33 @@ def generate_launch_description():
             name='joint_state_publisher',
             parameters=[{
                 'source_list': ["/joint_states", "/franka1_gripper/joint_states", "/franka2_gripper/joint_states"],
-                'rate': 1000.0,
+                'rate': 100.0,
                 'use_robot_description': False,
             }],
             output='screen',
         ),
 
-        # Sequence controllers
+        # Sequence controllers: JSB → readers → JTC arm controllers
         TimerAction(period=1.0, actions=[load_jsb]),
 
         RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=load_jsb,
                 on_exit=[
-                    load_franka1_controller, 
-                    load_franka2_controller
+                    load_position_reader,
+                    load_pose_reader,
+                ],
+            )
+        ),
+
+        RegisterEventHandler(
+            event_handler=OnProcessExit(
+                target_action=load_position_reader,
+                on_exit=[
+                    load_franka1_arm_controller,
+                    load_franka2_arm_controller,
+                    load_cartesian_impedance_left,
+                    load_cartesian_impedance_right,
                 ],
             )
         ),

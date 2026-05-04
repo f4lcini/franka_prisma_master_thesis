@@ -13,6 +13,7 @@ find_package(moveit_ros_planning_interface REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(shape_msgs REQUIRED)
 find_package(control_msgs REQUIRED)
+find_package(trajectory_msgs REQUIRED)
 find_package(franka_custom_interfaces REQUIRED)
 
 # Add executable
@@ -27,6 +28,7 @@ ament_target_dependencies(bimanual_planner_node
   geometry_msgs
   shape_msgs
   control_msgs
+  trajectory_msgs
   franka_custom_interfaces
 )
 
@@ -38,4 +40,3 @@ install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME})
 
 ament_package()
-

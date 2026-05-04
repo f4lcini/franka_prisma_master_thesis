@@ -7,7 +7,7 @@ import py_trees
 import py_trees_ros
 
 # Add path for behaviors
-workspace_path = "/home/falco_robotics/vf_projects_portfolio/mm_ws/src"
+workspace_path = "/home/hargalaten/Documents/vfalcini/franka_prisma_master_thesis/src"
 # Map /mm_ws if in docker
 if os.path.exists("/mm_ws/src"):
     workspace_path = "/mm_ws/src"
