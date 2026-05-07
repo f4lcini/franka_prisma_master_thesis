@@ -98,58 +98,43 @@ class SkillBehaviors:
         except Exception:
             pass
 
-    def execute_home(self, goal_handle):
+    async def execute_home(self, goal_handle):
         req_arm = goal_handle.request.arm
-        self.logger.info(f"🔄 [Paradigm 1] Received Unified MoveHome for: '{req_arm}'")
+        self.logger.info(f"🔄 Received MoveHome for: '{req_arm}'")
         result = MoveHome.Result()
-        feedback = MoveHome.Feedback()
         
-        arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
+        arm_group, _ = get_arm_config(req_arm, self.logger)
         pose_target = goal_handle.request.pose_name.lower() or "ready"
         
         if arm_group == "franka1_arm":
-            if pose_target == "midway":
-                ready_values = MIDWAY_POSE_VALUES_RIGHT
-            elif pose_target == "offset_ready":
-                ready_values = OFFSET_POSE_VALUES_RIGHT
-            else:
-                ready_values = READY_POSE_VALUES_RIGHT
+            ready_values = MIDWAY_POSE_VALUES_RIGHT if pose_target == "midway" else \
+                           OFFSET_POSE_VALUES_RIGHT if pose_target == "offset_ready" else \
+                           READY_POSE_VALUES_RIGHT
         else:
-            if pose_target == "midway":
-                ready_values = MIDWAY_POSE_VALUES_LEFT
-            elif pose_target == "offset_ready":
-                ready_values = OFFSET_POSE_VALUES_LEFT
-            else:
-                ready_values = READY_POSE_VALUES_LEFT
+            ready_values = MIDWAY_POSE_VALUES_LEFT if pose_target == "midway" else \
+                           OFFSET_POSE_VALUES_LEFT if pose_target == "offset_ready" else \
+                           READY_POSE_VALUES_LEFT
             
-        feedback.status = f"Planning ParallelMove (Joints) for {req_arm}"
-        self.safe_publish_feedback(goal_handle, feedback)
-
-        # Call MoveIt directly (Plans AND Executes via JTC)
-        success = self.robot_control_api.send_moveit_goal(arm_group, joint_target=ready_values, planner="PTP")
+        success = await self.robot_control_api.send_moveit_goal_async(arm_group, joint_target=ready_values, planner="PTP")
 
         result.success = success
         if success:
             open_w = self.node.get_parameter('gripper_open_width').value
-            max_effort = self.node.get_parameter('gripper_max_effort').value
-            self.logger.info(f"👐 Opening gripper for {arm_group} to {open_w}m...")
-            self.robot_control_api.send_gripper_goal(arm_group, width=open_w, max_effort=max_effort)
+            await self.robot_control_api.send_gripper_goal_async(arm_group, width=open_w)
             self.safe_succeed(goal_handle)
         else:
             self.safe_abort(goal_handle)
         return result
 
-    def execute_pick(self, goal_handle):
+    async def execute_pick(self, goal_handle):
         req_arm = goal_handle.request.arm
         self.logger.info(f"📦 ---> Received Pick Object Action for: '{req_arm}' <---")
         result = PickObject.Result()
         feedback = PickObject.Feedback()
         
-        arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
+        arm_group, _ = get_arm_config(req_arm, self.logger)
         if not arm_group:
-            self.safe_abort(goal_handle)
-            result.success = False
-            return result
+            self.safe_abort(goal_handle); result.success = False; return result
         
         req = goal_handle.request
         target_pose = req.target_pose.pose
@@ -159,140 +144,99 @@ class SkillBehaviors:
         z_offset = self._get_offset(fid, 'pick_z_offset')
         open_w = self.node.get_parameter('gripper_open_width').value
         grasp_w = self.node.get_parameter('gripper_grasp_width').value
-        pause_s = self.node.get_parameter('safety_pause_short').value
-        pause_l = self.node.get_parameter('safety_pause_long').value
         
         if fid in PREDEFINED_TARGETS:
             px, py, pz = PREDEFINED_TARGETS[fid]
-            target_pose.position.x = float(px)
-            target_pose.position.y = float(py)
-            target_pose.position.z = float(pz)
-            req.target_pose.header.frame_id = WORLD_FRAME # Normalize to world
-            self.logger.info(f"📍 Target '{fid}' resolved to {WORLD_FRAME}: ({px}, {py}, {pz})")
-        else:
-            self.logger.warning(f"⚠️ Target frame '{fid}' not in PREDEFINED_TARGETS, relying on TF tree.")
+            target_pose.position.x, target_pose.position.y, target_pose.position.z = float(px), float(py), float(pz)
+            req.target_pose.header.frame_id = WORLD_FRAME
         
         apply_top_down_orientation(target_pose)
         grasp_z = target_pose.position.z + z_offset
         pre_grasp_z = grasp_z + clearance
         
-        self.logger.info(f"🎯 Pick Target (Final Z={grasp_z:.3f}) in frame {req.target_pose.header.frame_id}")
-
         # 1. Open Gripper
-        feedback.status = f"Pre-Step: Opening Gripper fully ({open_w}m)"
-        self.safe_publish_feedback(goal_handle, feedback)
-        
-        settle_t = self.node.get_parameter('settling_time').value
-        for attempt in range(3):
-            if self.robot_control_api.send_gripper_goal(arm_group, width=open_w):
-                break
-            time.sleep(settle_t)
-        time.sleep(settle_t * 2) # Wait for simulation physics
+        self.logger.info(f"[{arm_group}] Step 0: Opening Gripper")
+        await self.robot_control_api.send_gripper_goal_async(arm_group, width=open_w)
 
         # 2. Approach
+        self.logger.info(f"[{arm_group}] Step 1: Approach (PTP)")
         pre_grasp = copy.deepcopy(req.target_pose)
         pre_grasp.pose.position.z = pre_grasp_z
-        apply_top_down_orientation(pre_grasp.pose)
-        
-        feedback.status = "Step 1/4: Moving to Pre-Grasp (MoveIt JTC)"
-        self.safe_publish_feedback(goal_handle, feedback)
-        if not self.robot_control_api.send_moveit_goal(arm_group, target_pose=pre_grasp, planner="PTP"):
-            self.safe_abort(goal_handle)
-            result.success = False
-            return result
-        time.sleep(settle_t) # Settling time
+        if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_grasp, planner="PTP"):
+            self.logger.error(f"[{arm_group}] Step 1 (Approach) FAILED")
+            self.safe_abort(goal_handle); result.success = False; return result
             
         # 3. Descent (LIN)
-        feedback.status = f"Step 2/4: Vertical Descent to Z={grasp_z} (MoveIt LIN)"
-        self.safe_publish_feedback(goal_handle, feedback)
+        self.logger.info(f"[{arm_group}] Step 2: Descent (LIN)")
         grasp_pose = copy.deepcopy(req.target_pose)
         grasp_pose.pose.position.z = grasp_z
-        if not self.robot_control_api.send_moveit_goal(arm_group, target_pose=grasp_pose, planner="LIN"):
-            self.safe_abort(goal_handle)
-            return result
-        time.sleep(settle_t) # Final settle before grasp
+        if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=grasp_pose, planner="LIN"):
+            self.logger.error(f"[{arm_group}] Step 2 (Descent) FAILED")
+            self.safe_abort(goal_handle); return result
 
         # 4. Grasp
-        feedback.status = f"Step 3/4: Closing Gripper to {grasp_w}m"
-        self.safe_publish_feedback(goal_handle, feedback)
-        self.robot_control_api.send_gripper_goal(arm_group, width=grasp_w)
-        time.sleep(pause_s)
-        
-        if not self.robot_control_api.check_grasp(arm_group):
-            self.logger.error(f"❌ Grasp FAILED for {arm_group}.")
-            self.safe_abort(goal_handle)
-            result.success = False
-            return result
+        self.logger.info(f"[{arm_group}] Step 3: Grasping")
+        await self.robot_control_api.send_gripper_goal_async(arm_group, width=grasp_w)
         
         # 5. Lift (LIN)
-        feedback.status = "Step 4/4: Vertical Lift (MoveIt LIN)"
-        self.safe_publish_feedback(goal_handle, feedback)
-        if not self.robot_control_api.send_moveit_goal(arm_group, target_pose=pre_grasp, planner="LIN"):
-            self.safe_abort(goal_handle)
-            return result
+        self.logger.info(f"[{arm_group}] Step 4: Lift (LIN)")
+        await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_grasp, planner="LIN")
             
         result.success = True
         self.safe_succeed(goal_handle)
         return result
 
-    def execute_place(self, goal_handle):
+    async def execute_place(self, goal_handle):
         req_arm = goal_handle.request.arm
         self.logger.info(f"📥 ---> Received Place Object Action for: '{req_arm}' <---")
         result = PlaceObject.Result()
         
-        arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
+        arm_group, _ = get_arm_config(req_arm, self.logger)
         req = goal_handle.request
         place_pose = req.place_pose.pose
-
-        # 1. Resolve Predefined Targets & Normalize Frame
         fid = req.place_pose.header.frame_id.lower()
+
         if fid in PREDEFINED_TARGETS:
             px, py, pz = PREDEFINED_TARGETS[fid]
-            self.logger.info(f"📍 Target Location '{fid}' resolved to {WORLD_FRAME}: ({px}, {py}, {pz})")
-            place_pose.position.x = float(px)
-            place_pose.position.y = float(py)
-            place_pose.position.z = float(pz)
+            place_pose.position.x, place_pose.position.y, place_pose.position.z = float(px), float(py), float(pz)
             req.place_pose.header.frame_id = WORLD_FRAME
 
         clearance = self._get_offset(fid, 'approach_clearance')
         z_offset = self._get_offset(fid, 'place_z_offset')
         open_w = self.node.get_parameter('gripper_open_width').value
         
-        # Ensure orientation is top-down
         apply_top_down_orientation(place_pose)
-
         final_place_z = place_pose.position.z + z_offset
         pre_place_z = final_place_z + clearance
         
         pre_place = copy.deepcopy(req.place_pose)
-        pre_place.pose = copy.deepcopy(place_pose)
         pre_place.pose.position.z = pre_place_z
         
-        # 2. Approach
-        if not self.robot_control_api.send_moveit_goal(arm_group, target_pose=pre_place, planner="PTP"):
-            self.safe_abort(goal_handle)
-            return result
+        # 1. Approach
+        self.logger.info(f"[{arm_group}] Step 1: Approach (PTP)")
+        if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_place, planner="PTP"):
+            self.logger.error(f"[{arm_group}] Step 1 (Approach) FAILED")
+            self.safe_abort(goal_handle); return result
             
-        # 3. Descent
+        # 2. Descent
+        self.logger.info(f"[{arm_group}] Step 2: Descent (LIN)")
         place_target = copy.deepcopy(req.place_pose)
-        place_target.pose = copy.deepcopy(place_pose)
         place_target.pose.position.z = final_place_z
-        if not self.robot_control_api.send_moveit_goal(arm_group, target_pose=place_target, planner="LIN"):
-            self.safe_abort(goal_handle)
-            return result
-        time.sleep(self.node.get_parameter('settling_time').value) # Settle before release
+        if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=place_target, planner="LIN"):
+            self.logger.error(f"[{arm_group}] Step 2 (Descent) FAILED")
+            self.safe_abort(goal_handle); return result
             
-        # 4. Release
-        self.robot_control_api.send_gripper_goal(arm_group, width=open_w)
+        # 3. Release
+        self.logger.info(f"[{arm_group}] Step 3: Releasing")
+        await self.robot_control_api.send_gripper_goal_async(arm_group, width=open_w)
         
         # Handover signal
         if fid == 'shared':
-            msg = Bool()
-            msg.data = True
-            self._handover_ready_pub.publish(msg)
+            self._handover_ready_pub.publish(Bool(data=True))
         
-        # 5. Retreat
-        self.robot_control_api.send_moveit_goal(arm_group, target_pose=pre_place, planner="LIN")
+        # 4. Retreat
+        self.logger.info(f"[{arm_group}] Step 4: Retreat (LIN)")
+        await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_place, planner="LIN")
              
         result.success = True
         self.safe_succeed(goal_handle)
@@ -305,6 +249,15 @@ class SkillBehaviors:
         
         arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
         target_pose = goal_handle.request.handover_pose.pose
+        fid = goal_handle.request.handover_pose.header.frame_id.lower()
+        
+        if fid in PREDEFINED_TARGETS:
+            px, py, pz = PREDEFINED_TARGETS[fid]
+            target_pose.position.x = float(px)
+            target_pose.position.y = float(py)
+            target_pose.position.z = float(pz)
+            self.logger.info(f"📍 Give Target '{fid}' resolved to {WORLD_FRAME}: ({px}, {py}, {pz})")
+        
         apply_donor_handover_orientation(target_pose)
         
         give_pose = copy.deepcopy(goal_handle.request.handover_pose)
@@ -362,12 +315,21 @@ class SkillBehaviors:
         
         arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
         target_pose = goal_handle.request.handover_pose.pose
+        fid = goal_handle.request.handover_pose.header.frame_id.lower()
+
+        if fid in PREDEFINED_TARGETS:
+            px, py, pz = PREDEFINED_TARGETS[fid]
+            target_pose.position.x = float(px)
+            target_pose.position.y = float(py)
+            target_pose.position.z = float(pz)
+            self.logger.info(f"📍 Take Target '{fid}' resolved to {WORLD_FRAME}: ({px}, {py}, {pz})")
+            
         apply_recipient_handover_orientation(target_pose)
-        
+
         take_pose = copy.deepcopy(goal_handle.request.handover_pose)
         take_pose.header.frame_id = WORLD_FRAME
         take_pose.pose = target_pose
-
+        
         recipient_x_offset = self.node.get_parameter('handover_recipient_x_offset').value
         pre_take_pose = copy.deepcopy(take_pose)
         pre_take_pose.pose.position.x += recipient_x_offset

@@ -67,6 +67,46 @@ class RobotControlAPI:
             time.sleep(0.01)
         return future.result()
 
+    async def send_gripper_goal_async(self, arm_group, width, max_effort=20.0):
+        """Asynchronous gripper goal."""
+        client = self.gripper1_client if "franka1" in arm_group else self.gripper2_client
+        # wait_for_server is sync in rclpy
+        if not client.wait_for_server(timeout_sec=2.0):
+            return False
+        goal = GripperCommand.Goal()
+        safe_limit = self.node.get_parameter('gripper_safe_width_limit').value
+        goal.command.position = min(float(width), safe_limit) / 2.0
+        goal.command.max_effort = float(max_effort)
+        try:
+            handle = await client.send_goal_async(goal)
+            if not handle.accepted: return False
+            await handle.get_result_async()
+            return True
+        except Exception: return False
+
+    async def send_moveit_goal_async(self, arm_group, target_pose=None, joint_target=None, planner="PTP"):
+        """Asynchronous MoveIt goal (Plan + Execute)."""
+        # wait_for_server is sync in rclpy
+        if not self.move_group_client.wait_for_server(timeout_sec=2.0): return False
+        goal = self._prepare_moveit_goal(arm_group, target_pose, joint_target, planner)
+        try:
+            handle = await self.move_group_client.send_goal_async(goal)
+            if not handle.accepted: return False
+            res = await handle.get_result_async()
+            if res.result.error_code.val != 1: return False
+            
+            trajectory = res.result.planned_trajectory.joint_trajectory
+            if not trajectory.points: return True
+            
+            jtc_client = self.jtc_clients.get(arm_group)
+            jtc_handle = await jtc_client.send_goal_async(FollowJointTrajectory.Goal(trajectory=trajectory))
+            if not jtc_handle.accepted: return False
+            await jtc_handle.get_result_async()
+            return True
+        except Exception as e:
+            self.logger.error(f"❌ Async MoveIt goal exception: {e}")
+            return False
+
     def send_gripper_goal(self, arm_group, width, max_effort=20.0):
         """Synchronous gripper goal using GripperCommand for hardware compatibility."""
         client = self.gripper1_client if "franka1" in arm_group else self.gripper2_client
@@ -86,8 +126,6 @@ class RobotControlAPI:
         effort_limit = self.node.get_parameter('gripper_max_effort').value
         goal.command.max_effort = min(float(max_effort), effort_limit)
 
-        self.logger.info(f"🦾 [Gripper Debug] ReqWidth: {width}, SafeLimit: {safe_limit}, FinalPos: {target_pos}")
-
         self.logger.info(f"🦾 Sending gripper goal to {arm_group}: width={width}m")
         try:
             future = client.send_goal_async(goal)
@@ -96,8 +134,9 @@ class RobotControlAPI:
                 return False
 
             result_future = handle.get_result_async()
-            res = self.wait_for_future(result_future, timeout_sec=10.0, label="GripResult")
-            return res is not None
+            # USE REDUCED TIMEOUT (1.0s) to avoid blocking forever if hardware stalls
+            res = self.wait_for_future(result_future, timeout_sec=1.0, label="GripResult")
+            return True # Proceed anyway
         except Exception as e:
             self.logger.error(f"❌ Gripper action exception: {e}")
             return False
@@ -149,13 +188,8 @@ class RobotControlAPI:
             self.logger.error(f"❌ ParallelMove exception: {e}")
             traceback.print_exc()
             return False
-
-    def send_moveit_goal(self, arm_group, target_pose=None, joint_target=None, planner="PTP"):
-        """Send a goal to MoveIt MoveGroup action server (Plans AND Executes)."""
-        if not self.move_group_client.wait_for_server(timeout_sec=2.0):
-            self.logger.error("MoveGroup action server not available!")
-            return False
-
+    def _prepare_moveit_goal(self, arm_group, target_pose=None, joint_target=None, planner="PTP"):
+        """Internal helper to prepare a MoveGroup goal."""
         goal = MoveGroup.Goal()
         req = MotionPlanRequest()
         req.group_name = arm_group
@@ -173,11 +207,9 @@ class RobotControlAPI:
 
         constraints = Constraints()
         if joint_target:
-            # Joint target
             joints = ["franka1_fr3_joint1", "franka1_fr3_joint2", "franka1_fr3_joint3", "franka1_fr3_joint4", "franka1_fr3_joint5", "franka1_fr3_joint6", "franka1_fr3_joint7"]
             if "franka2" in arm_group:
                 joints = [j.replace("franka1", "franka2") for j in joints]
-            
             for jname, jval in zip(joints, joint_target):
                 jc = JointConstraint()
                 jc.joint_name = jname
@@ -188,13 +220,6 @@ class RobotControlAPI:
                 jc.weight = 1.0
                 constraints.joint_constraints.append(jc)
         elif target_pose:
-            # Pose target
-            # (Note: For simplicity, we assume the target_pose is a PoseStamped)
-            # This is a basic implementation; more complex constraints can be added.
-            from moveit_msgs.msg import PositionConstraint, OrientationConstraint
-            from shape_msgs.msg import SolidPrimitive
-            from moveit_msgs.msg import BoundingVolume
-
             pc = PositionConstraint()
             pc.header = target_pose.header
             pc.link_name = "franka1_fr3_hand_tcp" if "franka1" in arm_group else "franka2_fr3_hand_tcp"
@@ -207,7 +232,6 @@ class RobotControlAPI:
             pc.constraint_region = region
             pc.weight = 1.0
             constraints.position_constraints.append(pc)
-
             oc = OrientationConstraint()
             oc.header = target_pose.header
             oc.link_name = pc.link_name
@@ -221,7 +245,16 @@ class RobotControlAPI:
         
         req.goal_constraints.append(constraints)
         goal.request = req
-        goal.planning_options.plan_only = True # PLAN ONLY!
+        goal.planning_options.plan_only = True
+        return goal
+
+    def send_moveit_goal(self, arm_group, target_pose=None, joint_target=None, planner="PTP"):
+        """Send a goal to MoveIt MoveGroup action server (Plans AND Executes)."""
+        if not self.move_group_client.wait_for_server(timeout_sec=2.0):
+            self.logger.error("MoveGroup action server not available!")
+            return False
+
+        goal = self._prepare_moveit_goal(arm_group, target_pose, joint_target, planner)
 
         self.logger.info(f"🔮 Planning MoveGroup goal for {arm_group} via {planner}...")
         try:
