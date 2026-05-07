@@ -13,7 +13,7 @@ tmux new-session -d -s $SESSION -n "Main" -c "$WS_DIR"
 
 # --- 1. HARDWARE & MOVEIT (Top Left) ---
 tmux send-keys -t $SESSION "source /opt/ros/humble/setup.bash && source install/setup.bash" C-m
-tmux send-keys -t $SESSION "ros2 launch franka_bimanual_config lab_bringup_final.launch.py left_ip:=$LEFT_IP right_ip:=$RIGHT_IP" C-m
+tmux send-keys -t $SESSION "ros2 launch franka_bimanual_config lab_bringup_final.launch.py left_ip:=192.168.9.11 right_ip:=192.168.9.12" C-m
 
 # --- 2. CAMERA (Top Right) ---
 tmux split-window -h -t $SESSION -c "$WS_DIR"

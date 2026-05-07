@@ -77,10 +77,16 @@ class RobotControlAPI:
 
         goal = GripperCommand.Goal()
         # Franka gripper action expects per-finger position (width / 2)
-        # Added safety margin (0.075 max) to avoid out-of-range errors on hardware
-        safe_width = min(float(width), 0.075)
-        goal.command.position = safe_width / 2.0
-        goal.command.max_effort = float(max_effort)
+        # Using safety limit from config
+        safe_limit = self.node.get_parameter('gripper_safe_width_limit').value
+        safe_width = min(float(width), safe_limit)
+        target_pos = safe_width / 2.0
+        goal.command.position = target_pos
+        
+        effort_limit = self.node.get_parameter('gripper_max_effort').value
+        goal.command.max_effort = min(float(max_effort), effort_limit)
+
+        self.logger.info(f"🦾 [Gripper Debug] ReqWidth: {width}, SafeLimit: {safe_limit}, FinalPos: {target_pos}")
 
         self.logger.info(f"🦾 Sending gripper goal to {arm_group}: width={width}m")
         try:
@@ -153,10 +159,10 @@ class RobotControlAPI:
         goal = MoveGroup.Goal()
         req = MotionPlanRequest()
         req.group_name = arm_group
-        req.num_planning_attempts = 5
-        req.allowed_planning_time = 10.0
-        req.max_velocity_scaling_factor = 0.3
-        req.max_acceleration_scaling_factor = 0.2
+        req.num_planning_attempts = self.node.get_parameter('planning_attempts').value
+        req.allowed_planning_time = self.node.get_parameter('planning_time').value
+        req.max_velocity_scaling_factor = self.node.get_parameter('velocity_scaling').value
+        req.max_acceleration_scaling_factor = self.node.get_parameter('acceleration_scaling').value
 
         if planner in ["PTP", "LIN", "CIRC"]:
             req.pipeline_id = "pilz_industrial_motion_planner"
@@ -176,8 +182,9 @@ class RobotControlAPI:
                 jc = JointConstraint()
                 jc.joint_name = jname
                 jc.position = float(jval)
-                jc.tolerance_above = 0.01
-                jc.tolerance_below = 0.01
+                tol = self.node.get_parameter('joint_tolerance').value
+                jc.tolerance_above = tol
+                jc.tolerance_below = tol
                 jc.weight = 1.0
                 constraints.joint_constraints.append(jc)
         elif target_pose:
@@ -194,7 +201,7 @@ class RobotControlAPI:
             region = BoundingVolume()
             sp = SolidPrimitive()
             sp.type = SolidPrimitive.SPHERE
-            sp.dimensions = [0.01]
+            sp.dimensions = [self.node.get_parameter('position_tolerance').value]
             region.primitives.append(sp)
             region.primitive_poses.append(target_pose.pose)
             pc.constraint_region = region
@@ -205,9 +212,10 @@ class RobotControlAPI:
             oc.header = target_pose.header
             oc.link_name = pc.link_name
             oc.orientation = target_pose.pose.orientation
-            oc.absolute_x_axis_tolerance = 0.05
-            oc.absolute_y_axis_tolerance = 0.05
-            oc.absolute_z_axis_tolerance = 0.05
+            tol = self.node.get_parameter('orientation_tolerance').value
+            oc.absolute_x_axis_tolerance = tol
+            oc.absolute_y_axis_tolerance = tol
+            oc.absolute_z_axis_tolerance = tol
             oc.weight = 1.0
             constraints.orientation_constraints.append(oc)
         

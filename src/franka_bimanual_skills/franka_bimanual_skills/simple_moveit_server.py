@@ -22,15 +22,15 @@ class SimpleMoveItServer(Node):
         self.get_logger().info(" Python Action Servers Starting (Strategic CBG)... ")
         self.get_logger().info("==============================================")
 
+        # --- PICK & PLACE PARAMETERS ---
+        for param_name, default_val in DEFAULT_OFFSETS.items():
+            self.declare_parameter(param_name, default_val)
+
         # Initialize Robot Control API for mechanical API
         self.robot_control_api = RobotControlAPI(self, self._client_cb_group)
         
         # Initialize Skill Behaviors linking mechanical components to semantics
         self.skill_behaviors = SkillBehaviors(self, self.robot_control_api, self._server_cb_group)
-
-        # --- PICK & PLACE PARAMETERS ---
-        for param_name, default_val in DEFAULT_OFFSETS.items():
-            self.declare_parameter(param_name, default_val)
 
 
 def main(args=None):

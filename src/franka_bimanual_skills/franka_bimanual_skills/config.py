@@ -1,3 +1,21 @@
+import os
+
+# --- WORKSPACE CONFIGURATION ---
+# Automatic discovery of workspace root
+try:
+    # Assuming config.py is in src/franka_bimanual_skills/franka_bimanual_skills/
+    _current_dir = os.path.dirname(os.path.abspath(__file__))
+    WORKSPACE_ROOT = os.path.abspath(os.path.join(_current_dir, "../../../"))
+    SRC_PATH = os.path.join(WORKSPACE_ROOT, "src")
+    
+    # Docker/Container override
+    if os.path.exists("/mm_ws/src"):
+        WORKSPACE_ROOT = "/mm_ws"
+        SRC_PATH = "/mm_ws/src"
+except Exception:
+    WORKSPACE_ROOT = "/home/hargalaten/Documents/vfalcini/franka_prisma_master_thesis"
+    SRC_PATH = os.path.join(WORKSPACE_ROOT, "src")
+
 MOVEIT_ERROR_CODES = {
     1: "SUCCESS",
     99999: "FAILURE",
@@ -23,40 +41,75 @@ MOVEIT_ERROR_CODES = {
     -31: "NO_IK_SOLUTION"
 }
 
-# --- LAB CALIBRATED TARGETS (PRESERVED) ---
+# --- DEFINITIVE REFERENCE SYSTEM (Table Top Center = 0,0,0) ---
+# Values from robot_poses.yaml. Z=0 is the table surface.
+TABLE_CONFIG = {
+    "center": (0.0, 0.0, 0.0), 
+    "size": (1.215, 0.6, 0.04),
+    "height_from_floor": 0.73
+}
+
+ROBOT_BASES = {
+    "franka1": {"x": 0.4375, "y": 0.205, "z": 0.06, "yaw": 3.14159265359}, # Right Arm
+    "franka2": {"x": -0.4175, "y": 0.205, "z": 0.06, "yaw": 0.0}            # Left Arm
+}
+
+# --- TARGETS IN TABLE REFERENCE FRAME (Z=0 is surface) ---
+# Table margins: X [-0.6, 0.6], Y [-0.3, 0.3]
 PREDEFINED_TARGETS = {
-    "base_pose": (0.4, 0.3, 0.225),
-    "shared":    (0.4, 0.0, 0.250),
-    "box":       (0.4, -0.3, 0.140),   # Box location for place
-    "mid_air":   (0.4, 0.0, 0.6)    
+    "shared":        (0.0, 0.0, 0.0),      # Shared zone (at table level)
+    "box":           (-0.4, -0.25, 0.0),   # In front of Left Arm (Franka2), at table level
+    "target_object": (0.4, -0.25, 0.0),    # In front of Right Arm (Franka1), at table level
+    "mid_air":       (0.0, 0.0, 0.4)       # Safe transition point
 }
 
 # NOTE: There is a ~15cm projection offset between the robot flange (link hand) 
 # and the TCP (link tcp) when the robot is rotated for handover. 
 # MoveIt targets the TCP. 
 
-# Actual positions extracted from bimanual_custom.world for tracking discrepancies
-GAZEBO_WORLD_POSES = {
-    "red_cube": (1.1, 0.2, 0.225), 
-    "open_box": (0.1, 0.1, 0.23)   
-}
-
-# --- LAB CALIBRATED OFFSETS (PRESERVED) ---
+# --- LAB CALIBRATED OFFSETS & PARAMETERS ---
 DEFAULT_OFFSETS = {
-    'approach_clearance': 0.1,
-    'pick_z_offset': 0.105,
-    'place_z_offset': 0.140,
-    'gripper_open_width': 0.08,
-    'gripper_grasp_width': 0.048,
+    # --- Skill Offsets ---
+    'approach_clearance': 0.10,
+    'pick_z_offset': 0.13,
+    'place_z_offset': 0.13,
     'safety_pause_short': 0.2,   
     'safety_pause_long': 0.5,
+    'settling_time': 0.5,                # Generic settling time for LIN/PTP
+    
+    # --- Gripper Parameters ---
+    'gripper_open_width': 0.075,
+    'gripper_grasp_width': 0.028,
+    'gripper_max_effort': 50.0,
+    'gripper_safe_width_limit': 0.075,   # Hardware safety limit for FR3
+    
+    # --- Handover Offsets ---
     'handover_safety_offset': 0.25,
-    'handover_donor_z_offset': 0.08,     # donor approaches from above (along Z)
-    'handover_recipient_x_offset': -0.30, # Increased clearance to avoid finger collision during PTP
-    'handover_timeout_sec': 120.0        # rendezvous timeout
+    'handover_donor_z_offset': 0.08,     
+    'handover_donor_x_offset': 0.15,     # Pre-positioning X offset for donor
+    'handover_recipient_x_offset': -0.30, 
+    'handover_timeout_sec': 120.0,
+    
+    # --- MoveIt / Planning Parameters ---
+    'planning_attempts': 5,
+    'planning_time': 10.0,
+    'velocity_scaling': 0.3,
+    'acceleration_scaling': 0.1,
+    'joint_tolerance': 0.01,
+    'position_tolerance': 0.01,
+    'orientation_tolerance': 0.05
 }
 
-# --- NEW: SPLIT READY POSES (FROM MAIN) ---
+# --- TARGET-SPECIFIC OVERRIDES ---
+# Use these to tune approach/offsets for specific objects or locations
+TARGET_OFFSETS = {
+    "box": {
+        "place_z_offset": 0.20,      # Higher release for the box
+        "approach_clearance": 0.1   # More vertical clearance for the box
+    }
+}
+
+# --- SPLIT READY POSES (Joint Configurations) ---
 READY_POSE_VALUES_RIGHT = [1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
 READY_POSE_VALUES_LEFT  = [-1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
 
@@ -71,7 +124,7 @@ OFFSET_POSE_VALUES_LEFT  = [-1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.2, 0.785
 # Compatibility for old code
 READY_POSE_VALUES = [0.0, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
 
-WORLD_FRAME = "world"
+WORLD_FRAME = "table"
 
 def parse_error_code(code_val):
     return MOVEIT_ERROR_CODES.get(code_val, f"UNKNOWN_ERROR_CODE_{code_val}")
@@ -106,3 +159,4 @@ def apply_top_down_orientation(pose):
     pose.orientation.y = 0.0
     pose.orientation.z = 0.0
     pose.orientation.w = 0.0
+

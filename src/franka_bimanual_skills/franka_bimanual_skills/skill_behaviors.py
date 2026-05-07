@@ -11,7 +11,15 @@ import time
 import traceback
 import threading
 
-from .config import PREDEFINED_TARGETS, WORLD_FRAME, READY_POSE_VALUES_LEFT, READY_POSE_VALUES_RIGHT, MIDWAY_POSE_VALUES_LEFT, MIDWAY_POSE_VALUES_RIGHT, OFFSET_POSE_VALUES_LEFT, OFFSET_POSE_VALUES_RIGHT, get_arm_config, apply_top_down_orientation, apply_donor_handover_orientation, apply_recipient_handover_orientation, parse_error_code
+from .config import (
+    PREDEFINED_TARGETS, WORLD_FRAME, TARGET_OFFSETS,
+    READY_POSE_VALUES_LEFT, READY_POSE_VALUES_RIGHT, 
+    MIDWAY_POSE_VALUES_LEFT, MIDWAY_POSE_VALUES_RIGHT, 
+    OFFSET_POSE_VALUES_LEFT, OFFSET_POSE_VALUES_RIGHT, 
+    get_arm_config, apply_top_down_orientation, 
+    apply_donor_handover_orientation, apply_recipient_handover_orientation, 
+    parse_error_code
+)
 
 class SkillBehaviors:
     def __init__(self, node, robot_control_api, server_cb_group):
@@ -58,6 +66,15 @@ class SkillBehaviors:
         self._handover_ready_pub = node.create_publisher(Bool, '/handover_ready', 10)
             
         self.logger.info("✅ Python Servers (Home, Pick, Place, Give, Take) Advertised!")
+        
+    def _get_offset(self, target_id, param_name):
+        """Get target-specific offset if available, otherwise fallback to default param."""
+        if target_id and target_id in TARGET_OFFSETS:
+            if param_name in TARGET_OFFSETS[target_id]:
+                val = TARGET_OFFSETS[target_id][param_name]
+                self.logger.info(f"💡 Using target-specific override for {target_id}: {param_name}={val}")
+                return val
+        return self.node.get_parameter(param_name).value
 
 
     def safe_publish_feedback(self, goal_handle, feedback):
@@ -113,9 +130,10 @@ class SkillBehaviors:
 
         result.success = success
         if success:
-            open_w = self.node.get_parameter('gripper_open_width').value if self.node.has_parameter('gripper_open_width') else 0.08
+            open_w = self.node.get_parameter('gripper_open_width').value
+            max_effort = self.node.get_parameter('gripper_max_effort').value
             self.logger.info(f"👐 Opening gripper for {arm_group} to {open_w}m...")
-            self.robot_control_api.send_gripper_goal(arm_group, width=open_w, max_effort=10.0)
+            self.robot_control_api.send_gripper_goal(arm_group, width=open_w, max_effort=max_effort)
             self.safe_succeed(goal_handle)
         else:
             self.safe_abort(goal_handle)
@@ -127,13 +145,6 @@ class SkillBehaviors:
         result = PickObject.Result()
         feedback = PickObject.Feedback()
         
-        clearance = self.node.get_parameter('approach_clearance').value
-        z_offset = self.node.get_parameter('pick_z_offset').value
-        open_w = self.node.get_parameter('gripper_open_width').value
-        grasp_w = self.node.get_parameter('gripper_grasp_width').value
-        pause_s = self.node.get_parameter('safety_pause_short').value
-        pause_l = self.node.get_parameter('safety_pause_long').value
-
         arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
         if not arm_group:
             self.safe_abort(goal_handle)
@@ -144,26 +155,39 @@ class SkillBehaviors:
         target_pose = req.target_pose.pose
         fid = req.target_pose.header.frame_id.lower()
         
+        clearance = self._get_offset(fid, 'approach_clearance')
+        z_offset = self._get_offset(fid, 'pick_z_offset')
+        open_w = self.node.get_parameter('gripper_open_width').value
+        grasp_w = self.node.get_parameter('gripper_grasp_width').value
+        pause_s = self.node.get_parameter('safety_pause_short').value
+        pause_l = self.node.get_parameter('safety_pause_long').value
+        
         if fid in PREDEFINED_TARGETS:
             px, py, pz = PREDEFINED_TARGETS[fid]
-            target_pose.position.x, target_pose.position.y, target_pose.position.z = px, py, pz
+            target_pose.position.x = float(px)
+            target_pose.position.y = float(py)
+            target_pose.position.z = float(pz)
             req.target_pose.header.frame_id = WORLD_FRAME # Normalize to world
+            self.logger.info(f"📍 Target '{fid}' resolved to {WORLD_FRAME}: ({px}, {py}, {pz})")
+        else:
+            self.logger.warning(f"⚠️ Target frame '{fid}' not in PREDEFINED_TARGETS, relying on TF tree.")
         
         apply_top_down_orientation(target_pose)
         grasp_z = target_pose.position.z + z_offset
         pre_grasp_z = grasp_z + clearance
         
-        self.logger.info(f"🎯 Pick Target (Final Z={grasp_z:.3f})")
+        self.logger.info(f"🎯 Pick Target (Final Z={grasp_z:.3f}) in frame {req.target_pose.header.frame_id}")
 
         # 1. Open Gripper
         feedback.status = f"Pre-Step: Opening Gripper fully ({open_w}m)"
         self.safe_publish_feedback(goal_handle, feedback)
         
+        settle_t = self.node.get_parameter('settling_time').value
         for attempt in range(3):
             if self.robot_control_api.send_gripper_goal(arm_group, width=open_w):
                 break
-            time.sleep(0.5)
-        time.sleep(1.0) # Wait for simulation physics
+            time.sleep(settle_t)
+        time.sleep(settle_t * 2) # Wait for simulation physics
 
         # 2. Approach
         pre_grasp = copy.deepcopy(req.target_pose)
@@ -176,7 +200,7 @@ class SkillBehaviors:
             self.safe_abort(goal_handle)
             result.success = False
             return result
-        time.sleep(0.5) # Settling time
+        time.sleep(settle_t) # Settling time
             
         # 3. Descent (LIN)
         feedback.status = f"Step 2/4: Vertical Descent to Z={grasp_z} (MoveIt LIN)"
@@ -186,7 +210,7 @@ class SkillBehaviors:
         if not self.robot_control_api.send_moveit_goal(arm_group, target_pose=grasp_pose, planner="LIN"):
             self.safe_abort(goal_handle)
             return result
-        time.sleep(0.5) # Final settle before grasp
+        time.sleep(settle_t) # Final settle before grasp
 
         # 4. Grasp
         feedback.status = f"Step 3/4: Closing Gripper to {grasp_w}m"
@@ -216,52 +240,58 @@ class SkillBehaviors:
         self.logger.info(f"📥 ---> Received Place Object Action for: '{req_arm}' <---")
         result = PlaceObject.Result()
         
-        clearance = self.node.get_parameter('approach_clearance').value
-        z_offset = self.node.get_parameter('place_z_offset').value
-        open_w = self.node.get_parameter('gripper_open_width').value
-        pause_s = self.node.get_parameter('safety_pause_short').value
-
         arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
         req = goal_handle.request
         place_pose = req.place_pose.pose
-        apply_top_down_orientation(place_pose)
+
+        # 1. Resolve Predefined Targets & Normalize Frame
+        fid = req.place_pose.header.frame_id.lower()
+        if fid in PREDEFINED_TARGETS:
+            px, py, pz = PREDEFINED_TARGETS[fid]
+            self.logger.info(f"📍 Target Location '{fid}' resolved to {WORLD_FRAME}: ({px}, {py}, {pz})")
+            place_pose.position.x = float(px)
+            place_pose.position.y = float(py)
+            place_pose.position.z = float(pz)
+            req.place_pose.header.frame_id = WORLD_FRAME
+
+        clearance = self._get_offset(fid, 'approach_clearance')
+        z_offset = self._get_offset(fid, 'place_z_offset')
+        open_w = self.node.get_parameter('gripper_open_width').value
         
+        # Ensure orientation is top-down
+        apply_top_down_orientation(place_pose)
+
         final_place_z = place_pose.position.z + z_offset
         pre_place_z = final_place_z + clearance
         
         pre_place = copy.deepcopy(req.place_pose)
+        pre_place.pose = copy.deepcopy(place_pose)
         pre_place.pose.position.z = pre_place_z
-        apply_top_down_orientation(pre_place.pose)
         
-        # 1. Approach
+        # 2. Approach
         if not self.robot_control_api.send_moveit_goal(arm_group, target_pose=pre_place, planner="PTP"):
             self.safe_abort(goal_handle)
             return result
             
-        # 2. Descent
+        # 3. Descent
         place_target = copy.deepcopy(req.place_pose)
+        place_target.pose = copy.deepcopy(place_pose)
         place_target.pose.position.z = final_place_z
         if not self.robot_control_api.send_moveit_goal(arm_group, target_pose=place_target, planner="LIN"):
             self.safe_abort(goal_handle)
             return result
-        time.sleep(0.5) # Settle before release
+        time.sleep(self.node.get_parameter('settling_time').value) # Settle before release
             
-        # 3. Release
+        # 4. Release
         self.robot_control_api.send_gripper_goal(arm_group, width=open_w)
         
         # Handover signal
-        fid = req.place_pose.header.frame_id.lower()
-        if fid in PREDEFINED_TARGETS:
-            px, py, pz = PREDEFINED_TARGETS[fid]
-            place_pose.position.x, place_pose.position.y, place_pose.position.z = px, py, pz
-            req.place_pose.header.frame_id = WORLD_FRAME # Normalize to world
-
         if fid == 'shared':
             msg = Bool()
             msg.data = True
             self._handover_ready_pub.publish(msg)
         
-        # 4. Retreat
+        # 5. Retreat
         self.robot_control_api.send_moveit_goal(arm_group, target_pose=pre_place, planner="LIN")
              
         result.success = True

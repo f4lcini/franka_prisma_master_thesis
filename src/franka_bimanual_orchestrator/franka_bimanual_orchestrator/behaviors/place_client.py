@@ -47,7 +47,7 @@ class PlaceActionClient(py_trees.behaviour.Behaviour):
             target_loc = getattr(self.blackboard, f"{self.prefix}target_location")
 
         # PREDEFINED TARGET SUPPORT
-        if target_loc in ["base_pose", "shared", "box"]:
+        if target_loc in ["base_pose", "shared", "box", "target_object"]:
             self.logger.info(f"[{self.name}] Using predefined target location: '{target_loc}'")
             target_pose = PoseStamped()
             target_pose.header.frame_id = target_loc

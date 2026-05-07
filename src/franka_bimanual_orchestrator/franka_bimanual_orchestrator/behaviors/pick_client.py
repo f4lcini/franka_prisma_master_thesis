@@ -8,12 +8,10 @@ import tf2_ros
 import tf2_geometry_msgs  # noqa: F401 - registers the transform for PoseStamped
 from geometry_msgs.msg import PoseStamped
 
-# -----------------------------------------------------------------
-# TEST_MODE: bypass YOLO/blackboard and send a hardcoded world-frame
-# pose directly to the MTC server.
+# pose directly to the skill server.
 # Controlled at runtime via ROS parameter 'test_mode' (default: False).
 # -----------------------------------------------------------------
-TEST_POSE_WORLD = (1.10, 0.20, 0.225)   # red_cube position
+TEST_POSE_TABLE = (0.4, -0.25, 0.0)   # Default target_object position on table
 
 class PickActionClient(py_trees.behaviour.Behaviour):
     def __init__(self, name="Execute Pick", action_name="/pick_object", prefix="left_"):
@@ -65,7 +63,7 @@ class PickActionClient(py_trees.behaviour.Behaviour):
         test_mode = self.node.get_parameter('test_mode').get_parameter_value().bool_value
 
         # PREDEFINED TARGET SUPPORT
-        if target_label in ["base_pose", "shared", "box"]:
+        if target_label in ["base_pose", "shared", "box", "target_object"]:
             self.logger.info(f"[{self.name}] Using predefined target: '{target_label}'")
             target_pose = PoseStamped()
             target_pose.header.frame_id = target_label
@@ -74,9 +72,9 @@ class PickActionClient(py_trees.behaviour.Behaviour):
         elif test_mode:
             self.logger.warning(f"[{self.name}] *** TEST_MODE ACTIVE ***")
             target_pose = PoseStamped()
-            target_pose.header.frame_id = 'world'
+            target_pose.header.frame_id = 'table'
             target_pose.header.stamp = self.node.get_clock().now().to_msg()
-            target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z = TEST_POSE_WORLD
+            target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z = TEST_POSE_TABLE
             target_pose.pose.orientation.w = 0.0
             target_pose.pose.orientation.x = 1.0
         else:
