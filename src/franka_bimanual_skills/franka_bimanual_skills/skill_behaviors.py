@@ -158,7 +158,13 @@ class SkillBehaviors:
         self.logger.info(f"[{arm_group}] Step 0: Opening Gripper")
         await self.robot_control_api.send_gripper_goal_async(arm_group, width=open_w)
 
-        # 2. Approach
+        # --- ROBUSTNESS: Intermediate Waypoint for Shared Zone ---
+        if req.target_pose.header.frame_id == "shared":
+            self.logger.info(f"[{arm_group}] Collaborative target detected. Moving to MIDWAY joint waypoint first.")
+            midway_joints = MIDWAY_POSE_VALUES_RIGHT if "franka1" in arm_group else MIDWAY_POSE_VALUES_LEFT
+            await self.robot_control_api.send_moveit_goal_async(arm_group, joint_target=midway_joints, planner="PTP")
+
+        # 2. Approach (PTP)
         self.logger.info(f"[{arm_group}] Step 1: Approach (PTP)")
         pre_grasp = copy.deepcopy(req.target_pose)
         pre_grasp.pose.position.z = pre_grasp_z

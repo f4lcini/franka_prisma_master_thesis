@@ -16,6 +16,7 @@ class MoveHomeClient(py_trees.behaviour.Behaviour):
         self.blackboard = py_trees.blackboard.Client(name=name)
         self.blackboard.register_key(key=f"{prefix}active_arm", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key=f"{prefix}target_pose_name", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="handover_ready", access=py_trees.common.Access.WRITE)
 
     def setup(self, **kwargs):
         self.node = kwargs['node']
@@ -26,6 +27,11 @@ class MoveHomeClient(py_trees.behaviour.Behaviour):
         self.send_goal_future = None
         self.get_result_future = None
         
+        # --- ROBUSTNESS: Signal ready if moving home after a potential handover ---
+        if self.prefix == "right_":
+            self.blackboard.handover_ready = True
+            self.node.get_logger().info(f"[{self.name}] Right arm moving HOME. Signalling HANDOVER_READY for maximum parallelism.")
+
         target_arm = getattr(self.blackboard, f"{self.prefix}active_arm", "left_arm")
         target_pose = getattr(self.blackboard, f"{self.prefix}target_pose_name", "ready")
         

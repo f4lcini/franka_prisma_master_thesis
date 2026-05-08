@@ -22,6 +22,7 @@ from franka_bimanual_orchestrator.behaviors.move_home_client import MoveHomeClie
 from franka_bimanual_orchestrator.behaviors.wait_client import WaitActionClient
 from franka_bimanual_orchestrator.behaviors.give_client import GiveActionClient
 from franka_bimanual_orchestrator.behaviors.take_client import TakeActionClient
+from franka_bimanual_orchestrator.behaviors.rendezvous_client import RendezvousClient
 from franka_bimanual_orchestrator.behaviors.planner_utils import PlanSplitter, DynamicActionIterator, PlanPopper
 
 def create_arm_lane(arm_name="left"):
@@ -58,7 +59,8 @@ def create_arm_lane(arm_name="left"):
         "MOVE_HOME": MoveHomeClient(name=f"Home_{arm_name}", prefix=prefix),
         "WAIT": WaitActionClient(name=f"Wait_{arm_name}", prefix=prefix),
         "GIVE": GiveActionClient(name=f"Give_{arm_name}", prefix=prefix),
-        "TAKE": TakeActionClient(name=f"Take_{arm_name}", prefix=prefix)
+        "TAKE": TakeActionClient(name=f"Take_{arm_name}", prefix=prefix),
+        "RENDEZVOUS": RendezvousClient(name=f"Rendezvous_{arm_name}", role="donor" if arm_name == "right" else "recipient")
     }
 
     for skill_name, client_node in available_skills.items():
@@ -136,12 +138,15 @@ def create_tree(task_description="Default Task"):
     
     return root
 
+import json
+
 def main():
     rclpy.init(args=sys.argv)
     
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("task", type=str, nargs="?", default="Put the red cube in the box")
+    parser.add_argument("--plan", type=str, help="Path to a JSON file containing a custom plan")
     args = parser.parse_args(rclpy.utilities.remove_ros_args(args=sys.argv)[1:])
 
     root = create_tree(task_description=args.task)
@@ -162,13 +167,25 @@ def main():
     blackboard.register_key(key="handover_starting", access=py_trees.common.Access.WRITE)
     
     blackboard.mission_completed = False
-    blackboard.vlm_plan = None
     blackboard.handover_ready = False
     blackboard.handover_starting = False
+    
+    # Load custom plan if provided
+    if args.plan:
+        try:
+            with open(args.plan, 'r') as f:
+                blackboard.vlm_plan = json.load(f)
+            print(f"✅ Custom plan loaded from {args.plan}. Bypassing VLM Planner.")
+        except Exception as e:
+            print(f"❌ Failed to load plan from {args.plan}: {e}")
+            return
+    else:
+        blackboard.vlm_plan = None
 
     print("\n--- Bimanual Parallel Engine Ready (No-Loop Version) ---")
     
     try:
+        # Tick at 1Hz
         tree.tick_tock(period_ms=1000)
         rclpy.spin(tree.node)
     except KeyboardInterrupt:

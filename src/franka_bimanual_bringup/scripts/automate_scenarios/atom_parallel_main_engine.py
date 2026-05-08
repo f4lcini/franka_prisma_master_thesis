@@ -15,6 +15,25 @@ def main():
     custom_plan = {
         "left_arm_sequence": [
             {
+                "action": "MOVE_HOME",
+                "pose_name": "midway",
+                "arm": "left_arm"
+            },
+            {
+                "action": "WAIT",
+                "arm": "left_arm"
+            },
+            {
+                "action": "PICK",
+                "target_name": "shared",
+                "arm": "left_arm"
+            },
+            {
+                "action": "MOVE_HOME",
+                "pose_name": "midway",
+                "arm": "left_arm"
+            },
+            {
                 "action": "PLACE",
                 "target_location": "box",
                 "arm": "left_arm"
@@ -31,8 +50,22 @@ def main():
                 "arm": "right_arm"
             },
             {
+                "action": "MOVE_HOME",
+                "pose_name": "midway",
+                "arm": "right_arm"
+            },
+            {
                 "action": "PLACE",
                 "target_location": "shared",
+                "arm": "right_arm"
+            },
+            {
+                "action": "MOVE_HOME",
+                "pose_name": "midway",
+                "arm": "right_arm"
+            },
+            {
+                "action": "MOVE_HOME",
                 "arm": "right_arm"
             }
         ]

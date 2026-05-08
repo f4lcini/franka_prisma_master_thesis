@@ -112,11 +112,15 @@ class PickActionClient(py_trees.behaviour.Behaviour):
         if self.get_result_future.done():
             result = self.get_result_future.result().result
             if result.success:
-                target_label = getattr(self.blackboard, f"{self.prefix}target_label", "none")
+                target_label = getattr(self.blackboard, f"{self.prefix}target_name", "none")
                 if target_label == "shared":
                     self.blackboard.handover_ready = False
                     self.logger.info(f"[{self.name}] Shared Pick complete. Handover flag reset.")
                 return py_trees.common.Status.SUCCESS
+            
+            # --- Robustness: Return FAILURE instead of infinite retry ---
+            error_msg = result.message.lower() if hasattr(result, 'message') else ""
+            self.logger.error(f"[{self.name}] Pick FAILED: {error_msg}")
             return py_trees.common.Status.FAILURE
 
         return py_trees.common.Status.RUNNING

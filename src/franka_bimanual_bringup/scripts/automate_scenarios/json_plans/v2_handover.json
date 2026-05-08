@@ -1,0 +1,51 @@
+{
+  "mission_metadata": {
+    "type": "HANDOVER",
+    "shared_zone": "shared"
+  },
+  "left_arm_sequence": [
+    {
+      "action": "MOVE_HOME",
+      "pose_name": "offset_ready",
+      "arm": "left_arm"
+    },
+    {
+      "action": "RENDEZVOUS",
+      "arm": "left_arm"
+    },
+    {
+      "action": "PICK",
+      "target_name": "shared",
+      "arm": "left_arm"
+    },
+    {
+      "action": "PLACE",
+      "target_location": "box",
+      "arm": "left_arm"
+    },
+    {
+      "action": "MOVE_HOME",
+      "arm": "left_arm"
+    }
+  ],
+  "right_arm_sequence": [
+    {
+      "action": "PICK",
+      "target_name": "target_object",
+      "arm": "right_arm"
+    },
+    {
+      "action": "PLACE",
+      "target_location": "shared",
+      "arm": "right_arm"
+    },
+    {
+      "action": "MOVE_HOME",
+      "arm": "right_arm"
+    },
+    {
+      "action": "RENDEZVOUS",
+      "arm": "right_arm"
+    }
+  ]
+}

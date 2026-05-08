@@ -57,7 +57,7 @@ ROBOT_BASES = {
 # --- TARGETS IN TABLE REFERENCE FRAME (Z=0 is surface) ---
 # Table margins: X [-0.6, 0.6], Y [-0.3, 0.3]
 PREDEFINED_TARGETS = {
-    "shared":        (0.0, 0.0, 0.0),      # Shared zone (at table level)
+    "shared":        (0.0, -0.2, 0.0),      # Shared zone (at table level)
     "box":           (-0.4, -0.25, 0.0),   # In front of Left Arm (Franka2), at table level
     "target_object": (0.4, -0.25, 0.0),    # In front of Right Arm (Franka1), at table level
     "mid_air":       (0.0, 0.0, 0.4)       # Safe transition point
@@ -114,8 +114,8 @@ READY_POSE_VALUES_RIGHT = [1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.
 READY_POSE_VALUES_LEFT  = [-1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
 
 # Aggressive 'Parallelismo Spinto' Poses (Joint1 shifted 45 deg towards shared zone)
-MIDWAY_POSE_VALUES_RIGHT = [0.785, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
-MIDWAY_POSE_VALUES_LEFT  = [-0.785, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
+MIDWAY_POSE_VALUES_RIGHT = [1.35, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
+MIDWAY_POSE_VALUES_LEFT  = [-1.35, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
 
 # Safe Offset Poses (Visible 20-30 deg shift on Joint 6 for clear parallel testing)
 OFFSET_POSE_VALUES_RIGHT = [1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.9, 0.785398]

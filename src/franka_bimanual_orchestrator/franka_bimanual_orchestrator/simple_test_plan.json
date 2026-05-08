@@ -1,0 +1,16 @@
+{
+  "left_arm_sequence": [
+    {
+      "action": "PLACE",
+      "target_location": "box",
+      "arm": "left_arm"
+    }
+  ],
+  "right_arm_sequence": [
+    {
+      "action": "PICK",
+      "target_name": "target_object",
+      "arm": "right_arm"
+    }
+  ]
+}

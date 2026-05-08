@@ -1,4 +1,5 @@
 import py_trees
+import copy
 
 class PlanSplitter(py_trees.behaviour.Behaviour):
     """
@@ -10,18 +11,32 @@ class PlanSplitter(py_trees.behaviour.Behaviour):
         self.blackboard.register_key(key="vlm_plan", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="left_arm_plan", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="right_arm_plan", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="mission_type", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="mission_metadata", access=py_trees.common.Access.WRITE)
+        self._split_done = False
 
     def setup(self, **kwargs):
         self.node = kwargs.get('node')
 
     def update(self):
+        if self._split_done:
+            return py_trees.common.Status.SUCCESS
+
         plan = self.blackboard.vlm_plan
         if plan is None:
             return py_trees.common.Status.FAILURE
         
-        # New TaskPlan structure has explicit lists
-        self.blackboard.left_arm_plan = plan.get("left_arm_sequence", [])
-        self.blackboard.right_arm_plan = plan.get("right_arm_sequence", [])
+        # --- MISSION AWARENESS: Extract Metadata ---
+        metadata = plan.get("mission_metadata", {})
+        self.blackboard.mission_metadata = metadata
+        self.blackboard.mission_type = metadata.get("type", "SIMPLE")
+        
+        self.logger.info(f"[{self.name}] MISSION START: {self.blackboard.mission_type}")
+
+        # Split sequences
+        self.blackboard.left_arm_plan = copy.deepcopy(plan.get("left_arm_sequence", []))
+        self.blackboard.right_arm_plan = copy.deepcopy(plan.get("right_arm_sequence", []))
+        self._split_done = True
         
         return py_trees.common.Status.SUCCESS
 
