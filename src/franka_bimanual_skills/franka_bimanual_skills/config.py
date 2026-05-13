@@ -80,7 +80,7 @@ DEFAULT_OFFSETS = {
     # --- Gripper Parameters ---
     'gripper_open_width': 0.075,
     'gripper_grasp_width': 0.028,
-    'gripper_max_effort': 50.0,
+    'gripper_max_effort': 10.0,
     'gripper_safe_width_limit': 0.075,   # Hardware safety limit for FR3
     
     # --- Handover Offsets ---
@@ -104,8 +104,18 @@ DEFAULT_OFFSETS = {
 # Use these to tune approach/offsets for specific objects or locations
 TARGET_OFFSETS = {
     "box": {
-        "place_z_offset": 0.20,      # Higher release for the box
-        "approach_clearance": 0.1   # More vertical clearance for the box
+        "place_z_offset": 0.20,       # Posa la scatola a 5cm dal tavolo (più delicato)
+        "approach_clearance": 0.1    # Spazio verticale standard
+    },
+    "bottle": {
+        "pick_z_offset": 0.20,        # Prendi la bottiglia a circa metà corpo (12cm)
+        "gripper_grasp_width": 0.055, # Presa sicura per bottiglia standard
+        "approach_clearance": 0.1     # 10cm sopra la bottiglia
+    },
+    "cup": {
+        "pick_z_offset": 0.15,        # Prendi la tazza a 6cm dal tavolo
+        "gripper_grasp_width": 0.055,  # Un po' più largo per sicurezza
+        "approach_clearance": 0.1     # 10cm sopra la tazza
     }
 }
 

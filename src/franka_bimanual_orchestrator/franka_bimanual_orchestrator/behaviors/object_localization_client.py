@@ -6,10 +6,11 @@ from rclpy.action import ActionClient
 from franka_custom_interfaces.action import DetectObject
 
 class ObjectLocalizationClient(py_trees.behaviour.Behaviour):
-    def __init__(self, name="YOLO Localization", action_name="/detect_object", prefix="left_"):
+    def __init__(self, name="YOLO Localization", action_name="/detect_object", prefix="left_", target_name=None):
         super().__init__(name=name)
         self.action_name = action_name
         self.prefix = prefix
+        self.target_name_override = target_name
         self.node = None
         self.action_client = None
         self.send_goal_future = None
@@ -33,8 +34,13 @@ class ObjectLocalizationClient(py_trees.behaviour.Behaviour):
 
     def initialise(self):
         target_name = "none"
-        if hasattr(self.blackboard, f"{self.prefix}target_name"):
-            target_name = getattr(self.blackboard, f"{self.prefix}target_name")
+        if self.target_name_override:
+            target_name = self.target_name_override
+        else:
+            try:
+                target_name = getattr(self.blackboard, f"{self.prefix}target_name")
+            except (AttributeError, KeyError):
+                target_name = "none"
         
         goal_msg = DetectObject.Goal()
         goal_msg.object_name = target_name

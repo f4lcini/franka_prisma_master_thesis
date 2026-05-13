@@ -127,6 +127,7 @@ class SkillBehaviors:
         return result
 
     async def execute_pick(self, goal_handle):
+        self.logger.info("DEBUG: execute_pick callback triggered!")
         req_arm = goal_handle.request.arm
         self.logger.info(f"📦 ---> Received Pick Object Action for: '{req_arm}' <---")
         result = PickObject.Result()
@@ -142,12 +143,18 @@ class SkillBehaviors:
         
         clearance = self._get_offset(fid, 'approach_clearance')
         z_offset = self._get_offset(fid, 'pick_z_offset')
+        grasp_w = self._get_offset(fid, 'gripper_grasp_width') # <-- Corretto!
         open_w = self.node.get_parameter('gripper_open_width').value
-        grasp_w = self.node.get_parameter('gripper_grasp_width').value
+        
+        self.logger.info(f"🔍 DEBUG PICK: fid='{fid}', grasp_w={grasp_w}")
         
         if fid in PREDEFINED_TARGETS:
             px, py, pz = PREDEFINED_TARGETS[fid]
             target_pose.position.x, target_pose.position.y, target_pose.position.z = float(px), float(py), float(pz)
+            req.target_pose.header.frame_id = WORLD_FRAME
+        else:
+            # Per oggetti YOLO, fid è il nome dell'oggetto. 
+            # Ora che abbiamo preso gli offset, riportiamo il frame a 'table'
             req.target_pose.header.frame_id = WORLD_FRAME
         
         apply_top_down_orientation(target_pose)
@@ -172,11 +179,11 @@ class SkillBehaviors:
             self.logger.error(f"[{arm_group}] Step 1 (Approach) FAILED")
             self.safe_abort(goal_handle); result.success = False; return result
             
-        # 3. Descent (LIN)
-        self.logger.info(f"[{arm_group}] Step 2: Descent (LIN)")
+        # 3. Descent (PTP)
+        self.logger.info(f"[{arm_group}] Step 2: Descent (PTP)")
         grasp_pose = copy.deepcopy(req.target_pose)
         grasp_pose.pose.position.z = grasp_z
-        if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=grasp_pose, planner="LIN"):
+        if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=grasp_pose, planner="PTP"):
             self.logger.error(f"[{arm_group}] Step 2 (Descent) FAILED")
             self.safe_abort(goal_handle); return result
 
@@ -184,9 +191,9 @@ class SkillBehaviors:
         self.logger.info(f"[{arm_group}] Step 3: Grasping")
         await self.robot_control_api.send_gripper_goal_async(arm_group, width=grasp_w)
         
-        # 5. Lift (LIN)
-        self.logger.info(f"[{arm_group}] Step 4: Lift (LIN)")
-        await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_grasp, planner="LIN")
+        # 5. Lift (PTP)
+        self.logger.info(f"[{arm_group}] Step 4: Lift (PTP)")
+        await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_grasp, planner="PTP")
             
         result.success = True
         self.safe_succeed(goal_handle)
@@ -205,6 +212,8 @@ class SkillBehaviors:
         if fid in PREDEFINED_TARGETS:
             px, py, pz = PREDEFINED_TARGETS[fid]
             place_pose.position.x, place_pose.position.y, place_pose.position.z = float(px), float(py), float(pz)
+            req.place_pose.header.frame_id = WORLD_FRAME
+        else:
             req.place_pose.header.frame_id = WORLD_FRAME
 
         clearance = self._get_offset(fid, 'approach_clearance')
@@ -228,7 +237,7 @@ class SkillBehaviors:
         self.logger.info(f"[{arm_group}] Step 2: Descent (LIN)")
         place_target = copy.deepcopy(req.place_pose)
         place_target.pose.position.z = final_place_z
-        if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=place_target, planner="LIN"):
+        if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=place_target, planner="PTP"):
             self.logger.error(f"[{arm_group}] Step 2 (Descent) FAILED")
             self.safe_abort(goal_handle); return result
             
@@ -242,7 +251,7 @@ class SkillBehaviors:
         
         # 4. Retreat
         self.logger.info(f"[{arm_group}] Step 4: Retreat (LIN)")
-        await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_place, planner="LIN")
+        await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_place, planner="PTP")
              
         result.success = True
         self.safe_succeed(goal_handle)
@@ -286,7 +295,7 @@ class SkillBehaviors:
             self.safe_abort(goal_handle)
             return result
 
-        if not self.robot_control_api.send_pose_goal(arm_group, give_pose, tcp_frame, planner="LIN", is_handover=True):
+        if not self.robot_control_api.send_pose_goal(arm_group, give_pose, tcp_frame, planner="PTP", is_handover=True):
             self._donor_pre_pos_ready.clear()
             self.safe_abort(goal_handle)
             return result
@@ -305,7 +314,7 @@ class SkillBehaviors:
         if not self._recipient_grasped.wait(timeout=timeout):
             self.logger.warning("[Handshake] recipient never signaled GRASPED.")
 
-        self.robot_control_api.send_pose_goal(arm_group, pre_give_pose, tcp_frame, planner="LIN", is_handover=True)
+        self.robot_control_api.send_pose_goal(arm_group, pre_give_pose, tcp_frame, planner="PTP", is_handover=True)
 
         self._donor_ready.clear()
         self._donor_pre_pos_ready.clear()
@@ -357,13 +366,13 @@ class SkillBehaviors:
              self.safe_abort(goal_handle)
              return result
 
-        if not self.robot_control_api.send_pose_goal(arm_group, take_pose, tcp_frame, planner="LIN", is_handover=True):
+        if not self.robot_control_api.send_pose_goal(arm_group, take_pose, tcp_frame, planner="PTP", is_handover=True):
             self._recipient_pre_pos_ready.clear()
             self.safe_abort(goal_handle)
             return result
 
         self._recipient_ready.set()
-        grasp_w = self.node.get_parameter('gripper_grasp_width').value
+        grasp_w = self._get_offset(fid, 'gripper_grasp_width')
         self.robot_control_api.send_gripper_goal(arm_group, width=grasp_w)
         
         if not self.robot_control_api.check_grasp(arm_group):
@@ -373,7 +382,7 @@ class SkillBehaviors:
             return result
 
         self._recipient_grasped.set()
-        self.robot_control_api.send_pose_goal(arm_group, pre_take_pose, tcp_frame, planner="LIN", is_handover=True)
+        self.robot_control_api.send_pose_goal(arm_group, pre_take_pose, tcp_frame, planner="PTP", is_handover=True)
 
         self._recipient_ready.clear()
         self._recipient_grasped.clear()

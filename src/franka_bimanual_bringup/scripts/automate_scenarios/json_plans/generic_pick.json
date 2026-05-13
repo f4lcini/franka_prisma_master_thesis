@@ -1,0 +1,15 @@
+{
+  "left_arm_sequence": [],
+  "right_arm_sequence": [
+    {
+      "action": "FIND_OBJECT",
+      "target_name": "bottle",
+      "arm": "right_arm"
+    },
+    {
+      "action": "PICK",
+      "target_name": "bottle",
+      "arm": "right_arm"
+    }
+  ]
+}

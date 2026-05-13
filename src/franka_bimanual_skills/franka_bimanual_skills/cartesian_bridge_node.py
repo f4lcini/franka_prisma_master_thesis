@@ -75,7 +75,7 @@ ARM_CONFIG = {
 STREAM_RATE_HZ   = 20.0    # Streaming rate to controller
 REACH_THRESHOLD  = 0.02    # 0.02 rad tolerance to declare goal reached
 STREAM_TIMEOUT_S = 30.0    # Maximum streaming time before abort
-WORLD_FRAME      = 'world'
+WORLD_FRAME      = 'table'
 
 
 # --------------------------------------------------------------------------- #

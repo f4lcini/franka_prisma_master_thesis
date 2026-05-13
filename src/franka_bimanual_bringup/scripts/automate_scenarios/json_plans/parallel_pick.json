@@ -1,20 +1,25 @@
 {
   "left_arm_sequence": [
     {
+      "action": "FIND_OBJECT",
+      "target_name": "bottle",
+      "arm": "left_arm"
+    },
+    {
       "action": "PICK",
-      "target_name": "shared",
+      "target_name": "bottle",
       "arm": "left_arm"
     }
   ],
   "right_arm_sequence": [
     {
       "action": "FIND_OBJECT",
-      "target_name": "target_object",
+      "target_name": "cup",
       "arm": "right_arm"
     },
     {
       "action": "PICK",
-      "target_name": "target_object",
+      "target_name": "cup",
       "arm": "right_arm"
     }
   ]

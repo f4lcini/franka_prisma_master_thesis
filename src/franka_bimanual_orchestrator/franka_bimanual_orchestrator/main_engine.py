@@ -25,117 +25,65 @@ from franka_bimanual_orchestrator.behaviors.take_client import TakeActionClient
 from franka_bimanual_orchestrator.behaviors.rendezvous_client import RendezvousClient
 from franka_bimanual_orchestrator.behaviors.planner_utils import PlanSplitter, DynamicActionIterator, PlanPopper
 
-def create_arm_lane(arm_name="left"):
+def create_dynamic_arm_sequence(arm_name, plan_steps):
     """
-    Creates a namespaced sequence lane for a specific arm.
-    Repeats until the arm-specific plan is empty.
+    Builds a pure BT sequence from a list of plan steps.
     """
     prefix = f"{arm_name}_"
-    plan_key = f"{arm_name}_arm_plan"
+    seq = py_trees.composites.Sequence(name=f"Sequence_{arm_name.upper()}", memory=True)
     
-    # 1. Action Step (Sequence) - MUST return FAILURE when no plan left to exit the repeat
-    step = py_trees.composites.Sequence(name=f"Step_{arm_name}", memory=True)
-    
-    # 1.1 Condition: Plan not empty (Returns FAILURE when plan is empty)
-    has_plan = py_trees.behaviours.CheckBlackboardVariableValue(
-        name=f"Has_{arm_name}_Plan?",
-        check=py_trees.common.ComparisonExpression(
-            variable=plan_key,
-            value=[],
-            operator=operator.ne
-        )
-    )
-    
-    # 1.2 Iterator
-    iterator = DynamicActionIterator(name=f"Iterator_{arm_name}", plan_key=plan_key, prefix=prefix)
-    
-    # 1.3 Dispatcher
-    dispatcher = py_trees.composites.Selector(name=f"Dispatcher_{arm_name}", memory=False)
-    
-    available_skills = {
-        "FIND_OBJECT": ObjectLocalizationClient(name=f"YOLO_{arm_name}", prefix=prefix),
-        "PICK": PickActionClient(name=f"Pick_{arm_name}", prefix=prefix),
-        "PLACE": PlaceActionClient(name=f"Place_{arm_name}", prefix=prefix),
-        "MOVE_HOME": MoveHomeClient(name=f"Home_{arm_name}", prefix=prefix),
-        "WAIT": WaitActionClient(name=f"Wait_{arm_name}", prefix=prefix),
-        "GIVE": GiveActionClient(name=f"Give_{arm_name}", prefix=prefix),
-        "TAKE": TakeActionClient(name=f"Take_{arm_name}", prefix=prefix),
-        "RENDEZVOUS": RendezvousClient(name=f"Rendezvous_{arm_name}", role="donor" if arm_name == "right" else "recipient")
-    }
+    if not plan_steps:
+        return py_trees.behaviours.Success(name=f"No_Task_{arm_name}")
 
-    for skill_name, client_node in available_skills.items():
-        skill_seq = py_trees.composites.Sequence(name=f"{skill_name}_{arm_name}_Seq", memory=True)
-        is_active = py_trees.behaviours.CheckBlackboardVariableValue(
-            name=f"Is_{skill_name}_{arm_name}?",
-            check=py_trees.common.ComparisonExpression(
-                variable=f"{prefix}active_action",
-                value=skill_name,
-                operator=operator.eq
-            )
-        )
-        skill_seq.add_children([is_active, client_node])
-        dispatcher.add_child(skill_seq)
+    for i, step in enumerate(plan_steps):
+        action = step.get('action')
+        target = step.get('target_name') or step.get('target_location')
         
-    # 1.4 Popper
-    popper = PlanPopper(name=f"Popper_{arm_name}", plan_key=plan_key)
-    
-    step.add_children([has_plan, iterator, dispatcher, popper])
-    
-    # Repeat indefinitely until 'step' fails (i.e. has_plan returns FAILURE)
-    repeat_loop = py_trees.decorators.Repeat(
-        child=step,
-        num_success=-1,
-        name=f"Repeat_{arm_name.upper()}"
-    )
-    
-    # When repeat_loop terminates (Failure), we want the lane to return SUCCESS to the Parallel node.
-    lane = py_trees.decorators.FailureIsSuccess(
-        child=repeat_loop,
-        name=f"Lane_{arm_name.upper()}"
-    )
-    
-    return lane
+        # Mapping string actions to BT Nodes with direct parameter passing
+        if action == "FIND_OBJECT":
+            node = ObjectLocalizationClient(name=f"Find_{target}_{i}", prefix=prefix, target_name=target)
+        elif action == "PICK":
+            node = PickActionClient(name=f"Pick_{target}_{i}", prefix=prefix, target_name=target)
+        elif action == "PLACE":
+            node = PlaceActionClient(name=f"Place_{target}_{i}", prefix=prefix)
+        elif action == "MOVE_HOME":
+            node = MoveHomeClient(name=f"Home_{i}", prefix=prefix)
+        elif action == "WAIT":
+            node = WaitActionClient(name=f"Wait_{i}", prefix=prefix)
+        elif action == "GIVE":
+            node = GiveActionClient(name=f"Give_{i}", prefix=prefix)
+        elif action == "TAKE":
+            node = TakeActionClient(name=f"Take_{i}", prefix=prefix)
+        elif action == "RENDEZVOUS":
+            node = RendezvousClient(name=f"Rendezvous_{i}", role="donor" if arm_name == "right" else "recipient")
+        else:
+            continue
 
-def create_tree(task_description="Default Task"):
-    root = py_trees.composites.Selector(name="Root_Guard", memory=True)
-    
-    # Condition: Stop if mission already marked simple success
-    mission_done = py_trees.behaviours.CheckBlackboardVariableValue(
-        name="Mission_Done?",
-        check=py_trees.common.ComparisonExpression(variable="mission_completed", value=True, operator=operator.eq)
-    )
+        # Inseriamo i parametri del target nella blackboard per quel nodo specifico
+        # Nota: In un albero dinamico, possiamo anche passare i parametri direttamente al costruttore 
+        # se modifichiamo i nodi, ma per ora usiamo la logica esistente.
+        seq.add_child(node)
+        
+    return seq
 
-    main_sequence = py_trees.composites.Sequence(name="Bimanual_Orchestrator", memory=True)
+def create_tree(task_description, full_plan):
+    """
+    Constructs the tree dynamically based on the plan.
+    """
+    root = py_trees.composites.Sequence(name=f"Mission: {task_description}", memory=True)
     
-    # 1. PLANNING GATE
-    planning_gate = py_trees.composites.Selector(name="Planning_Gate", memory=False)
-    has_plan_already = py_trees.behaviours.CheckBlackboardVariableValue(
-        name="Plan_Exists?",
-        check=py_trees.common.ComparisonExpression(variable="vlm_plan", value=None, operator=operator.ne)
-    )
-    vlm_planner = VlmActionClient(name="Gemini_Planner", task_description=task_description)
-    planning_gate.add_children([has_plan_already, vlm_planner])
-
-    splitter = PlanSplitter(name="Plan_Splitter")
-    
-    # 2. PARALLEL EXECUTION
+    # 1. Parallel execution of arm sequences
     execution_parallel = py_trees.composites.Parallel(
-        name="Side_By_Side_Execution",
+        name="Bimanual_Execution",
         policy=py_trees.common.ParallelPolicy.SuccessOnAll()
     )
-    execution_parallel.add_children([create_arm_lane("left"), create_arm_lane("right")])
     
-    # 3. FINALIZE (Latching)
-    mark_done = py_trees.behaviours.SetBlackboardVariable(
-        name="Set_Complete",
-        variable_name="mission_completed",
-        variable_value=True,
-        overwrite=True
-    )
-
-    main_sequence.add_children([planning_gate, splitter, execution_parallel, mark_done])
-    root.add_children([mission_done, main_sequence])
+    left_seq = create_dynamic_arm_sequence("left", full_plan.get('left_arm_sequence', []))
+    right_seq = create_dynamic_arm_sequence("right", full_plan.get('right_arm_sequence', []))
     
+    execution_parallel.add_children([left_seq, right_seq])
+    
+    root.add_child(execution_parallel)
     return root
 
 import json
@@ -145,44 +93,93 @@ def main():
     
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("task", type=str, nargs="?", default="Put the red cube in the box")
+    parser.add_argument("task", type=str, nargs="?", default="Bimanual Operation")
     parser.add_argument("--plan", type=str, help="Path to a JSON file containing a custom plan")
+    parser.add_argument("--object", type=str, help="Override the target object name in the plan")
     args = parser.parse_args(rclpy.utilities.remove_ros_args(args=sys.argv)[1:])
 
-    root = create_tree(task_description=args.task)
-    tree = py_trees_ros.trees.BehaviourTree(root=root, unicode_tree_debug=False)
-    tree.visitors.append(py_trees.visitors.DisplaySnapshotVisitor())
+    # 1. Load Plan
+    full_plan = {}
+    task_desc = args.task
+    if args.plan:
+        try:
+            with open(args.plan, 'r') as f:
+                full_plan = json.load(f)
+            print(f"✅ Custom plan loaded from {args.plan}.")
+            
+            # --- BLACKBOARD INITIALIZATION ---
+            # Sempre inizializzata per evitare KeyError nei comportamenti
+            blackboard = py_trees.blackboard.Client(name="MainConfig")
+            blackboard.register_key(key="left_target_name", access=py_trees.common.Access.WRITE)
+            blackboard.register_key(key="right_target_name", access=py_trees.common.Access.WRITE)
+            blackboard.register_key(key="left_active_arm", access=py_trees.common.Access.WRITE)
+            blackboard.register_key(key="right_active_arm", access=py_trees.common.Access.WRITE)
+            blackboard.register_key(key="left_target_pose_name", access=py_trees.common.Access.WRITE)
+            blackboard.register_key(key="right_target_pose_name", access=py_trees.common.Access.WRITE)
+            blackboard.register_key(key="left_target_location", access=py_trees.common.Access.WRITE)
+            blackboard.register_key(key="right_target_location", access=py_trees.common.Access.WRITE)
+            blackboard.register_key(key="mission_metadata", access=py_trees.common.Access.WRITE)
+            blackboard.register_key(key="mission_type", access=py_trees.common.Access.WRITE)
+            
+            # Valori di default
+            blackboard.left_target_name = "none"
+            blackboard.right_target_name = "none"
+            blackboard.left_active_arm = "left_arm"
+            blackboard.right_active_arm = "right_arm"
+            blackboard.left_target_pose_name = "ready"
+            blackboard.right_target_pose_name = "ready"
+            blackboard.left_target_location = "box"
+            blackboard.right_target_location = "box"
+            blackboard.mission_metadata = {}
+            blackboard.mission_type = "SIMPLE"
+            
+            # --- OVERRIDE LOGIC ---
+            if args.object:
+                print(f"🔄 Overriding all targets with: {args.object}")
+                blackboard.left_target_name = args.object
+                blackboard.right_target_name = args.object
+                
+                for arm in ['left_arm_sequence', 'right_arm_sequence']:
+                    if arm in full_plan:
+                        for step in full_plan[arm]:
+                            # Caso 1: target_name alla radice dello step
+                            if 'target_name' in step and step['target_name'] not in ['shared', 'box']:
+                                step['target_name'] = args.object
+                            # Caso 2: target_name dentro config
+                            if 'config' in step and 'target_name' in step['config'] and step['config']['target_name'] not in ['shared', 'box']:
+                                step['config']['target_name'] = args.object
+            # ----------------------
+            
+        except Exception as e:
+            print(f"❌ Failed to load plan: {e}")
+            return
+    else:
+        print("❌ No plan provided. Please use --plan <file.json>")
+        return
+
+    # 2. Build Tree
+    root = create_tree(task_desc, full_plan)
+    # Add OneShot decorator to prevent infinite looping
+    root = py_trees.decorators.OneShot(
+        name="Single Mission", 
+        child=root, 
+        policy=py_trees.common.OneShotPolicy.ON_COMPLETION
+    )
     
+    tree = py_trees_ros.trees.BehaviourTree(root=root, unicode_tree_debug=False)
+    
+    # 3. Setup (Basic blackboard for shared flags)
+    blackboard = py_trees.blackboard.Client(name="Main")
+    blackboard.register_key(key="handover_ready", access=py_trees.common.Access.WRITE)
+    blackboard.handover_ready = False
+
     try:
         tree.setup(node_name="bimanual_engine", timeout=15.0)
     except Exception as e:
         print(f"Setup failed: {e}")
         return
 
-    # INITIALIZE BLACKBOARD
-    blackboard = py_trees.blackboard.Client(name="Main")
-    blackboard.register_key(key="mission_completed", access=py_trees.common.Access.WRITE)
-    blackboard.register_key(key="vlm_plan", access=py_trees.common.Access.WRITE)
-    blackboard.register_key(key="handover_ready", access=py_trees.common.Access.WRITE)
-    blackboard.register_key(key="handover_starting", access=py_trees.common.Access.WRITE)
-    
-    blackboard.mission_completed = False
-    blackboard.handover_ready = False
-    blackboard.handover_starting = False
-    
-    # Load custom plan if provided
-    if args.plan:
-        try:
-            with open(args.plan, 'r') as f:
-                blackboard.vlm_plan = json.load(f)
-            print(f"✅ Custom plan loaded from {args.plan}. Bypassing VLM Planner.")
-        except Exception as e:
-            print(f"❌ Failed to load plan from {args.plan}: {e}")
-            return
-    else:
-        blackboard.vlm_plan = None
-
-    print("\n--- Bimanual Parallel Engine Ready (No-Loop Version) ---")
+    print("\n--- Bimanual DYNAMIC Engine Ready ---")
     
     try:
         # Tick at 1Hz

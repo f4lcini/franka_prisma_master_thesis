@@ -14,11 +14,13 @@ from geometry_msgs.msg import PoseStamped
 TEST_POSE_TABLE = (0.4, -0.25, 0.0)   # Default target_object position on table
 
 class PickActionClient(py_trees.behaviour.Behaviour):
-    def __init__(self, name="Execute Pick", action_name="/pick_object", prefix="left_"):
+    def __init__(self, name="Execute Pick", action_name="/pick_object", prefix="left_", target_name=None):
         super().__init__(name=name)
         self.action_name = action_name
         self.prefix = prefix
+        self.target_name_override = target_name
         self.node = None
+        # ... rest of init ...
         self.action_client = None
         self.send_goal_future = None
         self.get_result_future = None
@@ -27,10 +29,12 @@ class PickActionClient(py_trees.behaviour.Behaviour):
         
         self.blackboard = py_trees.blackboard.Client(name=name)
         self.blackboard.register_key(key=f"{prefix}target_name", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key=f"{prefix}target_pose", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key=f"{prefix}active_arm", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="handover_ready", access=py_trees.common.Access.WRITE)
 
     def setup(self, **kwargs):
+        # ... setup remains same ...
         try:
             self.node = kwargs['node']
         except KeyError:
@@ -51,14 +55,23 @@ class PickActionClient(py_trees.behaviour.Behaviour):
         self.logger.info(f"[{self.name}] Initializing Pick...")
         target_arm = "any"
         target_label = "none"
+        
+        # Priority: Constructor Override -> Blackboard (Safe Access)
+        if self.target_name_override:
+            target_label = self.target_name_override
+        else:
+            try:
+                target_label = getattr(self.blackboard, f"{self.prefix}target_name")
+            except (AttributeError, KeyError):
+                target_label = "none"
+        
         try:
+            # Safe read from blackboard
             target_arm = getattr(self.blackboard, f"{self.prefix}active_arm")
         except (AttributeError, KeyError):
-            pass
-        try:
-            target_label = getattr(self.blackboard, f"{self.prefix}target_name")
-        except (AttributeError, KeyError):
-            pass
+            # Default fallback if not on blackboard
+            target_arm = "right_arm" if "right" in self.prefix else "left_arm"
+            self.logger.info(f"[{self.name}] Blackboard arm missing, using default: {target_arm}")
 
         test_mode = self.node.get_parameter('test_mode').get_parameter_value().bool_value
 
@@ -84,9 +97,6 @@ class PickActionClient(py_trees.behaviour.Behaviour):
                 self.logger.error(f"[{self.name}] No '{self.prefix}target_pose' found!")
                 self.status = py_trees.common.Status.FAILURE
                 return
-
-        if hasattr(self.blackboard, f"{self.prefix}active_arm"):
-            target_arm = getattr(self.blackboard, f"{self.prefix}active_arm")
 
         goal_msg = PickObject.Goal()
         goal_msg.arm = target_arm

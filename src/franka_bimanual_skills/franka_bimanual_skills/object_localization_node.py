@@ -14,6 +14,8 @@ from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import numpy as np
 import datetime
+import os
+import time
 from scipy.spatial.transform import Rotation
 
 try:
@@ -42,15 +44,24 @@ class ObjectLocalizationNode(Node):
         self.declare_parameter('camera_pitch', 0.785)   
         self.declare_parameter('camera_yaw',   1.57)    
 
-        self._cam_pos, self._R_optical_to_world = self._build_camera_transform()
+        self._cam_pos, self._R_optical_to_table = self._build_camera_transform()
+        self.get_logger().info(f"📸 CAMERA POS: {self._cam_pos}")
+        self.get_logger().info(f"📸 CAMERA ROT MATRIX:\n{self._R_optical_to_table}")
 
-        # ---- YOLO ----
+        # ---- YOLO26 ----
         if YOLO is None:
             self.get_logger().error('YOLO (ultralytics) is not installed.')
             self.model = None
         else:
-            self.model = YOLO('yolov8n.pt')
-            self.get_logger().info('YOLOv8n loaded successfully.')
+            # Carichiamo il modello ONNX esportato per massime prestazioni su CPU
+            model_path = '/mm_ws/yolo26s.onnx'
+            if os.path.exists(model_path):
+                self.model = YOLO(model_path, task='detect')
+                self.get_logger().info(f'YOLO26s (ONNX) caricato correttamente da {model_path}')
+            else:
+                # Fallback al modello Medium di YOLOv8 (ultralytics lo scaricherà in automatico se manca)
+                self.model = YOLO('yolov8m.pt')
+                self.get_logger().info('YOLOv8 Medium caricato per maggiore precisione!')
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
@@ -100,10 +111,10 @@ class ObjectLocalizationNode(Node):
         roll  = self.get_parameter('camera_roll').value
         pitch = self.get_parameter('camera_pitch').value
         yaw   = self.get_parameter('camera_yaw').value
-        R_body_to_world = Rotation.from_euler('xyz', [roll, pitch, yaw]).as_matrix()
-        R_body_to_optical = Rotation.from_euler('xz', [-np.pi / 2, -np.pi / 2]).as_matrix()
-        R_opt_to_world = R_body_to_world @ R_body_to_optical.T
-        return cam_pos, R_opt_to_world
+        # I valori da robot_poses.yaml (roll, pitch, yaw) ora appartengono 
+        # DIRETTAMENTE al frame ottico a colori! Nessuna rotazione aggiuntiva richiesta.
+        R_opt_to_table = Rotation.from_euler('xyz', [roll, pitch, yaw]).as_matrix()
+        return cam_pos, R_opt_to_table
 
     def image_callback(self, msg):
         self.latest_image = msg
@@ -144,24 +155,24 @@ class ObjectLocalizationNode(Node):
                             fx, fy = self.camera_intrinsics['fx'], self.camera_intrinsics['fy']
                             cx, cy = self.camera_intrinsics['cx'], self.camera_intrinsics['cy']
                             p_opt = np.array([(u - cx) * z_opt / fx, (v - cy) * z_opt / fy, z_opt])
-                            p_world = self._R_optical_to_world @ p_opt + self._cam_pos
+                            p_table = self._R_optical_to_table @ p_opt + self._cam_pos
                             
                             # Publish PoseStamped
                             ps = PoseStamped()
-                            ps.header.frame_id = 'world'
+                            ps.header.frame_id = 'table'
                             ps.header.stamp = msg.header.stamp
-                            ps.pose.position.x, ps.pose.position.y, ps.pose.position.z = p_world
+                            ps.pose.position.x, ps.pose.position.y, ps.pose.position.z = p_table
                             self.pose_pub.publish(ps)
                             
                             # Add Marker for RViz
                             marker = Marker()
-                            marker.header.frame_id = 'world'
+                            marker.header.frame_id = 'table'
                             marker.header.stamp = msg.header.stamp
                             marker.ns = "yolo_detections"
                             marker.id = i
                             marker.type = Marker.SPHERE
                             marker.action = Marker.ADD
-                            marker.pose.position.x, marker.pose.position.y, marker.pose.position.z = p_world
+                            marker.pose.position.x, marker.pose.position.y, marker.pose.position.z = p_table
                             marker.scale.x = marker.scale.y = marker.scale.z = 0.05
                             marker.color.a = 1.0
                             marker.color.r = 0.0; marker.color.g = 1.0; marker.color.b = 0.0
@@ -210,85 +221,71 @@ class ObjectLocalizationNode(Node):
     def cancel_callback(self, goal_handle):
         return CancelResponse.ACCEPT
 
-    async def execute_callback(self, goal_handle):
+    def execute_callback(self, goal_handle):
+        import time
         result = DetectObject.Result()
-        if self.latest_image is None or self.latest_depth is None:
-            goal_handle.abort()
-            return result
-        
         object_name = goal_handle.request.object_name
-        cv_image = self.cv_bridge.imgmsg_to_cv2(self.latest_image, 'bgr8').copy()
-        yolo_results = self.model(cv_image, verbose=False)
+        self._cam_pos, self._R_optical_to_table = self._build_camera_transform()
         
-        best_box, best_conf, best_red_ratio = None, 0.0, 0.0
-        
-        for box in yolo_results[0].boxes:
-            conf = float(box.conf[0].item())
-            if object_name == 'cube' or 'cube' in object_name:
-                # HSV Red Heuristic
-                x1, y1, x2, y2 = [int(c) for c in box.xyxy[0].tolist()]
-                roi = cv_image[max(0,y1):y2, max(0,x1):x2]
-                if roi.size == 0: continue
-                hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-                mask1 = cv2.inRange(hsv, np.array([0, 100, 100]), np.array([10, 255, 255]))
-                mask2 = cv2.inRange(hsv, np.array([160, 100, 100]), np.array([180, 255, 255]))
-                red_ratio = np.sum((mask1 | mask2) > 0) / roi.size
-                if red_ratio > best_red_ratio and red_ratio > 0.1:
-                    best_red_ratio = red_ratio
-                    best_box = box
-            else:
-                cls_id = int(box.cls[0].item())
-                cls_name = self.model.names[cls_id]
-                if object_name.lower() in cls_name.lower() and conf > best_conf:
+        # --- CONFIGURAZIONE FILTRO ---
+        num_samples = 1 # Cambia a 1 per disattivare il filtro e avere risposta immediata
+        # -----------------------------
+
+        samples_x, samples_y = [], []
+        self.get_logger().info(f"🔍 Localizzazione di {object_name} ({num_samples} campioni)...")
+
+        for i in range(num_samples):
+            if self.latest_image is None:
+                time.sleep(0.1)
+                continue
+            
+            cv_image = self.cv_bridge.imgmsg_to_cv2(self.latest_image, 'bgr8').copy()
+            yolo_results = self.model(cv_image, verbose=False)
+            
+            best_box, best_conf = None, 0.0
+            for box in yolo_results[0].boxes:
+                conf = float(box.conf[0].item())
+                if object_name.lower() in self.model.names[int(box.cls[0].item())].lower() and conf > best_conf:
                     best_box, best_conf = box, conf
 
-        if best_box is None:
+            if best_box is not None:
+                x1, y1, x2, y2 = [int(c) for c in best_box.xyxy[0].tolist()]
+                u, v = (x1 + x2) // 2, y2 # Base dell'oggetto
+                
+                fx, fy = self.camera_intrinsics['fx'], self.camera_intrinsics['fy']
+                cx, cy = self.camera_intrinsics['cx'], self.camera_intrinsics['cy']
+                
+                v_opt = np.array([(u - cx) / fx, (v - cy) / fy, 1.0])
+                v_table = self._R_optical_to_table @ v_opt
+                lam = -self._cam_pos[2] / v_table[2]
+                P_table = self._cam_pos + lam * v_table
+                
+                samples_x.append(P_table[0])
+                samples_y.append(P_table[1])
+            
+            if num_samples > 1: time.sleep(0.05)
+
+        if not samples_x:
+            self.get_logger().error(f"❌ {object_name} non trovato.")
             goal_handle.abort()
             return result
 
-        x1, y1, x2, y2 = [int(c) for c in best_box.xyxy[0].tolist()]
+        final_x = np.median(samples_x)
+        final_y = np.median(samples_y)
         
-        u, v = (x1 + x2) // 2, (y1 + y2) // 2
-        depth_image = self.cv_bridge.imgmsg_to_cv2(self.latest_depth, 'passthrough')
-        
-        # Robust depth estimation: take a 5x5 window and use the median
-        h, w = depth_image.shape
-        u_min, u_max = max(0, u-2), min(w, u+3)
-        v_min, v_max = max(0, v-2), min(h, v+3)
-        depth_window = depth_image[v_min:v_max, u_min:u_max]
-        
-        valid_depths = depth_window[depth_window > 0]
-        if valid_depths.size > 0:
-            depth_value = np.median(valid_depths)
-        else:
-            depth_value = 0.0 # Will trigger fallback below
-            
-        if depth_value <= 0.0 or np.isnan(depth_value):
-            self.get_logger().warn(f"Invalid depth at ({u}, {v}), using fallback!")
-            depth_value = 1000.0 # Fallback 1 meter if in mm, or 1.0 if in meters
-            
-        is_metric = depth_image.dtype in (np.float32, np.float64)
-        Z_opt = depth_value if is_metric else depth_value / 1000.0
-        
-        # Safety check: if depth is too small or too large, something is wrong
-        if Z_opt < 0.2 or Z_opt > 2.0:
-            self.get_logger().error(f"Absurd depth detected: {Z_opt}m. Aborting.")
-            goal_handle.abort()
-            return result
+        # --- RIMOZIONE INVERSIONE ASSI ---
+        # La matrice è ora calibrata in modo puramente ottico e senza rotazioni fittizie del Tag.
+        # final_x = final_x
+        # final_y = final_y
+        # ----------------------------------------------------------------------
 
-        fx, fy = self.camera_intrinsics['fx'], self.camera_intrinsics['fy']
-        cx, cy = self.camera_intrinsics['cx'], self.camera_intrinsics['cy']
-        P_optical = np.array([(u - cx) * Z_opt / fx, (v - cy) * Z_opt / fy, Z_opt])
-        P_world = self._R_optical_to_world @ P_optical + self._cam_pos
+        self.get_logger().info(f"📍 RISULTATO FINALE: x={final_x:.3f}, y={final_y:.3f}")
         
-        q_opt = self.estimate_orientation(depth_image, [x1, y1, x2, y2])
-        q_world = (Rotation.from_matrix(self._R_optical_to_world) * Rotation.from_quat(q_opt)).as_quat()
-
         pose = PoseStamped()
-        pose.header.frame_id = 'world'
-        pose.header.stamp = self.latest_image_time
-        pose.pose.position.x, pose.pose.position.y, pose.pose.position.z = P_world
-        pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z, pose.pose.orientation.w = q_world
+        pose.header.frame_id = object_name  # Passiamo il nome dell'oggetto qui!
+        pose.header.stamp = self.get_clock().now().to_msg()
+        pose.pose.position.x, pose.pose.position.y, pose.pose.position.z = float(final_x), float(final_y), 0.0
+        pose.pose.orientation.w = 1.0
         
         result.success = True
         result.target_pose = pose
@@ -298,7 +295,7 @@ class ObjectLocalizationNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = ObjectLocalizationNode()
-    executor = MultiThreadedExecutor()
+    executor = MultiThreadedExecutor(num_threads=10)
     executor.add_node(node)
     executor.spin()
     node.destroy_node()

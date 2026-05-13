@@ -6,7 +6,7 @@
   <!-- Reference Frame Arguments -->
   <xacro:arg name="table_x" default="0.0" />
   <xacro:arg name="table_y" default="0.0" />
-  <xacro:arg name="table_z" default="0.2" />
+  <xacro:arg name="table_z" default="0.0" />
   <xacro:arg name="table_roll" default="0.0" />
   <xacro:arg name="table_pitch" default="0.0" />
   <xacro:arg name="table_yaw" default="0.0" />
@@ -42,39 +42,6 @@
             xyz="$(arg table_x) $(arg table_y) $(arg table_z)" />
     <parent link="world" />
     <child link="table" />
-  </joint>
-
-  <link name="shared_link">
-    <visual>
-      <geometry>
-        <sphere radius="0.02" />
-      </geometry>
-      <material name="shared_material">
-        <color rgba="0 1 0 0.5" />
-      </material>
-    </visual>
-  </link>
-  <joint name="table_to_shared" type="fixed">
-    <parent link="table" />
-    <child link="shared_link" />
-    <origin xyz="$(arg shared_x) $(arg shared_y) $(arg shared_z)" rpy="0 0 0" />
-  </joint>
-
-  <!-- AprilTag Fixed Reference -->
-  <link name="tag_0_fixed">
-    <visual>
-      <geometry>
-        <box size="0.05 0.05 0.001" />
-      </geometry>
-      <material name="tag_material">
-        <color rgba="0 0 0 1" />
-      </material>
-    </visual>
-  </link>
-  <joint name="table_to_tag_0" type="fixed">
-    <parent link="table" />
-    <child link="tag_0_fixed" />
-    <origin xyz="$(arg shared_x) $(arg shared_y) 0.0" rpy="0 0 0" />
   </joint>
 
   <link name="camera_link" />

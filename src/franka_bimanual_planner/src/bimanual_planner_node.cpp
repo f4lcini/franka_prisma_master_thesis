@@ -78,7 +78,7 @@ private:
   {
     moveit_msgs::msg::Constraints constraints;
     moveit_msgs::msg::PositionConstraint pc;
-    pc.header.frame_id = "world";
+    pc.header.frame_id = "table";
     pc.link_name = tcp_frame;
 
     shape_msgs::msg::SolidPrimitive sp;
@@ -141,7 +141,7 @@ private:
       } else {
         auto target_pose_msg = goal->target_pose;
         if (target_pose_msg.header.frame_id.empty()) {
-          target_pose_msg.header.frame_id = "world";
+          target_pose_msg.header.frame_id = "table";
         }
         move_group_ptr->setPoseTarget(target_pose_msg);
       }

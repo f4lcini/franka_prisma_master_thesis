@@ -158,3 +158,22 @@ ros2 launch franka_bimanual_skills reasoning.launch.py use_hardware:=true
 # Terminal 5: Natural Language Command (User Input & BT Engine)
 cd /mm_ws && source install/setup.bash
 ros2 run franka_bimanual_orchestrator main_engine "Place the green ball in the box"
+
+
+ros2 launch franka_bimanual_config lab_bringup_final.launch.py left_ip:=192.168.9.11 right_ip:=192.168.9.12
+
+ros2 run tf2_ros tf2_echo camera_link tag_0
+
+ros2 launch realsense2_camera rs_launch.py align_depth.enable:=true pointcloud.enable:=true
+
+ros2 run rqt_image_view rqt_image_view
+
+ros2 run apriltag_ros apriltag_node --ros-args --params-file src/franka_bimanual_config/config/apriltag.yaml -r image_rect:=/camera/camera/color/image_raw -r camera_info:=/camera/camera/color/camera_info
+
+ros2 launch franka_bimanual_bringup parallel_test_backends.launch.py
+
+ros2 run franka_bimanual_config fix_camera
+
+ros2 topic echo /detections
+
+ros2 run franka_bimanual_orchestrator main_engine --plan src/franka_bimanual_bringup/scripts/automate_scenarios/json_plans/bottle_pick.json
