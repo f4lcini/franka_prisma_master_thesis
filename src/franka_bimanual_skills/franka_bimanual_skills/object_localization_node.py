@@ -16,12 +16,15 @@ import numpy as np
 import datetime
 import os
 import time
+import asyncio
 from scipy.spatial.transform import Rotation
 
 try:
     from ultralytics import YOLO
 except ImportError:
     YOLO = None
+
+from .config import TARGET_OFFSETS
 
 
 class ObjectLocalizationNode(Node):
@@ -48,20 +51,14 @@ class ObjectLocalizationNode(Node):
         self.get_logger().info(f"📸 CAMERA POS: {self._cam_pos}")
         self.get_logger().info(f"📸 CAMERA ROT MATRIX:\n{self._R_optical_to_table}")
 
-        # ---- YOLO26 ----
+        # ---- YOLOv26 Configuration ----
         if YOLO is None:
-            self.get_logger().error('YOLO (ultralytics) is not installed.')
+            self.get_logger().error('Libreria YOLO (ultralytics) non trovata.')
             self.model = None
         else:
-            # Carichiamo il modello ONNX esportato per massime prestazioni su CPU
-            model_path = '/mm_ws/yolo26s.onnx'
-            if os.path.exists(model_path):
-                self.model = YOLO(model_path, task='detect')
-                self.get_logger().info(f'YOLO26s (ONNX) caricato correttamente da {model_path}')
-            else:
-                # Fallback al modello Medium di YOLOv8 (ultralytics lo scaricherà in automatico se manca)
-                self.model = YOLO('yolov8m.pt')
-                self.get_logger().info('YOLOv8 Medium caricato per maggiore precisione!')
+            # Questo comando scarica automaticamente 'yolo26m.pt' al primo avvio
+            self.model = YOLO("yolo26m.pt")
+            self.get_logger().info('✅ YOLOv26m inizializzato (download automatico se necessario).')
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
@@ -93,13 +90,20 @@ class ObjectLocalizationNode(Node):
         self.create_subscription(Image, depth_topic, self.depth_callback, qos, callback_group=self.sensor_cb_group)
         self.create_subscription(CameraInfo, info_topic, self.camera_info_callback, qos, callback_group=self.sensor_cb_group)
 
-        self.detect_object_server = ActionServer(
-            self, DetectObject, 'detect_object',
-            execute_callback=self.execute_callback,
-            goal_callback=self.goal_callback,
-            cancel_callback=self.cancel_callback,
+        # --- DUAL ACTION SERVERS (One per Arm) ---
+        self.detect_left_server = ActionServer(
+            self, DetectObject, 'detect_object_left',
+            execute_callback=self.execute_callback_left,
             callback_group=self.action_cb_group
         )
+        self.detect_right_server = ActionServer(
+            self, DetectObject, 'detect_object_right',
+            execute_callback=self.execute_callback_right,
+            callback_group=self.action_cb_group
+        )
+        
+        # Timer per il debug live
+        self.create_timer(0.1, self.debug_timer_callback, callback_group=self.sensor_cb_group)
         self._frame_counter = 0
 
     def _build_camera_transform(self):
@@ -117,71 +121,32 @@ class ObjectLocalizationNode(Node):
         return cam_pos, R_opt_to_table
 
     def image_callback(self, msg):
+        """Salva l'ultimo frame ricevuto senza processarlo (Latenza Zero)."""
         self.latest_image = msg
         self.latest_image_time = msg.header.stamp
-        
-        # Latency Optimization: Skip frames to avoid backlog
-        self._frame_counter += 1
-        if self._frame_counter % 9 != 0: # Process at ~3.3Hz instead of 30Hz
+
+    def debug_timer_callback(self):
+        """Esegue l'inferenza di debug in modo asincrono."""
+        if self.latest_image is None or self.model is None:
             return
 
-        # Continuous Live Detection for Debugging
-        if self.model is not None and self.camera_intrinsics is not None and self.latest_depth is not None:
-            try:
-                cv_image = self.cv_bridge.imgmsg_to_cv2(msg, 'bgr8')
-                depth_image = self.cv_bridge.imgmsg_to_cv2(self.latest_depth, 'passthrough')
-                results = self.model(cv_image, verbose=False, conf=0.3)
-                
-                debug_img = cv_image.copy()
-                marker_array = MarkerArray()
-                
-                for i, box in enumerate(results[0].boxes):
-                    x1, y1, x2, y2 = [int(c) for c in box.xyxy[0].tolist()]
-                    cls_id = int(box.cls[0].item())
-                    cls_name = self.model.names[cls_id]
-                    conf = float(box.conf[0].item())
-                    
-                    # Draw 2D
-                    cv2.rectangle(debug_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(debug_img, f"{cls_name} {conf:.2f}", (x1, y1 - 10), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                    
-                    # Calculate 3D Position (simple centroid depth)
-                    u, v = (x1 + x2) // 2, (y1 + y2) // 2
-                    if 0 <= v < depth_image.shape[0] and 0 <= u < depth_image.shape[1]:
-                        d = float(depth_image[v, u])
-                        if d > 0.001 and not np.isnan(d):
-                            z_opt = d if depth_image.dtype in (np.float32, np.float64) else d / 1000.0
-                            fx, fy = self.camera_intrinsics['fx'], self.camera_intrinsics['fy']
-                            cx, cy = self.camera_intrinsics['cx'], self.camera_intrinsics['cy']
-                            p_opt = np.array([(u - cx) * z_opt / fx, (v - cy) * z_opt / fy, z_opt])
-                            p_table = self._R_optical_to_table @ p_opt + self._cam_pos
-                            
-                            # Publish PoseStamped
-                            ps = PoseStamped()
-                            ps.header.frame_id = 'table'
-                            ps.header.stamp = msg.header.stamp
-                            ps.pose.position.x, ps.pose.position.y, ps.pose.position.z = p_table
-                            self.pose_pub.publish(ps)
-                            
-                            # Add Marker for RViz
-                            marker = Marker()
-                            marker.header.frame_id = 'table'
-                            marker.header.stamp = msg.header.stamp
-                            marker.ns = "yolo_detections"
-                            marker.id = i
-                            marker.type = Marker.SPHERE
-                            marker.action = Marker.ADD
-                            marker.pose.position.x, marker.pose.position.y, marker.pose.position.z = p_table
-                            marker.scale.x = marker.scale.y = marker.scale.z = 0.05
-                            marker.color.a = 1.0
-                            marker.color.r = 0.0; marker.color.g = 1.0; marker.color.b = 0.0
-                            marker_array.markers.append(marker)
-                
-                self.debug_image_pub.publish(self.cv_bridge.cv2_to_imgmsg(debug_img, 'bgr8'))
-                self.marker_pub.publish(marker_array)
-            except Exception as e:
-                self.get_logger().warn(f"Error in live detection: {e}")
+        try:
+            # Convertiamo l'ultimo frame disponibile
+            cv_image = self.cv_bridge.imgmsg_to_cv2(self.latest_image, 'bgr8')
+            
+            # OTTIMIZZAZIONE: Inferenza a bassa risoluzione (320px) per il debug live
+            results = self.model(cv_image, verbose=False, conf=0.3, imgsz=320)
+            
+            # Usiamo il metodo nativo .plot() di Ultralytics che è estremamente ottimizzato
+            annotated_frame = results[0].plot(labels=True, boxes=True)
+            
+            # Pubblichiamo l'immagine di debug
+            debug_msg = self.cv_bridge.cv2_to_imgmsg(annotated_frame, 'bgr8')
+            debug_msg.header = self.latest_image.header
+            self.debug_image_pub.publish(debug_msg)
+            
+        except Exception as e:
+            self.get_logger().warn(f"Errore nel timer di debug: {e}")
 
     def depth_callback(self, msg):
         self.latest_depth = msg
@@ -215,77 +180,96 @@ class ObjectLocalizationNode(Node):
         if np.linalg.det(R) < 0: R[2, :] *= -1
         return Rotation.from_matrix(R).as_quat().tolist()
 
-    def goal_callback(self, goal_request):
-        return GoalResponse.ACCEPT
+    def execute_callback_left(self, goal_handle):
+        return self._execute_common(goal_handle, side="left")
 
-    def cancel_callback(self, goal_handle):
-        return CancelResponse.ACCEPT
+    def execute_callback_right(self, goal_handle):
+        return self._execute_common(goal_handle, side="right")
 
-    def execute_callback(self, goal_handle):
-        import time
+    def _execute_common(self, goal_handle, side="left"):
+        """Logica di localizzazione condivisa (Sincrona con MultiThread)."""
         result = DetectObject.Result()
         object_name = goal_handle.request.object_name
         self._cam_pos, self._R_optical_to_table = self._build_camera_transform()
         
-        # --- CONFIGURAZIONE FILTRO ---
-        num_samples = 1 # Cambia a 1 per disattivare il filtro e avere risposta immediata
-        # -----------------------------
+        self.get_logger().info(f"🔍 [{side.upper()}] Cerco '{object_name}' nel mio spazio di lavoro...")
 
-        samples_x, samples_y = [], []
-        self.get_logger().info(f"🔍 Localizzazione di {object_name} ({num_samples} campioni)...")
-
-        for i in range(num_samples):
-            if self.latest_image is None:
+        # Raccogliamo campioni per 0.5 secondi per stabilità
+        samples = []
+        for _ in range(5):
+            if self.latest_image is None or self.camera_intrinsics is None:
                 time.sleep(0.1)
                 continue
             
-            cv_image = self.cv_bridge.imgmsg_to_cv2(self.latest_image, 'bgr8').copy()
-            yolo_results = self.model(cv_image, verbose=False)
+            cv_image = self.cv_bridge.imgmsg_to_cv2(self.latest_image, 'bgr8')
+            # Usiamo risoluzione standard per la precisione di pick
+            yolo_results = self.model(cv_image, verbose=False, imgsz=640)
             
-            best_box, best_conf = None, 0.0
+            # Troviamo tutti i candidati validi
+            candidates = []
             for box in yolo_results[0].boxes:
                 conf = float(box.conf[0].item())
-                if object_name.lower() in self.model.names[int(box.cls[0].item())].lower() and conf > best_conf:
-                    best_box, best_conf = box, conf
+                if object_name.lower() in self.model.names[int(box.cls[0].item())].lower() and conf > 0.25:
+                    # Calcoliamo la posizione 3D del candidato
+                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+                    u, v = (x1 + x2) / 2.0, y2
+                    v_opt = np.array([(u - self.camera_intrinsics['cx']) / self.camera_intrinsics['fx'], 
+                                     (v - self.camera_intrinsics['cy']) / self.camera_intrinsics['fy'], 1.0])
+                    v_table = self._R_optical_to_table @ v_opt
+                    lam = -self._cam_pos[2] / v_table[2]
+                    p_table = self._cam_pos + lam * v_table
+                    candidates.append((p_table, conf))
 
-            if best_box is not None:
-                x1, y1, x2, y2 = [int(c) for c in best_box.xyxy[0].tolist()]
-                u, v = (x1 + x2) // 2, y2 # Base dell'oggetto
-                
-                fx, fy = self.camera_intrinsics['fx'], self.camera_intrinsics['fy']
-                cx, cy = self.camera_intrinsics['cx'], self.camera_intrinsics['cy']
-                
-                v_opt = np.array([(u - cx) / fx, (v - cy) / fy, 1.0])
-                v_table = self._R_optical_to_table @ v_opt
-                lam = -self._cam_pos[2] / v_table[2]
-                P_table = self._cam_pos + lam * v_table
-                
-                samples_x.append(P_table[0])
-                samples_y.append(P_table[1])
+            # Filtro spaziale con sovrapposizione per zona condivisa (handover)
+            if side == "left":
+                # Il sinistro vede fino a +5cm nel lato destro
+                valid = [c for c in candidates if c[0][0] < 0.05]
+            else:
+                # Il destro vede fino a -5cm nel lato sinistro
+                valid = [c for c in candidates if c[0][0] >= -0.05]
+
+            if candidates:
+                self.get_logger().info(f"🔍 [{side.upper()}] {len(candidates)} oggetti rilevati. Validi per questo lato: {len(valid)}")
+                for idx, c in enumerate(candidates):
+                    status = "VALIDO" if (side == "left" and c[0][0] < 0.05) or (side == "right" and c[0][0] >= -0.05) else "FUORI_ZONA"
+                    self.get_logger().info(f"   -> [{status}] X={c[0][0]:.3f}, Conf={c[1]:.2f}")
+
+            if valid:
+                # Prendiamo il migliore nel proprio lato
+                best = max(valid, key=lambda x: x[1])
+                samples.append(best[0])
             
-            if num_samples > 1: time.sleep(0.05)
+            time.sleep(0.05)
 
-        if not samples_x:
-            self.get_logger().error(f"❌ {object_name} non trovato.")
+        if not samples:
+            self.get_logger().error(f"❌ [{side.upper()}] '{object_name}' non trovato nel mio lato.")
             goal_handle.abort()
             return result
 
-        final_x = np.median(samples_x)
-        final_y = np.median(samples_y)
+        # Mediana finale per robustezza
+        final_pos = np.median(np.array(samples), axis=0)
         
-        # --- RIMOZIONE INVERSIONE ASSI ---
-        # La matrice è ora calibrata in modo puramente ottico e senza rotazioni fittizie del Tag.
-        # final_x = final_x
-        # final_y = final_y
-        # ----------------------------------------------------------------------
+        # --- APPLICAZIONE OFFSET Y DINAMICO DA CONFIG.PY ---
+        obj_key = object_name.lower()
+        if "sports" in obj_key: obj_key = "sports" # Normalizzazione
+        
+        y_offset = 0.0
+        if obj_key in TARGET_OFFSETS:
+            y_offset = TARGET_OFFSETS[obj_key].get('pick_y_offset', 0.0)
+            self.get_logger().info(f"DEBUG: Letto da config.py per '{obj_key}': pick_y_offset = {y_offset}")
+            
+        if y_offset != 0.0:
+            final_pos[1] += y_offset
+            self.get_logger().info(f"✨ Offset Y di {y_offset}m applicato per {object_name}")
+        # -------------------------------------------------------------
 
-        self.get_logger().info(f"📍 RISULTATO FINALE: x={final_x:.3f}, y={final_y:.3f}")
-        
         pose = PoseStamped()
-        pose.header.frame_id = object_name  # Passiamo il nome dell'oggetto qui!
+        pose.header.frame_id = object_name
         pose.header.stamp = self.get_clock().now().to_msg()
-        pose.pose.position.x, pose.pose.position.y, pose.pose.position.z = float(final_x), float(final_y), 0.0
+        pose.pose.position.x, pose.pose.position.y, pose.pose.position.z = final_pos
         pose.pose.orientation.w = 1.0
+        
+        self.get_logger().info(f"✅ [{side.upper()}] Trovato '{object_name}' a: {final_pos[0]:.3f}, {final_pos[1]:.3f}")
         
         result.success = True
         result.target_pose = pose

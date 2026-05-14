@@ -7,11 +7,13 @@ from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
 
 class PlaceActionClient(py_trees.behaviour.Behaviour):
-    def __init__(self, name="Execute Place", action_name="/place_object", prefix="left_"):
+    def __init__(self, name="Execute Place", action_name="/place_object", prefix="left_", target_location=None):
         super().__init__(name=name)
         self.action_name = action_name
         self.prefix = prefix
+        self.target_loc_override = target_location
         self.node = None
+        # ... rest of init ...
         self.action_client = None
         self.send_goal_future = None
         self.get_result_future = None
@@ -46,10 +48,15 @@ class PlaceActionClient(py_trees.behaviour.Behaviour):
         
         target_arm = "any"
         target_loc = "none"
+
+        # Priorità: Override da costruttore -> Blackboard
+        if self.target_loc_override:
+            target_loc = self.target_loc_override
+        elif hasattr(self.blackboard, f"{self.prefix}target_location"):
+            target_loc = getattr(self.blackboard, f"{self.prefix}target_location")
+        
         if hasattr(self.blackboard, f"{self.prefix}active_arm"):
             target_arm = getattr(self.blackboard, f"{self.prefix}active_arm")
-        if hasattr(self.blackboard, f"{self.prefix}target_location"):
-            target_loc = getattr(self.blackboard, f"{self.prefix}target_location")
 
         # PREDEFINED TARGET SUPPORT
         if target_loc in ["base_pose", "shared", "box", "target_object"]:

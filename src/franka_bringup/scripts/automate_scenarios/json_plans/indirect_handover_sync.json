@@ -1,6 +1,10 @@
 {
   "left_arm_sequence": [
     {
+      "action": "RENDEZVOUS",
+      "arm": "left_arm"
+    },
+    {
       "action": "FIND_OBJECT",
       "target_name": "sports ball",
       "arm": "left_arm"
@@ -13,6 +17,10 @@
     {
       "action": "PLACE",
       "target_name": "box",
+      "arm": "left_arm"
+    },
+    {
+      "action": "MOVE_HOME",
       "arm": "left_arm"
     }
   ],
@@ -29,7 +37,15 @@
     },
     {
       "action": "PLACE",
-      "target_name": "target_object",
+      "target_name": "shared",
+      "arm": "right_arm"
+    },
+    {
+      "action": "RENDEZVOUS",
+      "arm": "right_arm"
+    },
+    {
+      "action": "MOVE_HOME",
       "arm": "right_arm"
     }
   ]

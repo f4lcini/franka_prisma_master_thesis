@@ -10,13 +10,14 @@ import copy
 import time
 import traceback
 import threading
+from std_srvs.srv import Trigger
 
 from .config import (
     PREDEFINED_TARGETS, WORLD_FRAME, TARGET_OFFSETS,
     READY_POSE_VALUES_LEFT, READY_POSE_VALUES_RIGHT, 
     MIDWAY_POSE_VALUES_LEFT, MIDWAY_POSE_VALUES_RIGHT, 
     OFFSET_POSE_VALUES_LEFT, OFFSET_POSE_VALUES_RIGHT, 
-    get_arm_config, apply_top_down_orientation, 
+    get_arm_config, apply_top_down_orientation, apply_rotated_top_down_orientation,
     apply_donor_handover_orientation, apply_recipient_handover_orientation, 
     parse_error_code
 )
@@ -26,20 +27,14 @@ class SkillBehaviors:
         self.node = node
         self.robot_control_api = robot_control_api
         self.logger = node.get_logger()
-
-        # In-process rendezvous events (multi-stage handshake)
-        self._donor_pre_pos_ready = threading.Event()
-        self._recipient_pre_pos_ready = threading.Event()
-        self._donor_ready = threading.Event()
-        self._recipient_ready = threading.Event()
-        self._recipient_grasped = threading.Event()
+        # --- MUTEX CLIENTS ---
+        self._mutex_acquire_client = self.node.create_client(Trigger, '/acquire_shared_zone', callback_group=server_cb_group)
+        self._mutex_release_client = self.node.create_client(Trigger, '/release_shared_zone', callback_group=server_cb_group)
 
         self.cb_groups = {
             'home': rclpy.callback_groups.ReentrantCallbackGroup(),
             'pick': rclpy.callback_groups.ReentrantCallbackGroup(),
-            'place': rclpy.callback_groups.ReentrantCallbackGroup(),
-            'give': rclpy.callback_groups.ReentrantCallbackGroup(),
-            'take': rclpy.callback_groups.ReentrantCallbackGroup()
+            'place': rclpy.callback_groups.ReentrantCallbackGroup()
         }
 
         self.home_server = ActionServer(
@@ -54,15 +49,7 @@ class SkillBehaviors:
             self.node, PlaceObject, 'place_object',
             execute_callback=self.execute_place, callback_group=self.cb_groups['place'])
 
-        self.give_server = ActionServer(
-            self.node, GiveObject, 'give_object',
-            execute_callback=self.execute_give, callback_group=self.cb_groups['give'])
-
-        self.take_server = ActionServer(
-            self.node, TakeObject, 'take_object',
-            execute_callback=self.execute_take, callback_group=self.cb_groups['take'])
-
-        # Publisher: fires when an object has been placed at 'shared' → wakes up the waiting arm
+        # Publisher: fires when an object has been placed at 'shared'
         self._handover_ready_pub = node.create_publisher(Bool, '/handover_ready', 10)
             
         self.logger.info("✅ Python Servers (Home, Pick, Place, Give, Take) Advertised!")
@@ -75,6 +62,42 @@ class SkillBehaviors:
                 self.logger.info(f"💡 Using target-specific override for {target_id}: {param_name}={val}")
                 return val
         return self.node.get_parameter(param_name).value
+
+    async def _is_zone_critical(self, arm_group, target_pose, fid):
+        """Determina se la posizione target richiede l'uso del Mutex."""
+        x = target_pose.position.x
+        
+        # 1. Se il target è esplicitamente 'shared' o 'box' (per il destro)
+        if fid in ["shared", "box", "target_object"]:
+            # Se il destro va nella box (lato sinistro) è critico
+            if "franka1" in arm_group and x < 0.1: return True
+            # Se il sinistro va nel target_object (lato destro) è critico
+            if "franka2" in arm_group and x > -0.1: return True
+            # La zona shared è sempre critica
+            if fid == "shared": return True
+
+        # 2. Controllo basato sulle coordinate X (Zona centrale di sicurezza)
+        # Se un braccio si avvicina a meno di 15cm dal centro del tavolo, chiede il lock
+        if abs(x) < 0.15:
+            return True
+            
+        return False
+
+    async def _request_mutex(self, arm_group):
+        """Richiede l'accesso esclusivo alla zona condivisa."""
+        if not self._mutex_acquire_client.wait_for_server(timeout_sec=1.0):
+            self.logger.warning(f"[{arm_group}] Mutex server non trovato, procedo senza lock!")
+            return False
+        self.logger.info(f"🛡️ [{arm_group}] Richiesta accesso zona condivisa...")
+        await self._mutex_acquire_client.call_async(Trigger.Request())
+        self.logger.info(f"✅ [{arm_group}] Accesso GARANTITO.")
+        return True
+
+    async def _release_mutex(self, arm_group):
+        """Rilascia la zona condivisa."""
+        if not self._mutex_release_client.wait_for_server(timeout_sec=1.0): return
+        self.logger.info(f"🔓 [{arm_group}] Rilascio zona condivisa.")
+        await self._mutex_release_client.call_async(Trigger.Request())
 
 
     def safe_publish_feedback(self, goal_handle, feedback):
@@ -127,13 +150,12 @@ class SkillBehaviors:
         return result
 
     async def execute_pick(self, goal_handle):
-        self.logger.info("DEBUG: execute_pick callback triggered!")
         req_arm = goal_handle.request.arm
-        self.logger.info(f"📦 ---> Received Pick Object Action for: '{req_arm}' <---")
+        self.logger.info(f"📥 [DEBUG] execute_pick RICEVUTO per {req_arm}")
         result = PickObject.Result()
-        feedback = PickObject.Feedback()
         
         arm_group, _ = get_arm_config(req_arm, self.logger)
+        self.logger.info(f"🔍 [DEBUG] Arm group: {arm_group}")
         if not arm_group:
             self.safe_abort(goal_handle); result.success = False; return result
         
@@ -157,7 +179,17 @@ class SkillBehaviors:
             # Ora che abbiamo preso gli offset, riportiamo il frame a 'table'
             req.target_pose.header.frame_id = WORLD_FRAME
         
-        apply_top_down_orientation(target_pose)
+        if "sports" in fid:
+            apply_rotated_top_down_orientation(target_pose)
+            self.logger.info(f"[{arm_group}] Using ROTATED (270deg) orientation for {fid}")
+        else:
+            apply_top_down_orientation(target_pose)
+        
+        # Apply X, Y offsets if specified
+        x_offset = self._get_offset(fid, 'pick_x_offset')
+        target_pose.position.x += x_offset
+        # Y-offset is now handled by the localization node directly for sports ball
+        
         grasp_z = target_pose.position.z + z_offset
         pre_grasp_z = grasp_z + clearance
         
@@ -165,11 +197,13 @@ class SkillBehaviors:
         self.logger.info(f"[{arm_group}] Step 0: Opening Gripper")
         await self.robot_control_api.send_gripper_goal_async(arm_group, width=open_w)
 
-        # --- ROBUSTNESS: Intermediate Waypoint for Shared Zone ---
-        if req.target_pose.header.frame_id == "shared":
-            self.logger.info(f"[{arm_group}] Collaborative target detected. Moving to MIDWAY joint waypoint first.")
-            midway_joints = MIDWAY_POSE_VALUES_RIGHT if "franka1" in arm_group else MIDWAY_POSE_VALUES_LEFT
-            await self.robot_control_api.send_moveit_goal_async(arm_group, joint_target=midway_joints, planner="PTP")
+        # --- MUTEX MANAGEMENT ---
+        has_mutex = False
+        self.logger.info(f"🔍 [DEBUG] Controllo criticità zona per {fid} a X={target_pose.position.x:.3f}...")
+        is_critical = await self._is_zone_critical(arm_group, target_pose, fid)
+        self.logger.info(f"🔍 [DEBUG] Zona critica? {is_critical}")
+        if is_critical:
+            has_mutex = await self._request_mutex(arm_group)
 
         # 2. Approach (PTP)
         self.logger.info(f"[{arm_group}] Step 1: Approach (PTP)")
@@ -194,6 +228,10 @@ class SkillBehaviors:
         # 5. Lift (PTP)
         self.logger.info(f"[{arm_group}] Step 4: Lift (PTP)")
         await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_grasp, planner="PTP")
+        
+        # --- RELEASE MUTEX ---
+        if has_mutex:
+            await self._release_mutex(arm_group)
             
         result.success = True
         self.safe_succeed(goal_handle)
@@ -221,11 +259,26 @@ class SkillBehaviors:
         open_w = self.node.get_parameter('gripper_open_width').value
         
         apply_top_down_orientation(place_pose)
+
+        # Apply X, Y offsets if specified (using pick offsets as general object offsets for now)
+        x_offset = self._get_offset(fid, 'pick_x_offset')
+        y_offset = self._get_offset(fid, 'pick_y_offset')
+        place_pose.position.x += x_offset
+        place_pose.position.y += y_offset
+
         final_place_z = place_pose.position.z + z_offset
         pre_place_z = final_place_z + clearance
         
         pre_place = copy.deepcopy(req.place_pose)
         pre_place.pose.position.z = pre_place_z
+
+        # --- MUTEX MANAGEMENT ---
+        has_mutex = False
+        self.logger.info(f"🔍 [DEBUG] Controllo criticità zona per PLACE '{fid}'...")
+        is_critical = await self._is_zone_critical(arm_group, pre_place.pose, fid)
+        self.logger.info(f"🔍 [DEBUG] Zona critica? {is_critical}")
+        if is_critical:
+            has_mutex = await self._request_mutex(arm_group)
         
         # 1. Approach
         self.logger.info(f"[{arm_group}] Step 1: Approach (PTP)")
@@ -252,142 +305,11 @@ class SkillBehaviors:
         # 4. Retreat
         self.logger.info(f"[{arm_group}] Step 4: Retreat (LIN)")
         await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_place, planner="PTP")
+
+        # --- RELEASE MUTEX ---
+        if has_mutex:
+            await self._release_mutex(arm_group)
              
         result.success = True
         self.safe_succeed(goal_handle)
-        return result
-
-    def execute_give(self, goal_handle):
-        req_arm = goal_handle.request.arm
-        self.logger.info(f"🎁 ---> [GIVE] Action for: '{req_arm}' <---")
-        result = GiveObject.Result()
-        
-        arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
-        target_pose = goal_handle.request.handover_pose.pose
-        fid = goal_handle.request.handover_pose.header.frame_id.lower()
-        
-        if fid in PREDEFINED_TARGETS:
-            px, py, pz = PREDEFINED_TARGETS[fid]
-            target_pose.position.x = float(px)
-            target_pose.position.y = float(py)
-            target_pose.position.z = float(pz)
-            self.logger.info(f"📍 Give Target '{fid}' resolved to {WORLD_FRAME}: ({px}, {py}, {pz})")
-        
-        apply_donor_handover_orientation(target_pose)
-        
-        give_pose = copy.deepcopy(goal_handle.request.handover_pose)
-        give_pose.header.frame_id = WORLD_FRAME
-        give_pose.pose = target_pose
-
-        donor_x_offset = self.node.get_parameter('handover_donor_x_offset').value
-        pre_give_pose = copy.deepcopy(give_pose)
-        pre_give_pose.pose.position.x += donor_x_offset
-        
-        if not self.robot_control_api.send_pose_goal(arm_group, pre_give_pose, tcp_frame, is_handover=True):
-            self.safe_abort(goal_handle)
-            return result
-
-        self._donor_pre_pos_ready.set()
-        
-        timeout = self.node.get_parameter('handover_timeout_sec').value
-        if not self._recipient_pre_pos_ready.wait(timeout=timeout):
-            self._donor_pre_pos_ready.clear()
-            self.safe_abort(goal_handle)
-            return result
-
-        if not self.robot_control_api.send_pose_goal(arm_group, give_pose, tcp_frame, planner="PTP", is_handover=True):
-            self._donor_pre_pos_ready.clear()
-            self.safe_abort(goal_handle)
-            return result
-
-        self._donor_ready.set()
-        
-        if not self._recipient_ready.wait(timeout=timeout):
-            self._donor_ready.clear()
-            self._donor_pre_pos_ready.clear()
-            self.safe_abort(goal_handle)
-            return result
-
-        open_w = self.node.get_parameter('gripper_open_width').value
-        self.robot_control_api.send_gripper_goal(arm_group, width=open_w)
-        
-        if not self._recipient_grasped.wait(timeout=timeout):
-            self.logger.warning("[Handshake] recipient never signaled GRASPED.")
-
-        self.robot_control_api.send_pose_goal(arm_group, pre_give_pose, tcp_frame, planner="PTP", is_handover=True)
-
-        self._donor_ready.clear()
-        self._donor_pre_pos_ready.clear()
-        
-        self.safe_succeed(goal_handle)
-        result.success = True
-        return result
-
-    def execute_take(self, goal_handle):
-        req_arm = goal_handle.request.arm
-        self.logger.info(f"🤝 ---> [TAKE] Action for: '{req_arm}' <---")
-        result = TakeObject.Result()
-        
-        arm_group, tcp_frame = get_arm_config(req_arm, self.logger)
-        target_pose = goal_handle.request.handover_pose.pose
-        fid = goal_handle.request.handover_pose.header.frame_id.lower()
-
-        if fid in PREDEFINED_TARGETS:
-            px, py, pz = PREDEFINED_TARGETS[fid]
-            target_pose.position.x = float(px)
-            target_pose.position.y = float(py)
-            target_pose.position.z = float(pz)
-            self.logger.info(f"📍 Take Target '{fid}' resolved to {WORLD_FRAME}: ({px}, {py}, {pz})")
-            
-        apply_recipient_handover_orientation(target_pose)
-
-        take_pose = copy.deepcopy(goal_handle.request.handover_pose)
-        take_pose.header.frame_id = WORLD_FRAME
-        take_pose.pose = target_pose
-        
-        recipient_x_offset = self.node.get_parameter('handover_recipient_x_offset').value
-        pre_take_pose = copy.deepcopy(take_pose)
-        pre_take_pose.pose.position.x += recipient_x_offset
-
-        if not self.robot_control_api.send_pose_goal(arm_group, pre_take_pose, tcp_frame, is_handover=True):
-            self.safe_abort(goal_handle)
-            return result
-        
-        self._recipient_pre_pos_ready.set()
-        
-        timeout = self.node.get_parameter('handover_timeout_sec').value
-        if not self._donor_pre_pos_ready.wait(timeout=timeout):
-            self._recipient_pre_pos_ready.clear()
-            self.safe_abort(goal_handle)
-            return result
-
-        if not self._donor_ready.wait(timeout=timeout):
-             self._recipient_pre_pos_ready.clear()
-             self.safe_abort(goal_handle)
-             return result
-
-        if not self.robot_control_api.send_pose_goal(arm_group, take_pose, tcp_frame, planner="PTP", is_handover=True):
-            self._recipient_pre_pos_ready.clear()
-            self.safe_abort(goal_handle)
-            return result
-
-        self._recipient_ready.set()
-        grasp_w = self._get_offset(fid, 'gripper_grasp_width')
-        self.robot_control_api.send_gripper_goal(arm_group, width=grasp_w)
-        
-        if not self.robot_control_api.check_grasp(arm_group):
-            self._recipient_ready.clear()
-            self._recipient_pre_pos_ready.clear()
-            self.safe_abort(goal_handle)
-            return result
-
-        self._recipient_grasped.set()
-        self.robot_control_api.send_pose_goal(arm_group, pre_take_pose, tcp_frame, planner="PTP", is_handover=True)
-
-        self._recipient_ready.clear()
-        self._recipient_grasped.clear()
-        self._recipient_pre_pos_ready.clear()
-        
-        self.safe_succeed(goal_handle)
-        result.success = True
         return result

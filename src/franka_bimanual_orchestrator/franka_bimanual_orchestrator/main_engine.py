@@ -20,8 +20,6 @@ from franka_bimanual_orchestrator.behaviors.pick_client import PickActionClient
 from franka_bimanual_orchestrator.behaviors.place_client import PlaceActionClient
 from franka_bimanual_orchestrator.behaviors.move_home_client import MoveHomeClient
 from franka_bimanual_orchestrator.behaviors.wait_client import WaitActionClient
-from franka_bimanual_orchestrator.behaviors.give_client import GiveActionClient
-from franka_bimanual_orchestrator.behaviors.take_client import TakeActionClient
 from franka_bimanual_orchestrator.behaviors.rendezvous_client import RendezvousClient
 from franka_bimanual_orchestrator.behaviors.planner_utils import PlanSplitter, DynamicActionIterator, PlanPopper
 
@@ -41,19 +39,22 @@ def create_dynamic_arm_sequence(arm_name, plan_steps):
         
         # Mapping string actions to BT Nodes with direct parameter passing
         if action == "FIND_OBJECT":
-            node = ObjectLocalizationClient(name=f"Find_{target}_{i}", prefix=prefix, target_name=target)
+            # Determinazione del server corretto in base al braccio
+            action_server = "/detect_object_left" if arm_name == "left" else "/detect_object_right"
+            node = ObjectLocalizationClient(
+                name=f"Find_{target}_{i}", 
+                prefix=prefix, 
+                target_name=target,
+                action_name=action_server
+            )
         elif action == "PICK":
             node = PickActionClient(name=f"Pick_{target}_{i}", prefix=prefix, target_name=target)
         elif action == "PLACE":
-            node = PlaceActionClient(name=f"Place_{target}_{i}", prefix=prefix)
+            node = PlaceActionClient(name=f"Place_{target}_{i}", prefix=prefix, target_location=target)
         elif action == "MOVE_HOME":
             node = MoveHomeClient(name=f"Home_{i}", prefix=prefix)
         elif action == "WAIT":
             node = WaitActionClient(name=f"Wait_{i}", prefix=prefix)
-        elif action == "GIVE":
-            node = GiveActionClient(name=f"Give_{i}", prefix=prefix)
-        elif action == "TAKE":
-            node = TakeActionClient(name=f"Take_{i}", prefix=prefix)
         elif action == "RENDEZVOUS":
             node = RendezvousClient(name=f"Rendezvous_{i}", role="donor" if arm_name == "right" else "recipient")
         else:

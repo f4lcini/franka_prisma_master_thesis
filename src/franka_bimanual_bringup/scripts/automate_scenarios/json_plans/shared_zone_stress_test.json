@@ -14,6 +14,10 @@
       "action": "PLACE",
       "target_name": "box",
       "arm": "left_arm"
+    },
+    {
+      "action": "MOVE_HOME",
+      "arm": "left_arm"
     }
   ],
   "right_arm_sequence": [
@@ -29,7 +33,11 @@
     },
     {
       "action": "PLACE",
-      "target_name": "target_object",
+      "target_name": "box",
+      "arm": "right_arm"
+    },
+    {
+      "action": "MOVE_HOME",
       "arm": "right_arm"
     }
   ]

@@ -72,7 +72,9 @@ DEFAULT_OFFSETS = {
     # --- Skill Offsets ---
     'approach_clearance': 0.10,
     'pick_z_offset': 0.13,
-    'place_z_offset': 0.13,
+    'pick_x_offset': 0.0,
+    'pick_y_offset': 0.0,
+    'place_z_offset': 0.15,
     'safety_pause_short': 0.2,   
     'safety_pause_long': 0.5,
     'settling_time': 0.5,                # Generic settling time for LIN/PTP
@@ -82,13 +84,6 @@ DEFAULT_OFFSETS = {
     'gripper_grasp_width': 0.028,
     'gripper_max_effort': 10.0,
     'gripper_safe_width_limit': 0.075,   # Hardware safety limit for FR3
-    
-    # --- Handover Offsets ---
-    'handover_safety_offset': 0.25,
-    'handover_donor_z_offset': 0.08,     
-    'handover_donor_x_offset': 0.15,     # Pre-positioning X offset for donor
-    'handover_recipient_x_offset': -0.30, 
-    'handover_timeout_sec': 120.0,
     
     # --- MoveIt / Planning Parameters ---
     'planning_attempts': 5,
@@ -116,6 +111,12 @@ TARGET_OFFSETS = {
         "pick_z_offset": 0.15,        # Prendi la tazza a 6cm dal tavolo
         "gripper_grasp_width": 0.055,  # Un po' più largo per sicurezza
         "approach_clearance": 0.1     # 10cm sopra la tazza
+    },
+    "sports": {
+        "pick_z_offset": 0.16,
+        "gripper_grasp_width": 0.055,
+        "pick_y_offset": 0.03,
+        "approach_clearance": 0.1
     }
 }
 
@@ -149,24 +150,17 @@ def get_arm_config(request_arm, logger=None):
             logger.error(f"❌ Unrecognized arm request: '{request_arm}'")
         return None, None
 
-def apply_donor_handover_orientation(pose):
-    """Donor: Points along -X, fingers Vertical."""
-    pose.orientation.x = 0.7071
-    pose.orientation.y = 0.7071
-    pose.orientation.z = 0.0
-    pose.orientation.w = 0.0
-
-def apply_recipient_handover_orientation(pose):
-    """Recipient: Points along +X, fingers Horizontal."""
-    pose.orientation.x = 0.0
-    pose.orientation.y = 0.0
-    pose.orientation.z = 0.7071
-    pose.orientation.w = 0.7071
-
 def apply_top_down_orientation(pose):
     """Standard Pick/Place orientation (TCP down)."""
     pose.orientation.x = 1.0
     pose.orientation.y = 0.0
+    pose.orientation.z = 0.0
+    pose.orientation.w = 0.0
+
+def apply_rotated_top_down_orientation(pose):
+    """Pick/Place orientation rotated 90 deg around Z axis."""
+    pose.orientation.x = 0.7071
+    pose.orientation.y = 0.7071
     pose.orientation.z = 0.0
     pose.orientation.w = 0.0
 

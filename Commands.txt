@@ -177,3 +177,5 @@ ros2 run franka_bimanual_config fix_camera
 ros2 topic echo /detections
 
 ros2 run franka_bimanual_orchestrator main_engine --plan src/franka_bimanual_bringup/scripts/automate_scenarios/json_plans/bottle_pick.json
+
+ros2 launch franka_bimanual_skills perception.launch.py use_hardware:=true
