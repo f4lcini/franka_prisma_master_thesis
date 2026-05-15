@@ -59,7 +59,7 @@ class PlaceActionClient(py_trees.behaviour.Behaviour):
             target_arm = getattr(self.blackboard, f"{self.prefix}active_arm")
 
         # PREDEFINED TARGET SUPPORT
-        if target_loc in ["base_pose", "shared", "box", "target_object"]:
+        if target_loc in ["base_pose", "shared", "box", "target_object", "box_ws_sx", "box_ws_dx"]:
             self.logger.info(f"[{self.name}] Using predefined target location: '{target_loc}'")
             target_pose = PoseStamped()
             target_pose.header.frame_id = target_loc

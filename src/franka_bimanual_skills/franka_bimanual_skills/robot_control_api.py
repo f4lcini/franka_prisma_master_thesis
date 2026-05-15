@@ -21,41 +21,31 @@ class RobotControlAPI:
         self.node = node
         self.logger = node.get_logger()
         
-        # Paradigm 1: Parallel Move Client (Connecting to our C++ Bimanual Planner)
-        self.parallel_move_client = ActionClient(
-            self.node, ParallelMove, 'parallel_move', callback_group=client_cb_group)
-        
-        # Gripper Action Clients — Using standard GripperCommand for hardware compatibility
-        self.gripper1_client = ActionClient(
-            self.node, GripperCommand, '/franka1_gripper/gripper_action',
-            callback_group=client_cb_group)
-        self.gripper2_client = ActionClient(
-            self.node, GripperCommand, '/franka2_gripper/gripper_action',
-            callback_group=client_cb_group)
-        
-        self.cartesian_client = self.node.create_client(
-            GetCartesianPath, 'compute_cartesian_path', callback_group=client_cb_group)
-        self.trajectory_executor = ActionClient(
-            self.node, ExecuteTrajectory, 'execute_trajectory', callback_group=client_cb_group)
-        self.move_group_client = ActionClient(
-            self.node, MoveGroup, 'move_action', callback_group=client_cb_group)
+        # Clients
+        self.parallel_move_client = ActionClient(self.node, ParallelMove, 'parallel_move', callback_group=client_cb_group)
+        self.gripper1_client = ActionClient(self.node, GripperCommand, '/franka1_gripper/gripper_action', callback_group=client_cb_group)
+        self.gripper2_client = ActionClient(self.node, GripperCommand, '/franka2_gripper/gripper_action', callback_group=client_cb_group)
+        self.cartesian_client = self.node.create_client(GetCartesianPath, 'compute_cartesian_path', callback_group=client_cb_group)
+        self.trajectory_executor = ActionClient(self.node, ExecuteTrajectory, 'execute_trajectory', callback_group=client_cb_group)
+        self.move_group_client = ActionClient(self.node, MoveGroup, 'move_action', callback_group=client_cb_group)
         
         self.jtc_clients = {
             "franka1_arm": ActionClient(self.node, FollowJointTrajectory, 'franka1_arm_controller/follow_joint_trajectory', callback_group=client_cb_group),
             "franka2_arm": ActionClient(self.node, FollowJointTrajectory, 'franka2_arm_controller/follow_joint_trajectory', callback_group=client_cb_group)
         }
 
-        self.logger.info("⏳ Checking backends (Planner, Grippers, MoveGroup, JTCs)...")
-        
-        if not self.parallel_move_client.wait_for_server(timeout_sec=2.0):
-             self.logger.warning("⚠️ ParallelMove (/parallel_move) not ready yet.")
-        
-        if not self.gripper1_client.wait_for_server(timeout_sec=5.0):
-            self.logger.warning("⚠️ franka1_gripper not ready yet.")
-        if not self.gripper2_client.wait_for_server(timeout_sec=5.0):
-            self.logger.warning("⚠️ franka2_gripper not ready yet.")
-        if not self.move_group_client.wait_for_server(timeout_sec=5.0):
-            self.logger.warning("⚠️ MoveGroup action server not ready yet.")
+        # --- FIX: Real-time Joint State Subscriber ---
+        self.current_joints = {}
+        self.joint_sub = self.node.create_subscription(
+            JointState, '/joint_states', self._joint_state_callback, 10, callback_group=client_cb_group
+        )
+
+        self.logger.info("⏳ Checking backends...")
+
+    def _joint_state_callback(self, msg):
+        """Caches the latest joint states for trajectory patching."""
+        for name, pos in zip(msg.name, msg.position):
+            self.current_joints[name] = pos
 
     def wait_for_future(self, future, timeout_sec=None, label="Action"):
         """Simple synchronous wait for a rclpy future."""
@@ -279,6 +269,22 @@ class RobotControlAPI:
             if not trajectory.points:
                 self.logger.warning(f"⚠️ Planned trajectory for {arm_group} is empty.")
                 return True
+
+            # --- TRAJECTORY PATCHING: Force start from CURRENT joint positions ---
+            # This is the ultimate fix for 'controller_torque_discontinuity'
+            current_pos = []
+            valid_patch = True
+            for jname in trajectory.joint_names:
+                if jname in self.current_joints:
+                    current_pos.append(self.current_joints[jname])
+                else:
+                    valid_patch = False
+                    break
+            
+            if valid_patch and current_pos:
+                # Sostituiamo la posizione del primo punto (tempo=0) con quella reale
+                trajectory.points[0].positions = current_pos
+                self.logger.info(f"🛠️ [PATCH] Trajectory start point synchronized for {arm_group}")
 
             jtc_client = self.jtc_clients.get(arm_group)
             if not jtc_client:

@@ -52,6 +52,8 @@ class ObjectLocalizationNode(Node):
         self.get_logger().info(f"📸 CAMERA ROT MATRIX:\n{self._R_optical_to_table}")
 
         # ---- YOLOv26 Configuration ----
+        self.num_samples = 1 # <--- CAMBIA QUESTO NUMERO PER VELOCIZZARE (es. 1)
+        
         if YOLO is None:
             self.get_logger().error('Libreria YOLO (ultralytics) non trovata.')
             self.model = None
@@ -194,9 +196,9 @@ class ObjectLocalizationNode(Node):
         
         self.get_logger().info(f"🔍 [{side.upper()}] Cerco '{object_name}' nel mio spazio di lavoro...")
 
-        # Raccogliamo campioni per 0.5 secondi per stabilità
+        # Raccogliamo campioni per stabilità
         samples = []
-        for _ in range(5):
+        for _ in range(self.num_samples):
             if self.latest_image is None or self.camera_intrinsics is None:
                 time.sleep(0.1)
                 continue

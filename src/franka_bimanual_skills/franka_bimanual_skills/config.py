@@ -58,8 +58,9 @@ ROBOT_BASES = {
 # Table margins: X [-0.6, 0.6], Y [-0.3, 0.3]
 PREDEFINED_TARGETS = {
     "shared":        (0.0, -0.2, 0.0),      # Shared zone (at table level)
-    "box":           (-0.4, -0.25, 0.0),   # In front of Left Arm (Franka2), at table level
+    "box_ws_sx":     (-0.5, -0.25, 0.0),   # In front of Left Arm (Franka2), at table level
     "target_object": (0.4, -0.25, 0.0),    # In front of Right Arm (Franka1), at table level
+    "box_ws_dx":     (0.5, -0.25, 0.0),    # +2cm on Y from target_object
     "mid_air":       (0.0, 0.0, 0.4)       # Safe transition point
 }
 
@@ -80,27 +81,37 @@ DEFAULT_OFFSETS = {
     'settling_time': 0.5,                # Generic settling time for LIN/PTP
     
     # --- Gripper Parameters ---
-    'gripper_open_width': 0.075,
+    'gripper_open_width': 0.070,
     'gripper_grasp_width': 0.028,
     'gripper_max_effort': 10.0,
-    'gripper_safe_width_limit': 0.075,   # Hardware safety limit for FR3
+    'gripper_safe_width_limit': 0.070,   # Hardware safety limit for FR3
     
     # --- MoveIt / Planning Parameters ---
     'planning_attempts': 5,
     'planning_time': 10.0,
-    'velocity_scaling': 0.2,
+    'velocity_scaling': 0.3,
     'acceleration_scaling': 0.1,
     'joint_tolerance': 0.01,
-    'position_tolerance': 0.03,
-    'orientation_tolerance': 0.05
+    'position_tolerance': 0.02,
+    'orientation_tolerance': 0.03
 }
 
 # --- TARGET-SPECIFIC OVERRIDES ---
 # Use these to tune approach/offsets for specific objects or locations
 TARGET_OFFSETS = {
-    "box": {
+    "shared": {
+        "pick_z_offset": 0.14,        # Stessa altezza di 'sports' per la presa cieca
+        "gripper_grasp_width": 0.045,
+        "approach_clearance": 0.1,
+        "place_z_offset": 0.15        # Altezza di rilascio standard
+    },
+    "box_ws_sx": {
         "place_z_offset": 0.20,       # Posa la scatola a 5cm dal tavolo (più delicato)
         "approach_clearance": 0.1    # Spazio verticale standard
+    },
+    "box_ws_dx": {
+        "place_z_offset": 0.20,
+        "approach_clearance": 0.1
     },
     "bottle": {
         "pick_z_offset": 0.20,        # Prendi la bottiglia a circa metà corpo (12cm)
@@ -113,9 +124,9 @@ TARGET_OFFSETS = {
         "approach_clearance": 0.1     # 10cm sopra la tazza
     },
     "sports": {
-        "pick_z_offset": 0.16,
-        "gripper_grasp_width": 0.055,
-        "pick_y_offset": 0.03,
+        "pick_z_offset": 0.14,
+        "gripper_grasp_width": 0.050,
+        "pick_y_offset": 0.01,
         "approach_clearance": 0.1
     }
 }
@@ -124,9 +135,9 @@ TARGET_OFFSETS = {
 READY_POSE_VALUES_RIGHT = [1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
 READY_POSE_VALUES_LEFT  = [-1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
 
-# Aggressive 'Parallelismo Spinto' Poses (Joint1 shifted 45 deg towards shared zone)
-MIDWAY_POSE_VALUES_RIGHT = [1.35, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
-MIDWAY_POSE_VALUES_LEFT  = [-1.35, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
+# Aggressive 'Parallelismo Spinto' Poses (Joint1 shifted ~45 deg towards shared zone)
+MIDWAY_POSE_VALUES_RIGHT = [0.85, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
+MIDWAY_POSE_VALUES_LEFT  = [-0.85, -0.785398, 0.0, -2.35619, 0.0, 1.570796, 0.785398]
 
 # Safe Offset Poses (Visible 20-30 deg shift on Joint 6 for clear parallel testing)
 OFFSET_POSE_VALUES_RIGHT = [1.570796, -0.785398, 0.0, -2.35619, 0.0, 1.9, 0.785398]

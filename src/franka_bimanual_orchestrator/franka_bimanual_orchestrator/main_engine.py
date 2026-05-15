@@ -52,9 +52,11 @@ def create_dynamic_arm_sequence(arm_name, plan_steps):
         elif action == "PLACE":
             node = PlaceActionClient(name=f"Place_{target}_{i}", prefix=prefix, target_location=target)
         elif action == "MOVE_HOME":
-            node = MoveHomeClient(name=f"Home_{i}", prefix=prefix)
+            target_pose = step.get('pose_name')
+            node = MoveHomeClient(name=f"Home_{i}", prefix=prefix, target_pose=target_pose)
         elif action == "WAIT":
-            node = WaitActionClient(name=f"Wait_{i}", prefix=prefix)
+            duration = step.get('seconds') or step.get('duration')
+            node = WaitActionClient(name=f"Wait_{i}", prefix=prefix, duration=duration)
         elif action == "RENDEZVOUS":
             node = RendezvousClient(name=f"Rendezvous_{i}", role="donor" if arm_name == "right" else "recipient")
         else:

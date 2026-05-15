@@ -8,8 +8,9 @@
     { "action": "MOVE_HOME", "arm": "left_arm" }
   ],
   "right_arm_sequence": [
-    { "action": "WAIT", "seconds": 10.0, "arm": "right_arm" },
-    { "action": "MOVE_HOME", "pose_name": "midway", "arm": "right_arm" },
+    { "action": "FIND_OBJECT", "target_name": "sports", "arm": "right_arm" },
+    { "action": "PICK", "target_name": "sports", "arm": "right_arm" },
+    { "action": "PLACE", "target_name": "box_ws_dx", "arm": "right_arm" },
     { "action": "RENDEZVOUS", "arm": "right_arm" },
     { "action": "PICK", "target_name": "shared", "arm": "right_arm" },
     { "action": "PLACE", "target_name": "box_ws_dx", "arm": "right_arm" },

@@ -4,10 +4,11 @@ from rclpy.action import ActionClient
 from franka_custom_interfaces.action import MoveHome
 
 class MoveHomeClient(py_trees.behaviour.Behaviour):
-    def __init__(self, name="Execute Move Home", action_name="/move_home", prefix="left_"):
+    def __init__(self, name="Execute Move Home", action_name="/move_home", prefix="left_", target_pose=None):
         super().__init__(name=name)
         self.action_name = action_name
         self.prefix = prefix
+        self.target_pose = target_pose
         self.node = None
         self.action_client = None
         self.send_goal_future = None
@@ -28,7 +29,8 @@ class MoveHomeClient(py_trees.behaviour.Behaviour):
         self.get_result_future = None
         
         target_arm = getattr(self.blackboard, f"{self.prefix}active_arm", "left_arm")
-        target_pose = getattr(self.blackboard, f"{self.prefix}target_pose_name", "ready")
+        # Priority: 1. constructor argument, 2. blackboard key, 3. default 'ready'
+        target_pose = self.target_pose or getattr(self.blackboard, f"{self.prefix}target_pose_name", "ready")
         
         goal_msg = MoveHome.Goal()
         goal_msg.arm = target_arm
