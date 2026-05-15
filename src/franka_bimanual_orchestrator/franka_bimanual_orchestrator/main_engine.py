@@ -166,6 +166,12 @@ def main():
         child=root, 
         policy=py_trees.common.OneShotPolicy.ON_COMPLETION
     )
+
+    print("\n" + "="*40)
+    print("🎄 GENERATED BEHAVIOR TREE:")
+    print("="*40)
+    print(py_trees.display.ascii_tree(root))
+    print("="*40 + "\n")
     
     tree = py_trees_ros.trees.BehaviourTree(root=root, unicode_tree_debug=False)
     

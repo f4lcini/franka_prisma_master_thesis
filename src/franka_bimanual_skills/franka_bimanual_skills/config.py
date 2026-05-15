@@ -88,10 +88,10 @@ DEFAULT_OFFSETS = {
     # --- MoveIt / Planning Parameters ---
     'planning_attempts': 5,
     'planning_time': 10.0,
-    'velocity_scaling': 0.3,
+    'velocity_scaling': 0.2,
     'acceleration_scaling': 0.1,
     'joint_tolerance': 0.01,
-    'position_tolerance': 0.01,
+    'position_tolerance': 0.03,
     'orientation_tolerance': 0.05
 }
 
@@ -151,16 +151,20 @@ def get_arm_config(request_arm, logger=None):
         return None, None
 
 def apply_top_down_orientation(pose):
-    """Standard Pick/Place orientation (TCP down)."""
     pose.orientation.x = 1.0
     pose.orientation.y = 0.0
     pose.orientation.z = 0.0
     pose.orientation.w = 0.0
 
-def apply_rotated_top_down_orientation(pose):
-    """Pick/Place orientation rotated 90 deg around Z axis."""
-    pose.orientation.x = 0.7071
-    pose.orientation.y = 0.7071
+def apply_donor_handover_orientation(pose):
+    pose.orientation.x = 1.0
+    pose.orientation.y = 0.0
+    pose.orientation.z = 0.0
+    pose.orientation.w = 0.0
+
+def apply_recipient_handover_orientation(pose):
+    pose.orientation.x = 1.0
+    pose.orientation.y = 0.0
     pose.orientation.z = 0.0
     pose.orientation.w = 0.0
 

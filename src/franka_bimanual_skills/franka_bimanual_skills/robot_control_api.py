@@ -198,6 +198,10 @@ class RobotControlAPI:
         req.max_velocity_scaling_factor = self.node.get_parameter('velocity_scaling').value
         req.max_acceleration_scaling_factor = self.node.get_parameter('acceleration_scaling').value
 
+        # --- FIX: Ensure MoveIt starts from CURRENT hardware state ---
+        # This prevents 'empty JointState' errors and torque discontinuity reflexes
+        req.start_state.is_diff = True 
+
         if planner in ["PTP", "LIN", "CIRC"]:
             req.pipeline_id = "pilz_industrial_motion_planner"
             req.planner_id = planner

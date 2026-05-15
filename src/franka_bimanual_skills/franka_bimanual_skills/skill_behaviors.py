@@ -17,7 +17,7 @@ from .config import (
     READY_POSE_VALUES_LEFT, READY_POSE_VALUES_RIGHT, 
     MIDWAY_POSE_VALUES_LEFT, MIDWAY_POSE_VALUES_RIGHT, 
     OFFSET_POSE_VALUES_LEFT, OFFSET_POSE_VALUES_RIGHT, 
-    get_arm_config, apply_top_down_orientation, apply_rotated_top_down_orientation,
+    get_arm_config, apply_top_down_orientation,
     apply_donor_handover_orientation, apply_recipient_handover_orientation, 
     parse_error_code
 )
@@ -85,7 +85,7 @@ class SkillBehaviors:
 
     async def _request_mutex(self, arm_group):
         """Richiede l'accesso esclusivo alla zona condivisa."""
-        if not self._mutex_acquire_client.wait_for_server(timeout_sec=1.0):
+        if not self._mutex_acquire_client.wait_for_service(timeout_sec=1.0):
             self.logger.warning(f"[{arm_group}] Mutex server non trovato, procedo senza lock!")
             return False
         self.logger.info(f"🛡️ [{arm_group}] Richiesta accesso zona condivisa...")
@@ -94,8 +94,9 @@ class SkillBehaviors:
         return True
 
     async def _release_mutex(self, arm_group):
-        """Rilascia la zona condivisa."""
-        if not self._mutex_release_client.wait_for_server(timeout_sec=1.0): return
+        """Rilascia l'accesso alla zona condivisa."""
+        if not self._mutex_release_client.wait_for_service(timeout_sec=1.0):
+            return
         self.logger.info(f"🔓 [{arm_group}] Rilascio zona condivisa.")
         await self._mutex_release_client.call_async(Trigger.Request())
 
@@ -179,11 +180,7 @@ class SkillBehaviors:
             # Ora che abbiamo preso gli offset, riportiamo il frame a 'table'
             req.target_pose.header.frame_id = WORLD_FRAME
         
-        if "sports" in fid:
-            apply_rotated_top_down_orientation(target_pose)
-            self.logger.info(f"[{arm_group}] Using ROTATED (270deg) orientation for {fid}")
-        else:
-            apply_top_down_orientation(target_pose)
+        apply_top_down_orientation(target_pose)
         
         # Apply X, Y offsets if specified
         x_offset = self._get_offset(fid, 'pick_x_offset')
