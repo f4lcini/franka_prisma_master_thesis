@@ -60,7 +60,7 @@ PREDEFINED_TARGETS = {
     "shared":        (0.0, -0.2, 0.0),      # Shared zone (at table level)
     "box_ws_sx":     (-0.5, -0.25, 0.0),   # In front of Left Arm (Franka2), at table level
     "target_object": (0.4, -0.25, 0.0),    # In front of Right Arm (Franka1), at table level
-    "box_ws_dx":     (0.5, -0.25, 0.0),    # +2cm on Y from target_object
+    "box_ws_dx":     (0.38, -0.25, 0.0),    # +2cm on Y from target_object
     "mid_air":       (0.0, 0.0, 0.4)       # Safe transition point
 }
 
@@ -126,7 +126,7 @@ TARGET_OFFSETS = {
     "sports": {
         "pick_z_offset": 0.14,
         "gripper_grasp_width": 0.050,
-        "pick_y_offset": 0.01,
+        "pick_y_offset": 0.02,
         "approach_clearance": 0.1
     }
 }

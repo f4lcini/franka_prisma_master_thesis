@@ -12,7 +12,7 @@
     },
     {
       "action": "PLACE",
-      "target_name": "box",
+      "target_name": "box_ws_sx",
       "arm": "left_arm"
     }
   ],
@@ -29,7 +29,7 @@
     },
     {
       "action": "PLACE",
-      "target_name": "target_object",
+      "target_name": "box_ws_dx",
       "arm": "right_arm"
     }
   ]
