@@ -23,4 +23,6 @@ ssh_falcini.pub
 *.key
 id_rsa*
 .env
+**/.env
+KEY/
 *.secret

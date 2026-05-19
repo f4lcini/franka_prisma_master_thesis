@@ -182,3 +182,15 @@ ros2 launch franka_bimanual_skills perception.launch.py use_hardware:=true
 
 QTWEBENGINE_DISABLE_SANDBOX=1 /opt/ros/humble/bin/py-trees-tree-viewer
 ros2 run tf2_ros tf2_echo camera_color_optical_frame tag_0
+
+EXP1:
+PROMPT: 
+Sort all the items inside the designated boxes
+
+EXP2:
+PROMPT: 
+Transfer the object on the table to the box
+
+EXP3:
+PROMPT: 
+Clear the entire workspace.

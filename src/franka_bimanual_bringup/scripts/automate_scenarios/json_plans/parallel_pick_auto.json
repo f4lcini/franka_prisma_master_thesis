@@ -2,12 +2,12 @@
   "left_arm_sequence": [
     {
       "action": "FIND_OBJECT",
-      "target_name": "sports ball",
+      "target_name": "auto",
       "arm": "left_arm"
     },
     {
       "action": "PICK",
-      "target_name": "sports ball",
+      "target_name": "auto",
       "arm": "left_arm"
     },
     {
@@ -23,12 +23,12 @@
   "right_arm_sequence": [
     {
       "action": "FIND_OBJECT",
-      "target_name": "sports ball",
+      "target_name": "auto",
       "arm": "right_arm"
     },
     {
       "action": "PICK",
-      "target_name": "sports ball",
+      "target_name": "auto",
       "arm": "right_arm"
     },
     {

@@ -1,0 +1,6 @@
+# Request: vuota (scan on-demand)
+---
+# Response
+bool success
+string scene_json   # JSON array: [{"label","x_world","y_world","side","conf"}, ...]
+string message

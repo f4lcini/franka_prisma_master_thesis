@@ -9,6 +9,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import PoseStamped, Point
 from visualization_msgs.msg import Marker, MarkerArray
 from franka_custom_interfaces.action import DetectObject
+from franka_custom_interfaces.srv import ScanTable
 
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
@@ -17,6 +18,7 @@ import datetime
 import os
 import time
 import asyncio
+import json
 from scipy.spatial.transform import Rotation
 
 try:
@@ -101,6 +103,13 @@ class ObjectLocalizationNode(Node):
         self.detect_right_server = ActionServer(
             self, DetectObject, 'detect_object_right',
             execute_callback=self.execute_callback_right,
+            callback_group=self.action_cb_group
+        )
+
+        # --- /scan_table Service: global table inventory for VLM grounding ---
+        self.scan_table_server = self.create_service(
+            ScanTable, 'scan_table',
+            self.scan_table_callback,
             callback_group=self.action_cb_group
         )
         
@@ -277,6 +286,105 @@ class ObjectLocalizationNode(Node):
         result.target_pose = pose
         goal_handle.succeed()
         return result
+
+    def scan_table_callback(self, request, response):
+        """
+        /scan_table service handler.
+        Scans the full table with YOLO (3 frames, both sides), applies NMS
+        and returns all unique detected objects as a JSON string.
+        Format: [{"label", "x_world", "y_world", "side", "conf"}, ...]
+        """
+        self.get_logger().info("🔍 /scan_table: avvio scan globale del tavolo...")
+
+        response.success = False
+        response.scene_json = "[]"
+
+        if self.model is None:
+            response.message = "YOLO model not loaded."
+            return response
+        if self.latest_image is None or self.camera_intrinsics is None:
+            response.message = "Camera not ready (no image or intrinsics)."
+            return response
+
+        # Rebuild camera transform in case parameters changed at runtime
+        cam_pos, R_opt_to_table = self._build_camera_transform()
+
+        fx = self.camera_intrinsics['fx']
+        fy = self.camera_intrinsics['fy']
+        cx = self.camera_intrinsics['cx']
+        cy = self.camera_intrinsics['cy']
+
+        NUM_FRAMES  = 3     # campioni per robustezza temporale
+        NMS_DIST_M  = 0.08  # soglia NMS: oggetti a <8 cm = stesso oggetto
+
+        all_detections = []
+
+        for _ in range(NUM_FRAMES):
+            try:
+                cv_image = self.cv_bridge.imgmsg_to_cv2(self.latest_image, 'bgr8')
+                results  = self.model(cv_image, verbose=False, conf=0.25, imgsz=640)
+
+                for box in results[0].boxes:
+                    cls_id = int(box.cls[0].item())
+                    conf   = float(box.conf[0].item())
+                    label  = self.model.names[cls_id]
+
+                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+                    u = (x1 + x2) / 2.0
+                    v = y2  # base del bounding box = punto di appoggio
+
+                    # Proiezione sul piano tavolo (z=0 nel frame mondo)
+                    v_opt   = np.array([(u - cx) / fx, (v - cy) / fy, 1.0])
+                    v_world = R_opt_to_table @ v_opt
+                    if abs(v_world[2]) < 1e-6:
+                        continue
+                    lam     = -cam_pos[2] / v_world[2]
+                    p_world = cam_pos + lam * v_world
+
+                    all_detections.append({
+                        'label':   label,
+                        'x_world': float(p_world[0]),
+                        'y_world': float(p_world[1]),
+                        'conf':    conf,
+                    })
+            except Exception as e:
+                self.get_logger().error(f"Errore YOLO in scan_table frame: {e}")
+            time.sleep(0.05)
+
+        if not all_detections:
+            response.success = True
+            response.scene_json = "[]"
+            response.message = "No objects detected on the table."
+            self.get_logger().info("🔍 /scan_table: nessun oggetto rilevato.")
+            return response
+
+        # NMS spaziale: per ogni (label, posizione XY) vicini, tieni solo best-conf
+        kept = []
+        for det in sorted(all_detections, key=lambda d: -d['conf']):
+            duplicate = False
+            for k in kept:
+                dist = ((k['x_world'] - det['x_world'])**2 +
+                        (k['y_world'] - det['y_world'])**2) ** 0.5
+                if k['label'] == det['label'] and dist < NMS_DIST_M:
+                    duplicate = True
+                    break
+            if not duplicate:
+                det['side'] = "left_side" if det['x_world'] < 0.0 else "right_side"
+                kept.append(det)
+
+        self.get_logger().info(
+            f"✅ /scan_table: {len(all_detections)} raw det → {len(kept)} oggetti unici"
+        )
+        for obj in kept:
+            self.get_logger().info(
+                f"   · '{obj['label']}' @ X={obj['x_world']:.3f}m → {obj['side']} (conf={obj['conf']:.2f})"
+            )
+
+        response.success   = True
+        response.scene_json = json.dumps(kept)
+        response.message   = f"Found {len(kept)} unique object(s) on the table."
+        return response
+
 
 def main(args=None):
     rclpy.init(args=args)

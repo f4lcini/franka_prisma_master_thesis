@@ -23,6 +23,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/ParallelMove.action"
   "srv/ClearOctomap.srv"
   "srv/HandoverReady.srv"
+  "srv/ScanTable.srv"
   DEPENDENCIES geometry_msgs sensor_msgs
 )
 
