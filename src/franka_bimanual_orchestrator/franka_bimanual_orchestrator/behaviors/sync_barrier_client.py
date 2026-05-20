@@ -2,12 +2,12 @@ import py_trees
 import rclpy
 from std_srvs.srv import Trigger
 
-class RendezvousClient(py_trees.behaviour.Behaviour):
+class SyncBarrierClient(py_trees.behaviour.Behaviour):
     """
-    Rendezvous node that synchronizes two arms using a unified ROS 2 Service.
+    SyncBarrier node that synchronizes two arms using a unified ROS 2 Service.
     It calls /sync_arms and blocks until BOTH arms have arrived.
     """
-    def __init__(self, name="Rendezvous", role="any"):
+    def __init__(self, name="SyncBarrier", role="any"):
         super().__init__(name=name)
         self.node = None
         self.client = None

@@ -86,11 +86,11 @@ def generate_launch_description():
         parameters=[{'use_sim_time': use_sim_time}]
     )
 
-    # Handover Coordinator (Rendezvous Server)
-    handover_coordinator_node = Node(
+    # Sync Barrier Coordinator
+    sync_barrier_coordinator_node = Node(
         package='franka_bimanual_skills',
-        executable='handover_coordinator',
-        name='handover_coordinator',
+        executable='sync_barrier_coordinator',
+        name='sync_barrier_coordinator',
         output='screen'
     )
 
@@ -98,5 +98,5 @@ def generate_launch_description():
         declare_use_sim_time,
         bridge_node,
         skill_server_node,
-        handover_coordinator_node
+        sync_barrier_coordinator_node
     ])

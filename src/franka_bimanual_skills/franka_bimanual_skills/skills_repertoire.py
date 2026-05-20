@@ -37,16 +37,16 @@ class MoveHomeSkill(BaseModel):
     arm: Literal["left_arm", "right_arm"] = Field(description="Which arm moves home.")
     pose_name: Literal["ready", "midway"] = "ready"
 
-class RendezvousSkill(BaseModel):
+class SyncBarrierSkill(BaseModel):
     """Explicitly synchronizes both arms at a specific waypoint.
-    Both arms must hit the RENDEZVOUS point; the orchestrator coordinates them safely."""
-    action: Literal["RENDEZVOUS"] = "RENDEZVOUS"
-    arm: Literal["left_arm", "right_arm"] = Field(description="Which arm enters rendezvous.")
+    Both arms must hit the SYNC_BARRIER point; the orchestrator coordinates them safely."""
+    action: Literal["SYNC_BARRIER"] = "SYNC_BARRIER"
+    arm: Literal["left_arm", "right_arm"] = Field(description="Which arm enters sync barrier.")
 
 # ==========================================
 # 2. GLOBAL REPERTOIRE DEFINITION
 # ==========================================
-RobotSkill = Union[FindObjectSkill, WaitSkill, PickSkill, PlaceSkill, MoveHomeSkill, RendezvousSkill]
+RobotSkill = Union[FindObjectSkill, WaitSkill, PickSkill, PlaceSkill, MoveHomeSkill, SyncBarrierSkill]
 
 class TaskPlan(BaseModel):
     """Logical plan for Dual-Arm execution. 

@@ -205,14 +205,14 @@ class VlmServerNode(Node):
             "   - Syntax: { \"action\": \"WAIT\", \"seconds\": <float>, \"arm\": \"<arm>\", \"message\": \"<text>\" }\n"
             "   - Purpose: Pauses the arm for a specific duration.\n\n"
 
-            "6. RENDEZVOUS:\n"
-            "   - Syntax: { \"action\": \"RENDEZVOUS\", \"arm\": \"<arm>\" }\n"
+            "6. SYNC_BARRIER:\n"
+            "   - Syntax: { \"action\": \"SYNC_BARRIER\", \"arm\": \"<arm>\" }\n"
             "   - Purpose: Synchronization barrier — both arms wait until both are ready.\n\n"
 
             "--- SYNCHRONIZATION & HANDOVER STRATEGIES ---\n"
             "- INDIRECT TABLE HANDOVER:\n"
-            "  left_arm: FIND_OBJECT -> PICK -> PLACE('shared') -> MOVE_HOME('midway') -> RENDEZVOUS -> MOVE_HOME('ready').\n"
-            "  right_arm: WAIT(10s) -> MOVE_HOME('midway') -> RENDEZVOUS -> PICK('shared') -> PLACE('box_ws_dx') -> MOVE_HOME('ready').\n\n"
+            "  left_arm: FIND_OBJECT -> PICK -> PLACE('shared') -> MOVE_HOME('midway') -> SYNC_BARRIER -> MOVE_HOME('ready').\n"
+            "  right_arm: WAIT(10s) -> MOVE_HOME('midway') -> SYNC_BARRIER -> PICK('shared') -> PLACE('box_ws_dx') -> MOVE_HOME('ready').\n\n"
             "- PARALLEL PICKING (no handover): both arms execute FIND_OBJECT -> PICK -> PLACE -> MOVE_HOME simultaneously.\n\n"
 
             "--- YOLO PERCEPTION LABELS (CRITICAL RULE) ---\n"

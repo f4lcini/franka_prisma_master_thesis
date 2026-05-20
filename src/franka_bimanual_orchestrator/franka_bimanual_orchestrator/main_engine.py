@@ -31,7 +31,7 @@ from franka_bimanual_orchestrator.behaviors.pick_client import PickActionClient
 from franka_bimanual_orchestrator.behaviors.place_client import PlaceActionClient
 from franka_bimanual_orchestrator.behaviors.move_home_client import MoveHomeClient
 from franka_bimanual_orchestrator.behaviors.wait_client import WaitActionClient
-from franka_bimanual_orchestrator.behaviors.rendezvous_client import RendezvousClient
+from franka_bimanual_orchestrator.behaviors.sync_barrier_client import SyncBarrierClient
 from franka_bimanual_orchestrator.behaviors.planner_utils import PlanSplitter, DynamicActionIterator, PlanPopper
 
 
@@ -115,9 +115,9 @@ def create_dynamic_arm_sequence(arm_name, plan_steps):
         elif action == "WAIT":
             duration = step.get('seconds') or step.get('duration')
             node = WaitActionClient(name=f"Wait_{i}", prefix=prefix, duration=duration)
-        elif action == "RENDEZVOUS":
-            node = RendezvousClient(
-                name=f"Rendezvous_{i}",
+        elif action == "SYNC_BARRIER":
+            node = SyncBarrierClient(
+                name=f"SyncBarrier_{i}",
                 role="donor" if arm_name == "right" else "recipient"
             )
         else:

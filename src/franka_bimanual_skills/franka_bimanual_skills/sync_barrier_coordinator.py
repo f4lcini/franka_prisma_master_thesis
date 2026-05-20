@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-SharedZoneManager — MUTEX + RENDEZVOUS
+SharedZoneManager — MUTEX + SYNC BARRIER
 Role: SERVICE SERVER
 Description:
     1. Mutex: /acquire_shared_zone + /release_shared_zone (for physical safety)
-    2. Rendezvous: /sync_arms (for mission synchronization)
+    2. Sync Barrier: /sync_arms (for mission synchronization)
 ================================================================================
 """
 
@@ -25,7 +25,7 @@ class SharedZoneManager(Node):
         self._lock = threading.Lock()
         self._condition = threading.Condition(self._lock)
 
-        # --- RENDEZVOUS STATE ---
+        # --- SYNC BARRIER STATE ---
         self._sync_arrived_count = 0
         self._sync_condition = threading.Condition(self._lock)
 
