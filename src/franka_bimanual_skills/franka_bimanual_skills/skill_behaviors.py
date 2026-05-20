@@ -37,16 +37,25 @@ class SkillBehaviors:
             'place': rclpy.callback_groups.ReentrantCallbackGroup()
         }
 
-        self.home_server = ActionServer(
-            self.node, MoveHome, 'move_home',
+        self.home_server_left = ActionServer(
+            self.node, MoveHome, 'left_arm/move_home',
+            execute_callback=self.execute_home, callback_group=self.cb_groups['home'])
+        self.home_server_right = ActionServer(
+            self.node, MoveHome, 'right_arm/move_home',
             execute_callback=self.execute_home, callback_group=self.cb_groups['home'])
         
-        self.pick_server = ActionServer(
-            self.node, PickObject, 'pick_object',
+        self.pick_server_left = ActionServer(
+            self.node, PickObject, 'left_arm/pick_object',
+            execute_callback=self.execute_pick, callback_group=self.cb_groups['pick'])
+        self.pick_server_right = ActionServer(
+            self.node, PickObject, 'right_arm/pick_object',
             execute_callback=self.execute_pick, callback_group=self.cb_groups['pick'])
             
-        self.place_server = ActionServer(
-            self.node, PlaceObject, 'place_object',
+        self.place_server_left = ActionServer(
+            self.node, PlaceObject, 'left_arm/place_object',
+            execute_callback=self.execute_place, callback_group=self.cb_groups['place'])
+        self.place_server_right = ActionServer(
+            self.node, PlaceObject, 'right_arm/place_object',
             execute_callback=self.execute_place, callback_group=self.cb_groups['place'])
 
         # Publisher: fires when an object has been placed at 'shared'
@@ -143,8 +152,9 @@ class SkillBehaviors:
 
         result.success = success
         if success:
-            open_w = self.node.get_parameter('gripper_open_width').value
-            await self.robot_control_api.send_gripper_goal_async(arm_group, width=open_w)
+            if pose_target != "midway":
+                open_w = self.node.get_parameter('gripper_open_width').value
+                await self.robot_control_api.send_gripper_goal_async(arm_group, width=open_w)
             self.safe_succeed(goal_handle)
         else:
             self.safe_abort(goal_handle)
@@ -184,8 +194,9 @@ class SkillBehaviors:
         
         # Apply X, Y offsets if specified
         x_offset = self._get_offset(fid, 'pick_x_offset')
+        y_offset = self._get_offset(fid, 'pick_y_offset')
         target_pose.position.x += x_offset
-        # Y-offset is now handled by the localization node directly for sports ball
+        target_pose.position.y += y_offset
         
         grasp_z = target_pose.position.z + z_offset
         pre_grasp_z = grasp_z + clearance
@@ -194,7 +205,6 @@ class SkillBehaviors:
         self.logger.info(f"[{arm_group}] Step 0: Opening Gripper")
         await self.robot_control_api.send_gripper_goal_async(arm_group, width=open_w)
 
-        # --- MUTEX MANAGEMENT ---
         has_mutex = False
         self.logger.info(f"🔍 [DEBUG] Controllo criticità zona per {fid} a X={target_pose.position.x:.3f}...")
         is_critical = await self._is_zone_critical(arm_group, target_pose, fid)
@@ -202,37 +212,38 @@ class SkillBehaviors:
         if is_critical:
             has_mutex = await self._request_mutex(arm_group)
 
-        # 2. Approach (PTP)
-        self.logger.info(f"[{arm_group}] Step 1: Approach (PTP)")
-        pre_grasp = copy.deepcopy(req.target_pose)
-        pre_grasp.pose.position.z = pre_grasp_z
-        if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_grasp, planner="PTP"):
-            self.logger.error(f"[{arm_group}] Step 1 (Approach) FAILED")
-            self.safe_abort(goal_handle); result.success = False; return result
-            
-        # 3. Descent (PTP)
-        self.logger.info(f"[{arm_group}] Step 2: Descent (PTP)")
-        grasp_pose = copy.deepcopy(req.target_pose)
-        grasp_pose.pose.position.z = grasp_z
-        if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=grasp_pose, planner="PTP"):
-            self.logger.error(f"[{arm_group}] Step 2 (Descent) FAILED")
-            self.safe_abort(goal_handle); return result
+        try:
+            # 2. Approach (PTP)
+            self.logger.info(f"[{arm_group}] Step 1: Approach (PTP)")
+            pre_grasp = copy.deepcopy(req.target_pose)
+            pre_grasp.pose.position.z = pre_grasp_z
+            if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_grasp, planner="PTP"):
+                self.logger.error(f"[{arm_group}] Step 1 (Approach) FAILED")
+                self.safe_abort(goal_handle); result.success = False; return result
+                
+            # 3. Descent (LIN)
+            self.logger.info(f"[{arm_group}] Step 2: Descent (LIN)")
+            grasp_pose = copy.deepcopy(req.target_pose)
+            grasp_pose.pose.position.z = grasp_z
+            if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=grasp_pose, planner="LIN"):
+                self.logger.error(f"[{arm_group}] Step 2 (Descent) FAILED")
+                self.safe_abort(goal_handle); return result
 
-        # 4. Grasp
-        self.logger.info(f"[{arm_group}] Step 3: Grasping")
-        await self.robot_control_api.send_gripper_goal_async(arm_group, width=grasp_w)
-        
-        # 5. Lift (PTP)
-        self.logger.info(f"[{arm_group}] Step 4: Lift (PTP)")
-        await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_grasp, planner="PTP")
-        
-        # --- RELEASE MUTEX ---
-        if has_mutex:
-            await self._release_mutex(arm_group)
+            # 4. Grasp
+            self.logger.info(f"[{arm_group}] Step 3: Grasping")
+            await self.robot_control_api.send_gripper_goal_async(arm_group, width=grasp_w)
             
-        result.success = True
-        self.safe_succeed(goal_handle)
-        return result
+            # 5. Lift (LIN)
+            self.logger.info(f"[{arm_group}] Step 4: Lift (LIN)")
+            await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_grasp, planner="LIN")
+            
+            result.success = True
+            self.safe_succeed(goal_handle)
+            return result
+        finally:
+            # --- GUARANTEED RELEASE MUTEX ---
+            if has_mutex:
+                await self._release_mutex(arm_group)
 
     async def execute_place(self, goal_handle):
         req_arm = goal_handle.request.arm
@@ -269,7 +280,6 @@ class SkillBehaviors:
         pre_place = copy.deepcopy(req.place_pose)
         pre_place.pose.position.z = pre_place_z
 
-        # --- MUTEX MANAGEMENT ---
         has_mutex = False
         self.logger.info(f"🔍 [DEBUG] Controllo criticità zona per PLACE '{fid}'...")
         is_critical = await self._is_zone_critical(arm_group, pre_place.pose, fid)
@@ -277,36 +287,37 @@ class SkillBehaviors:
         if is_critical:
             has_mutex = await self._request_mutex(arm_group)
         
-        # 1. Approach
-        self.logger.info(f"[{arm_group}] Step 1: Approach (PTP)")
-        if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_place, planner="PTP"):
-            self.logger.error(f"[{arm_group}] Step 1 (Approach) FAILED")
-            self.safe_abort(goal_handle); return result
+        try:
+            # 1. Approach
+            self.logger.info(f"[{arm_group}] Step 1: Approach (PTP)")
+            if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_place, planner="PTP"):
+                self.logger.error(f"[{arm_group}] Step 1 (Approach) FAILED")
+                self.safe_abort(goal_handle); return result
+                
+            # 2. Descent
+            self.logger.info(f"[{arm_group}] Step 2: Descent (LIN)")
+            place_target = copy.deepcopy(req.place_pose)
+            place_target.pose.position.z = final_place_z
+            if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=place_target, planner="LIN"):
+                self.logger.error(f"[{arm_group}] Step 2 (Descent) FAILED")
+                self.safe_abort(goal_handle); return result
+                
+            # 3. Release
+            self.logger.info(f"[{arm_group}] Step 3: Releasing")
+            await self.robot_control_api.send_gripper_goal_async(arm_group, width=open_w)
             
-        # 2. Descent
-        self.logger.info(f"[{arm_group}] Step 2: Descent (LIN)")
-        place_target = copy.deepcopy(req.place_pose)
-        place_target.pose.position.z = final_place_z
-        if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=place_target, planner="PTP"):
-            self.logger.error(f"[{arm_group}] Step 2 (Descent) FAILED")
-            self.safe_abort(goal_handle); return result
+            # Handover signal
+            if fid == 'shared':
+                self._handover_ready_pub.publish(Bool(data=True))
             
-        # 3. Release
-        self.logger.info(f"[{arm_group}] Step 3: Releasing")
-        await self.robot_control_api.send_gripper_goal_async(arm_group, width=open_w)
-        
-        # Handover signal
-        if fid == 'shared':
-            self._handover_ready_pub.publish(Bool(data=True))
-        
-        # 4. Retreat
-        self.logger.info(f"[{arm_group}] Step 4: Retreat (LIN)")
-        await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_place, planner="PTP")
+            # 4. Retreat
+            self.logger.info(f"[{arm_group}] Step 4: Retreat (LIN)")
+            await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_place, planner="LIN")
 
-        # --- RELEASE MUTEX ---
-        if has_mutex:
-            await self._release_mutex(arm_group)
-             
-        result.success = True
-        self.safe_succeed(goal_handle)
-        return result
+            result.success = True
+            self.safe_succeed(goal_handle)
+            return result
+        finally:
+            # --- GUARANTEED RELEASE MUTEX ---
+            if has_mutex:
+                await self._release_mutex(arm_group)

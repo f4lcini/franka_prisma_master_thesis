@@ -91,7 +91,11 @@ class RobotControlAPI:
             jtc_client = self.jtc_clients.get(arm_group)
             jtc_handle = await jtc_client.send_goal_async(FollowJointTrajectory.Goal(trajectory=trajectory))
             if not jtc_handle.accepted: return False
-            await jtc_handle.get_result_async()
+            jtc_res = await jtc_handle.get_result_async()
+            # error_code 0 = SUCCESSFUL in control_msgs
+            if jtc_res.result.error_code != 0:
+                self.logger.error(f"❌ JTC execution aborted for {arm_group}: error_code={jtc_res.result.error_code}")
+                return False
             return True
         except Exception as e:
             self.logger.error(f"❌ Async MoveIt goal exception: {e}")
@@ -302,7 +306,12 @@ class RobotControlAPI:
 
             jtc_result_future = jtc_handle.get_result_async()
             jtc_res = self.wait_for_future(jtc_result_future, timeout_sec=30.0, label="JTCResult")
-            return jtc_res is not None
+            if jtc_res is None:
+                return False
+            if jtc_res.result.error_code != 0:
+                self.logger.error(f"❌ JTC execution aborted for {arm_group}: error_code={jtc_res.result.error_code}")
+                return False
+            return True
         except Exception as e:
             self.logger.error(f"❌ MoveGroup/JTC exception: {e}")
             return False

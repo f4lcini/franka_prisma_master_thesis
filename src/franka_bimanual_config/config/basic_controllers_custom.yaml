@@ -285,18 +285,18 @@ franka1_arm_controller:
       franka1_fr3_joint7: {p: 50.0,  d: 5.0,  i: 0.0}
     action_monitor_rate: 20.0
     allow_integration_in_goal_trajectories: true
-    open_loop_control: false
+    open_loop_control: true
     allow_nonzero_velocity_at_trajectory_start: true
     constraints:
       goal_time: 0.0
       stopped_velocity_tolerance: 0.05
-      franka1_fr3_joint1: {trajectory: 0.5, goal: 0.1}
-      franka1_fr3_joint2: {trajectory: 0.5, goal: 0.1}
-      franka1_fr3_joint3: {trajectory: 0.5, goal: 0.1}
-      franka1_fr3_joint4: {trajectory: 0.5, goal: 0.1}
-      franka1_fr3_joint5: {trajectory: 0.5, goal: 0.1}
-      franka1_fr3_joint6: {trajectory: 0.5, goal: 0.1}
-      franka1_fr3_joint7: {trajectory: 0.5, goal: 0.1}
+      franka1_fr3_joint1: {trajectory: 0.8, goal: 0.1}
+      franka1_fr3_joint2: {trajectory: 0.8, goal: 0.1}
+      franka1_fr3_joint3: {trajectory: 0.8, goal: 0.1}
+      franka1_fr3_joint4: {trajectory: 0.8, goal: 0.1}
+      franka1_fr3_joint5: {trajectory: 0.8, goal: 0.1}
+      franka1_fr3_joint6: {trajectory: 0.8, goal: 0.1}
+      franka1_fr3_joint7: {trajectory: 0.8, goal: 0.1}
 
 franka2_arm_controller:
   ros__parameters:
@@ -323,16 +323,16 @@ franka2_arm_controller:
       franka2_fr3_joint7: {p: 50.0,  d: 5.0,  i: 0.0}
     action_monitor_rate: 20.0
     allow_integration_in_goal_trajectories: true
-    open_loop_control: false
+    open_loop_control: true
     allow_nonzero_velocity_at_trajectory_start: true
     constraints:
       goal_time: 0.0
       stopped_velocity_tolerance: 0.05
-      franka2_fr3_joint1: {trajectory: 0.5, goal: 0.1}
-      franka2_fr3_joint2: {trajectory: 0.5, goal: 0.1}
-      franka2_fr3_joint3: {trajectory: 0.5, goal: 0.1}
-      franka2_fr3_joint4: {trajectory: 0.5, goal: 0.1}
-      franka2_fr3_joint5: {trajectory: 0.5, goal: 0.1}
-      franka2_fr3_joint6: {trajectory: 0.5, goal: 0.1}
-      franka2_fr3_joint7: {trajectory: 0.5, goal: 0.1}
+      franka2_fr3_joint1: {trajectory: 0.8, goal: 0.1}
+      franka2_fr3_joint2: {trajectory: 0.8, goal: 0.1}
+      franka2_fr3_joint3: {trajectory: 0.8, goal: 0.1}
+      franka2_fr3_joint4: {trajectory: 0.8, goal: 0.1}
+      franka2_fr3_joint5: {trajectory: 0.8, goal: 0.1}
+      franka2_fr3_joint6: {trajectory: 0.8, goal: 0.1}
+      franka2_fr3_joint7: {trajectory: 0.8, goal: 0.1}
 

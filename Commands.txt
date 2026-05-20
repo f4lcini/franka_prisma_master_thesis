@@ -183,9 +183,21 @@ ros2 run tf2_ros tf2_echo camera_color_optical_frame tag_0  #currently using thi
 # ------------------------------------------
 # EXP1:
 # Sort all the items inside the designated boxes
+ros2 run franka_bimanual_orchestrator main_engine "Sort all the items inside the designated boxes"
+JSON plan
+ros2 run franka_bimanual_orchestrator main_engine --plan src/franka_bimanual_bringup/scripts/automate_scenarios/json_plans/EXP1_sort_items.json
+
+
 
 # EXP2:
 # Transfer the object on the table to the box
+ros2 run franka_bimanual_orchestrator main_engine "Transfer the object on the table to the box"
+JSON plan
+ros2 run franka_bimanual_orchestrator main_engine --plan src/franka_bimanual_bringup/scripts/automate_scenarios/json_plans/EXP2_transfer_object.json
+
 
 # EXP3:
 # Clear the entire workspace.
+ros2 run franka_bimanual_orchestrator main_engine "Clear the entire workspace"
+JSON plan
+ros2 run franka_bimanual_orchestrator main_engine --plan src/franka_bimanual_bringup/scripts/automate_scenarios/json_plans/EXP3_clear_workspace.json

@@ -22,8 +22,8 @@ def create_atomic_tree():
         policy=py_trees.common.ParallelPolicy.SuccessOnAll()
     )
     
-    left_home = MoveHomeClient(name="Left_Arm_Home", prefix="left_")
-    right_home = MoveHomeClient(name="Right_Arm_Home", prefix="right_")
+    left_home = MoveHomeClient(name="Left_Arm_Home", prefix="left_", action_name="/left_arm/move_home")
+    right_home = MoveHomeClient(name="Right_Arm_Home", prefix="right_", action_name="/right_arm/move_home")
     
     root.add_children([left_home, right_home])
     return root

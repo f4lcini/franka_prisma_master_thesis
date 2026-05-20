@@ -21,6 +21,12 @@ import asyncio
 import json
 from scipy.spatial.transform import Rotation
 
+# Abbassa la priorità di scheduling del processo YOLO rispetto al RT controller
+try:
+    os.nice(10)  # 0=normale, 19=minima priorità
+except Exception:
+    pass
+
 try:
     from ultralytics import YOLO
 except ImportError:
@@ -39,6 +45,7 @@ class ObjectLocalizationNode(Node):
         self.latest_image_time = None
         self.latest_depth = None
         self.camera_intrinsics = None
+        self.cached_scene = []
 
         # ---- Camera Extrinsics (TF-Free) ----
         # These are overridden at launch time if needed.
@@ -113,9 +120,10 @@ class ObjectLocalizationNode(Node):
             callback_group=self.action_cb_group
         )
         
-        # Timer per il debug live
-        self.create_timer(0.1, self.debug_timer_callback, callback_group=self.sensor_cb_group)
+        # Timer per il debug live (1 Hz - ridotto per non interferire con il RT controller)
+        self.create_timer(1.0, self.debug_timer_callback, callback_group=self.sensor_cb_group)
         self._frame_counter = 0
+        self._busy = False  # Flag: True mentre si esegue un pick/place
 
     def _build_camera_transform(self):
         cam_pos = np.array([
@@ -137,25 +145,20 @@ class ObjectLocalizationNode(Node):
         self.latest_image_time = msg.header.stamp
 
     def debug_timer_callback(self):
-        """Esegue l'inferenza di debug in modo asincrono."""
+        """Esegue l'inferenza di debug a bassa frequenza (1Hz) e bassa risoluzione."""
         if self.latest_image is None or self.model is None:
             return
-
+        # Non disturbare durante pick/place attivi
+        if self._busy:
+            return
         try:
-            # Convertiamo l'ultimo frame disponibile
             cv_image = self.cv_bridge.imgmsg_to_cv2(self.latest_image, 'bgr8')
-            
-            # OTTIMIZZAZIONE: Inferenza a bassa risoluzione (320px) per il debug live
-            results = self.model(cv_image, verbose=False, conf=0.3, imgsz=320)
-            
-            # Usiamo il metodo nativo .plot() di Ultralytics che è estremamente ottimizzato
+            # Risoluzione ridotta (224px) per minimizzare il carico CPU
+            results = self.model(cv_image, verbose=False, conf=0.3, imgsz=224)
             annotated_frame = results[0].plot(labels=True, boxes=True)
-            
-            # Pubblichiamo l'immagine di debug
             debug_msg = self.cv_bridge.cv2_to_imgmsg(annotated_frame, 'bgr8')
             debug_msg.header = self.latest_image.header
             self.debug_image_pub.publish(debug_msg)
-            
         except Exception as e:
             self.get_logger().warn(f"Errore nel timer di debug: {e}")
 
@@ -199,58 +202,79 @@ class ObjectLocalizationNode(Node):
 
     def _execute_common(self, goal_handle, side="left"):
         """Logica di localizzazione condivisa (Sincrona con MultiThread)."""
+        self._busy = True
         result = DetectObject.Result()
         object_name = goal_handle.request.object_name
         self._cam_pos, self._R_optical_to_table = self._build_camera_transform()
         
         self.get_logger().info(f"🔍 [{side.upper()}] Cerco '{object_name}' nel mio spazio di lavoro...")
 
-        # Raccogliamo campioni per stabilità
+        # 1. Tentativo dalla Cache Globale (se disponibile)
         samples = []
-        for _ in range(self.num_samples):
-            if self.latest_image is None or self.camera_intrinsics is None:
-                time.sleep(0.1)
-                continue
-            
-            cv_image = self.cv_bridge.imgmsg_to_cv2(self.latest_image, 'bgr8')
-            # Usiamo risoluzione standard per la precisione di pick
-            yolo_results = self.model(cv_image, verbose=False, imgsz=640)
-            
-            # Troviamo tutti i candidati validi
-            candidates = []
-            for box in yolo_results[0].boxes:
-                conf = float(box.conf[0].item())
-                if object_name.lower() in self.model.names[int(box.cls[0].item())].lower() and conf > 0.25:
-                    # Calcoliamo la posizione 3D del candidato
-                    x1, y1, x2, y2 = box.xyxy[0].tolist()
-                    u, v = (x1 + x2) / 2.0, y2
-                    v_opt = np.array([(u - self.camera_intrinsics['cx']) / self.camera_intrinsics['fx'], 
-                                     (v - self.camera_intrinsics['cy']) / self.camera_intrinsics['fy'], 1.0])
-                    v_table = self._R_optical_to_table @ v_opt
-                    lam = -self._cam_pos[2] / v_table[2]
-                    p_table = self._cam_pos + lam * v_table
-                    candidates.append((p_table, conf))
-
-            # Filtro spaziale con sovrapposizione per zona condivisa (handover)
+        if getattr(self, 'cached_scene', []):
+            self.get_logger().info(f"🔍 [{side.upper()}] Controllo la cache della scansione iniziale per '{object_name}'...")
+            candidates_cache = []
+            for det in self.cached_scene:
+                if object_name.lower() in det['label'].lower():
+                    p_table = np.array([det['x_world'], det['y_world'], 0.0])
+                    candidates_cache.append((p_table, det['conf'], det))
+                    
+            # Filtro spaziale sulla cache
             if side == "left":
-                # Il sinistro vede fino a +5cm nel lato destro
-                valid = [c for c in candidates if c[0][0] < 0.05]
+                valid_cache = [c for c in candidates_cache if c[0][0] < 0.05]
             else:
-                # Il destro vede fino a -5cm nel lato sinistro
-                valid = [c for c in candidates if c[0][0] >= -0.05]
+                valid_cache = [c for c in candidates_cache if c[0][0] >= -0.05]
+                
+            if valid_cache:
+                best_cache = max(valid_cache, key=lambda x: x[1])
+                samples.append(best_cache[0])
+                self.cached_scene.remove(best_cache[2])  # Rimuovi per non riprenderlo!
+                self.get_logger().info(f"✅ Trovato '{object_name}' in cache a X={best_cache[0][0]:.3f}!")
 
-            if candidates:
-                self.get_logger().info(f"🔍 [{side.upper()}] {len(candidates)} oggetti rilevati. Validi per questo lato: {len(valid)}")
-                for idx, c in enumerate(candidates):
-                    status = "VALIDO" if (side == "left" and c[0][0] < 0.05) or (side == "right" and c[0][0] >= -0.05) else "FUORI_ZONA"
-                    self.get_logger().info(f"   -> [{status}] X={c[0][0]:.3f}, Conf={c[1]:.2f}")
-
-            if valid:
-                # Prendiamo il migliore nel proprio lato
-                best = max(valid, key=lambda x: x[1])
-                samples.append(best[0])
-            
-            time.sleep(0.05)
+        # 2. Fallback a Scansione Live (se la cache è vuota o l'oggetto non c'è)
+        if not samples:
+            self.get_logger().info(f"⚠️ Nessun '{object_name}' in cache. Procedo con la scansione LIVE...")
+            for _ in range(self.num_samples):
+                if self.latest_image is None or self.camera_intrinsics is None:
+                    time.sleep(0.1)
+                    continue
+                
+                cv_image = self.cv_bridge.imgmsg_to_cv2(self.latest_image, 'bgr8')
+                yolo_results = self.model(cv_image, verbose=False, imgsz=640)
+                
+                candidates = []
+                for box in yolo_results[0].boxes:
+                    conf = float(box.conf[0].item())
+                    if object_name.lower() in self.model.names[int(box.cls[0].item())].lower() and conf > 0.10:
+                        x1, y1, x2, y2 = box.xyxy[0].tolist()
+                        u, v = (x1 + x2) / 2.0, y2
+                        v_opt = np.array([(u - self.camera_intrinsics['cx']) / self.camera_intrinsics['fx'], 
+                                         (v - self.camera_intrinsics['cy']) / self.camera_intrinsics['fy'], 1.0])
+                        v_table = self._R_optical_to_table @ v_opt
+                        lam = -self._cam_pos[2] / v_table[2]
+                        p_table = self._cam_pos + lam * v_table
+                        candidates.append((p_table, conf))
+    
+                if not candidates and yolo_results[0].boxes:
+                    seen = [f"{self.model.names[int(b.cls[0].item())]} ({float(b.conf[0].item()):.2f})" for b in yolo_results[0].boxes]
+                    self.get_logger().info(f"   [DEBUG YOLO] Sto cercando '{object_name}' ma ho visto: {', '.join(seen)}")
+                    
+                if side == "left":
+                    valid = [c for c in candidates if c[0][0] < 0.05]
+                else:
+                    valid = [c for c in candidates if c[0][0] >= -0.05]
+    
+                if candidates:
+                    self.get_logger().info(f"🔍 [{side.upper()}] {len(candidates)} oggetti rilevati. Validi per questo lato: {len(valid)}")
+                    for idx, c in enumerate(candidates):
+                        status = "VALIDO" if (side == "left" and c[0][0] < 0.05) or (side == "right" and c[0][0] >= -0.05) else "FUORI_ZONA"
+                        self.get_logger().info(f"   -> [{status}] X={c[0][0]:.3f}, Conf={c[1]:.2f}")
+    
+                if valid:
+                    best = max(valid, key=lambda x: x[1])
+                    samples.append(best[0])
+                
+                time.sleep(0.05)
 
         if not samples:
             self.get_logger().error(f"❌ [{side.upper()}] '{object_name}' non trovato nel mio lato.")
@@ -285,6 +309,7 @@ class ObjectLocalizationNode(Node):
         result.success = True
         result.target_pose = pose
         goal_handle.succeed()
+        self._busy = False
         return result
 
     def scan_table_callback(self, request, response):
@@ -322,7 +347,7 @@ class ObjectLocalizationNode(Node):
         for _ in range(NUM_FRAMES):
             try:
                 cv_image = self.cv_bridge.imgmsg_to_cv2(self.latest_image, 'bgr8')
-                results  = self.model(cv_image, verbose=False, conf=0.25, imgsz=640)
+                results  = self.model(cv_image, verbose=False, conf=0.10, imgsz=640)
 
                 for box in results[0].boxes:
                     cls_id = int(box.cls[0].item())
@@ -379,6 +404,9 @@ class ObjectLocalizationNode(Node):
             self.get_logger().info(
                 f"   · '{obj['label']}' @ X={obj['x_world']:.3f}m → {obj['side']} (conf={obj['conf']:.2f})"
             )
+
+        # Salva in cache globale
+        self.cached_scene = kept
 
         response.success   = True
         response.scene_json = json.dumps(kept)

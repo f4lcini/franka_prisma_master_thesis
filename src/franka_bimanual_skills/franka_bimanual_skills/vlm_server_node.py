@@ -60,7 +60,9 @@ class VlmServerNode(Node):
         self.model_candidates = [
             "gemini-2.5-flash",
             "gemini-2.0-flash",
+            "gemini-1.5-pro",
             "gemini-1.5-flash",
+            "gemini-1.5-flash-8b"
         ]
         self.last_plan_cache = None
         self.last_task_input = ""
@@ -129,7 +131,7 @@ class VlmServerNode(Node):
         future = self.scan_table_client.call_async(ScanTable.Request())
 
         # Spin sincrono dentro l'executor multi-thread (safe con ReentrantCallbackGroup)
-        rclpy.spin_until_future_complete(self, future, timeout_sec=10.0)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=30.0)
 
         if not future.done() or future.result() is None:
             self.get_logger().error("❌ /scan_table timeout o errore.")
@@ -170,62 +172,43 @@ class VlmServerNode(Node):
 
         # ── System Prompt ────────────────────────────────────────────────────
         system_prompt = (
-            "You are the Master Orchestrator for a dual-arm Franka Research 3 robot system (left_arm and right_arm).\n"
-            "Your objective is to output a highly synchronized, fluid, and collision-free task plan as a JSON object matching the TaskPlan schema.\n"
-            "The system runs two sequence lanes (left_arm_sequence and right_arm_sequence) SIMULTANEOUSLY.\n\n"
+            "You are the task planner for a dual-arm Franka Research 3 robot system.\n"
+            "Your ONLY job is to output a JSON plan following the EXACT structure shown below.\n\n"
 
-            "--- WORKSPACE TOPOLOGY & PREDEFINED TARGETS ---\n"
-            "The coordinate frames represent dedicated physical workspace areas on the table:\n"
-            "- 'shared': The central shared zone, accessible by BOTH arms. Used as a relay area for handovers.\n"
-            "- 'box_ws_sx': Destination container on the far LEFT, reachable ONLY by left_arm.\n"
-            "- 'box_ws_dx': Destination container on the far RIGHT, reachable ONLY by right_arm.\n"
-            "Use left_arm for objects on the left side (X < 0), right_arm for objects on the right side (X >= 0).\n\n"
+            "--- MANDATORY OUTPUT STRUCTURE ---\n"
+            "Each arm sequence MUST contain EXACTLY these 4 steps in this exact order:\n"
+            "  1. FIND_OBJECT  (localize the object with YOLO)\n"
+            "  2. PICK         (grasp the object)\n"
+            "  3. PLACE        (deposit the object at its destination)\n"
+            "  4. MOVE_HOME    (return arm to rest)\n\n"
 
-            "--- ATOMIC ACTION REPERTOIRE ---\n"
-            "Each arm sequence MUST consist ONLY of these actions:\n\n"
+            "FORBIDDEN: Do NOT add SYNC_BARRIER, WAIT, or any other step. Do NOT add more than 4 steps per arm.\n\n"
 
-            "1. FIND_OBJECT:\n"
-            "   - Syntax: { \"action\": \"FIND_OBJECT\", \"target_name\": \"<object>\", \"arm\": \"<arm>\" }\n"
-            "   - Purpose: Triggers YOLO vision system to localize a physical object in 3D space.\n"
-            "   - Rule: ALWAYS call FIND_OBJECT before PICK on any physical object.\n\n"
+            "--- EXAMPLE OUTPUT (follow this structure exactly) ---\n"
+            '{\n'
+            '  "task_name": "Sort items",\n'
+            '  "left_arm_sequence": [\n'
+            '    {"action": "FIND_OBJECT", "target_name": "sports ball", "arm": "left_arm"},\n'
+            '    {"action": "PICK",        "target_name": "sports ball", "arm": "left_arm"},\n'
+            '    {"action": "PLACE",       "target_name": "box_ws_sx",   "arm": "left_arm"},\n'
+            '    {"action": "MOVE_HOME",   "arm": "left_arm", "pose_name": "ready"}\n'
+            '  ],\n'
+            '  "right_arm_sequence": [\n'
+            '    {"action": "FIND_OBJECT", "target_name": "sports ball", "arm": "right_arm"},\n'
+            '    {"action": "PICK",        "target_name": "sports ball", "arm": "right_arm"},\n'
+            '    {"action": "PLACE",       "target_name": "box_ws_dx",   "arm": "right_arm"},\n'
+            '    {"action": "MOVE_HOME",   "arm": "right_arm", "pose_name": "ready"}\n'
+            '  ]\n'
+            '}\n\n'
 
-            "2. PICK:\n"
-            "   - Syntax: { \"action\": \"PICK\", \"target_name\": \"<target>\", \"arm\": \"<arm>\" }\n"
-            "   - Purpose: Approaches, grasps, and lifts an object.\n\n"
+            "--- RULES ---\n"
+            "- left_arm handles objects on the LEFT side (X < 0). Destination: 'box_ws_sx'.\n"
+            "- right_arm handles objects on the RIGHT side (X >= 0). Destination: 'box_ws_dx'.\n"
+            "- Use ONLY the EXACT label string from YOLO detections (e.g. 'sports ball', 'bottle', 'cup').\n"
+            "- If one side has no detected object, use MOVE_HOME as the only step for that arm.\n"
+            "- Do NOT include 'chair', 'person', or any label not relevant to the sorting task.\n\n"
 
-            "3. PLACE:\n"
-            "   - Syntax: { \"action\": \"PLACE\", \"target_name\": \"<target>\", \"arm\": \"<arm>\" }\n"
-            "   - Purpose: Lowers arm, opens gripper, retreats. Target: 'shared', 'box_ws_sx', or 'box_ws_dx'.\n\n"
-
-            "4. MOVE_HOME:\n"
-            "   - Syntax: { \"action\": \"MOVE_HOME\", \"pose_name\": \"<ready|midway>\", \"arm\": \"<arm>\" }\n"
-            "   - Pose options: 'ready' (high safe rest), 'midway' (45° towards shared zone).\n\n"
-
-            "5. WAIT:\n"
-            "   - Syntax: { \"action\": \"WAIT\", \"seconds\": <float>, \"arm\": \"<arm>\", \"message\": \"<text>\" }\n"
-            "   - Purpose: Pauses the arm for a specific duration.\n\n"
-
-            "6. SYNC_BARRIER:\n"
-            "   - Syntax: { \"action\": \"SYNC_BARRIER\", \"arm\": \"<arm>\" }\n"
-            "   - Purpose: Synchronization barrier — both arms wait until both are ready.\n\n"
-
-            "--- SYNCHRONIZATION & HANDOVER STRATEGIES ---\n"
-            "- INDIRECT TABLE HANDOVER:\n"
-            "  left_arm: FIND_OBJECT -> PICK -> PLACE('shared') -> MOVE_HOME('midway') -> SYNC_BARRIER -> MOVE_HOME('ready').\n"
-            "  right_arm: WAIT(10s) -> MOVE_HOME('midway') -> SYNC_BARRIER -> PICK('shared') -> PLACE('box_ws_dx') -> MOVE_HOME('ready').\n\n"
-            "- PARALLEL PICKING (no handover): both arms execute FIND_OBJECT -> PICK -> PLACE -> MOVE_HOME simultaneously.\n\n"
-
-            "--- YOLO PERCEPTION LABELS (CRITICAL RULE) ---\n"
-            "The YOLO system ONLY detects these labels:\n"
-            "- 'sports ball', 'bottle', 'cup'\n"
-            "NEVER use generic labels like 'left_item', 'right_item'. Use the EXACT label string.\n\n"
-
-            "--- CRITICAL HARDWARE SAFETY RULES ---\n"
-            "Every PICK-PLACE sequence MUST conclude with MOVE_HOME('ready') before the next FIND_OBJECT or PICK.\n"
-            "Never plan consecutive PICK-PLACE without MOVE_HOME in between — this causes kinematic singularities.\n\n"
-
-            "Format your output strictly as a JSON matching the TaskPlan schema. "
-            "Do not include any markdowns (like ```json) or explanation outside the JSON."
+            "Format your output strictly as a JSON matching the TaskPlan schema with no markdown."
         )
 
         # ── YOLO Grounding via /scan_table ───────────────────────────────────
@@ -266,7 +249,7 @@ class VlmServerNode(Node):
         # ── Call Gemini with model fallback on 429 ────────────────────────────
         for model_name in self.model_candidates:
             self.get_logger().info(f"🤖 Tentativo con modello: '{model_name}'...")
-            max_retries = 2
+            max_retries = 5 if model_name == "gemini-2.5-flash" else 2
             base_delay  = 5.0
 
             for attempt in range(max_retries):
@@ -281,6 +264,27 @@ class VlmServerNode(Node):
                         ),
                     )
                     json_plan = response.text
+                    
+                    # ── Normalizza il piano alla struttura esatta FIND→PICK→PLACE→HOME ──
+                    # Questo garantisce che il piano VLM sia identico a EXP1_sort_items.json
+                    try:
+                        plan_obj = json.loads(json_plan)
+                        for arm_key in ['left_arm_sequence', 'right_arm_sequence']:
+                            seq = plan_obj.get(arm_key, [])
+                            # Prendi solo il primo passo di ogni tipo (ordine naturale)
+                            find  = next((s for s in seq if s.get('action') == 'FIND_OBJECT'), None)
+                            pick  = next((s for s in seq if s.get('action') == 'PICK'), None)
+                            place = next((s for s in seq if s.get('action') == 'PLACE'), None)
+                            home  = next((s for s in seq if s.get('action') == 'MOVE_HOME'), None)
+                            normalized = [s for s in [find, pick, place, home] if s is not None]
+                            if len(normalized) == 4:
+                                plan_obj[arm_key] = normalized
+                            # Se manca qualcosa, lascia invariata (caso degradato)
+                        json_plan = json.dumps(plan_obj, indent=2)
+                        self.get_logger().info(f"✅ Piano normalizzato a struttura FIND→PICK→PLACE→HOME")
+                    except Exception as e:
+                        self.get_logger().warn(f"⚠️ Normalizzazione piano fallita: {e} — uso output grezzo")
+
                     self.get_logger().info(f"✅ Piano generato con '{model_name}': {json_plan}")
 
                     self.last_plan_cache = json_plan
@@ -293,6 +297,7 @@ class VlmServerNode(Node):
                 except Exception as e:
                     err_str  = str(e)
                     is_quota = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
+                    is_unavailable = "503" in err_str or "UNAVAILABLE" in err_str
                     self.get_logger().error(
                         f"❌ '{model_name}' attempt {attempt+1}/{max_retries}: {e}"
                     )
@@ -301,6 +306,12 @@ class VlmServerNode(Node):
                             f"⚠️  Quota 429 su '{model_name}', provo modello successivo..."
                         )
                         break
+                    elif is_unavailable and attempt < max_retries - 1:
+                        wait = base_delay * (attempt + 1)
+                        self.get_logger().warn(
+                            f"⚠️  503 su '{model_name}' (attempt {attempt+1}/{max_retries}), riprovo tra {wait:.0f}s..."
+                        )
+                        time.sleep(wait)
                     elif attempt < max_retries - 1:
                         time.sleep(base_delay)
                         base_delay *= 2

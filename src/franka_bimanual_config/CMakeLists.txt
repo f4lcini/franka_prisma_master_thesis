@@ -29,5 +29,9 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
+install(PROGRAMS
+  fix_camera.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 ament_package() # Deve sempre essere l'ultima riga

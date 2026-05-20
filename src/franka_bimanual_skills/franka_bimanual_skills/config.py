@@ -103,7 +103,7 @@ TARGET_OFFSETS = {
         "pick_z_offset": 0.14,        # Stessa altezza di 'sports' per la presa cieca
         "gripper_grasp_width": 0.045,
         "approach_clearance": 0.1,
-        "place_z_offset": 0.15        # Altezza di rilascio standard
+        "place_z_offset": 0.24        # Altezza di rilascio standard
     },
     "box_ws_sx": {
         "place_z_offset": 0.20,       # Posa la scatola a 5cm dal tavolo (più delicato)
@@ -119,8 +119,9 @@ TARGET_OFFSETS = {
         "approach_clearance": 0.1     # 10cm sopra la bottiglia
     },
     "cup": {
-        "pick_z_offset": 0.15,        # Prendi la tazza a 6cm dal tavolo
-        "gripper_grasp_width": 0.055,  # Un po' più largo per sicurezza
+        "pick_z_offset": 0.12,        # Prendi la tazza a 6cm dal tavolo
+        "gripper_grasp_width": 0.043,  # Un po' più largo per sicurezza
+        "pick_y_offset": 0.01,
         "approach_clearance": 0.1     # 10cm sopra la tazza
     },
     "sports": {

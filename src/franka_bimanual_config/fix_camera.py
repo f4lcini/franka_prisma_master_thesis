@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import numpy as np
 from scipy.spatial.transform import Rotation
 import yaml
@@ -10,9 +11,9 @@ import os
 
 # 1. Matrice Camera (Optical Frame) -> Tag (FORNITA DA UTENTE)
 T_link_tag = np.array([
-    [ 0.796, -0.605, -0.015,  0.076],
-    [-0.193, -0.230, -0.954,  0.148],
-    [ 0.573,  0.763, -0.300,  1.249],
+    [ 0.806, -0.592, -0.011,  0.077],
+    [-0.186, -0.235, -0.954,  0.149],
+    [ 0.562,  0.771, -0.299,  1.248],
     [ 0.000,  0.000,  0.000,  1.000]
 ])
 

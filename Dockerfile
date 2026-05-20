@@ -63,6 +63,7 @@ RUN apt-get update && apt-get install -y \
     ros-humble-ros2controlcli \
     ros-humble-urdf \
     ros-humble-rviz2 \
+    ros-humble-apriltag-ros \
     iputils-ping \
     openssh-client \
     && rm -rf /var/lib/apt/lists/*
@@ -76,6 +77,9 @@ RUN pip3 install --no-cache-dir \
     "numpy<2" \
     ultralytics \
     scipy
+
+# Scarica i pesi di YOLOv8m (Medium) preventivamente
+RUN python3 -c "from ultralytics import YOLO; YOLO('yolov26m.pt')"
 
 # 3. Setup Workspace e Franka da sorgenti (per Humble)
 WORKDIR /mm_ws

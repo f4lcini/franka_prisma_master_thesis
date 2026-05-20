@@ -106,12 +106,15 @@ def create_dynamic_arm_sequence(arm_name, plan_steps):
                 action_name=action_server
             )
         elif action == "PICK":
-            node = PickActionClient(name=f"Pick_{target}_{i}", prefix=prefix, target_name=target)
+            action_server = f"/{arm_name}_arm/pick_object"
+            node = PickActionClient(name=f"Pick_{target}_{i}", action_name=action_server, prefix=prefix, target_name=target)
         elif action == "PLACE":
-            node = PlaceActionClient(name=f"Place_{target}_{i}", prefix=prefix, target_location=target)
+            action_server = f"/{arm_name}_arm/place_object"
+            node = PlaceActionClient(name=f"Place_{target}_{i}", action_name=action_server, prefix=prefix, target_location=target)
         elif action == "MOVE_HOME":
             target_pose = step.get('pose_name')
-            node = MoveHomeClient(name=f"Home_{i}", prefix=prefix, target_pose=target_pose)
+            action_server = f"/{arm_name}_arm/move_home"
+            node = MoveHomeClient(name=f"Home_{i}", action_name=action_server, prefix=prefix, target_pose=target_pose)
         elif action == "WAIT":
             duration = step.get('seconds') or step.get('duration')
             node = WaitActionClient(name=f"Wait_{i}", prefix=prefix, duration=duration)
@@ -340,9 +343,18 @@ def main():
 
     try:
         tree.tick_tock(period_ms=1000)
-        rclpy.spin(tree.node)
+        # One-shot loop: exit as soon as the tree reaches SUCCESS or FAILURE
+        while rclpy.ok():
+            rclpy.spin_once(tree.node, timeout_sec=0.1)
+            status = tree.root.status
+            if status == py_trees.common.Status.SUCCESS:
+                print("\n✅ MISSION COMPLETED: Both arms finished successfully!")
+                break
+            if status == py_trees.common.Status.FAILURE:
+                print("\n❌ MISSION FAILED: Plan aborted. Check logs for details.")
+                break
     except KeyboardInterrupt:
-        pass
+        print("\n🛑 Manual interruption.")
     finally:
         tree.shutdown()
         rclpy.try_shutdown()
