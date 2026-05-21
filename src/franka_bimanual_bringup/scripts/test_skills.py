@@ -9,11 +9,11 @@ import sys
 import time
 
 class SkillTester(Node):
-    def __init__(self):
+    def __init__(self, arm="left_arm"):
         super().__init__('skill_tester')
-        self.home_client = ActionClient(self, MoveHome, 'move_home')
-        self.pick_client = ActionClient(self, PickObject, 'pick_object')
-        self.place_client = ActionClient(self, PlaceObject, 'place_object')
+        self.home_client = ActionClient(self, MoveHome, f'/{arm}/move_home')
+        self.pick_client = ActionClient(self, PickObject, f'/{arm}/pick_object')
+        self.place_client = ActionClient(self, PlaceObject, f'/{arm}/place_object')
 
     def send_home(self, arm="left_arm"):
         self.get_logger().info(f"🏠 Sending HOME goal for {arm}...")
@@ -73,7 +73,6 @@ class SkillTester(Node):
 
 def main():
     rclpy.init()
-    tester = SkillTester()
     
     if len(sys.argv) < 2:
         print("Usage: python3 test_skills.py [home|pick|place] [left_arm|right_arm] [target]")
@@ -82,6 +81,8 @@ def main():
     skill = sys.argv[1].lower()
     arm = sys.argv[2] if len(sys.argv) > 2 else "left_arm"
     target = sys.argv[3] if len(sys.argv) > 3 else None
+    
+    tester = SkillTester(arm)
     
     future = None
     if skill == "home":

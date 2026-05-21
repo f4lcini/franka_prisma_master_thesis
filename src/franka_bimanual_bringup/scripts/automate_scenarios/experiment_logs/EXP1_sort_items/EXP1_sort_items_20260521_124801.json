@@ -1,0 +1,55 @@
+{
+    "mission_name": "EXP1_sort_items",
+    "start_timestamp": 1779367654.785669,
+    "end_timestamp": 1779367681.9430544,
+    "rsr_vlm_success": true,
+    "rsr_bt_success": true,
+    "psr_perception_attempts": 2,
+    "psr_perception_successes": 2,
+    "psr_grasp_attempts": 2,
+    "psr_grasp_successes": 2,
+    "fsr_execution_attempts": 6,
+    "fsr_execution_successes": 6,
+    "arm_actions": {
+        "left_arm": [
+            {
+                "action": "PICK",
+                "start": 1779367658.9050167,
+                "end": 1779367667.9065952,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1779367667.906691,
+                "end": 1779367674.904817,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779367674.905192,
+                "end": 1779367678.905173,
+                "success": true
+            }
+        ],
+        "right_arm": [
+            {
+                "action": "PICK",
+                "start": 1779367657.909325,
+                "end": 1779367668.9077692,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1779367668.9078567,
+                "end": 1779367676.9048686,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779367676.9049585,
+                "end": 1779367681.9065018,
+                "success": true
+            }
+        ]
+    }
+}

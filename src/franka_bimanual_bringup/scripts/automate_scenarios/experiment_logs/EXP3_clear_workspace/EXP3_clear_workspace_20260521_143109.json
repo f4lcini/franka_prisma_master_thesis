@@ -1,0 +1,121 @@
+{
+    "mission_name": "EXP3_clear_workspace",
+    "start_timestamp": 1779373778.6821432,
+    "end_timestamp": 1779373869.9570234,
+    "rsr_vlm_success": true,
+    "rsr_bt_success": true,
+    "psr_perception_attempts": 4,
+    "psr_perception_successes": 4,
+    "psr_grasp_attempts": 4,
+    "psr_grasp_successes": 4,
+    "fsr_execution_attempts": 17,
+    "fsr_execution_successes": 17,
+    "arm_actions": {
+        "left_arm": [
+            {
+                "action": "PICK",
+                "start": 1779373781.8875856,
+                "end": 1779373791.8949428,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1779373794.8863447,
+                "end": 1779373801.8861675,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779373801.8862178,
+                "end": 1779373805.894547,
+                "success": true
+            },
+            {
+                "action": "PICK",
+                "start": 1779373808.8896575,
+                "end": 1779373817.8877907,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779373817.8878663,
+                "end": 1779373821.8860986,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1779373840.886263,
+                "end": 1779373848.885909,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779373848.8860078,
+                "end": 1779373852.8949184,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779373853.899134,
+                "end": 1779373856.8861165,
+                "success": true
+            }
+        ],
+        "right_arm": [
+            {
+                "action": "PICK",
+                "start": 1779373782.8865635,
+                "end": 1779373793.8861604,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779373794.8875763,
+                "end": 1779373799.8862216,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1779373806.8927896,
+                "end": 1779373816.8864424,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779373816.886517,
+                "end": 1779373821.88632,
+                "success": true
+            },
+            {
+                "action": "PICK",
+                "start": 1779373823.8861666,
+                "end": 1779373834.8868656,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779373834.8869324,
+                "end": 1779373839.8863645,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779373840.8871238,
+                "end": 1779373842.89056,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1779373853.9011471,
+                "end": 1779373863.8866158,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779373863.886924,
+                "end": 1779373869.8859742,
+                "success": true
+            }
+        ]
+    }
+}

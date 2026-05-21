@@ -176,6 +176,9 @@ ros2 run rqt_image_view rqt_image_view
 ros2 topic echo /detections
 ros2 run tf2_ros tf2_echo camera_link tag_0
 ros2 run tf2_ros tf2_echo camera_color_optical_frame tag_0  #currently using this frame
+ros2 action send_goal /franka2_gripper/homing franka_msgs/action/Homing "{}"
+sudo apt update
+sudo apt install ros-humble-apriltag-ros
 
 
 # ------------------------------------------

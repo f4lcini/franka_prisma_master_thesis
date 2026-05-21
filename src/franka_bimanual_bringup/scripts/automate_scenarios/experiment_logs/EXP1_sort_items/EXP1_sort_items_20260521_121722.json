@@ -1,0 +1,24 @@
+{
+    "mission_name": "EXP1_sort_items",
+    "start_timestamp": 1779365835.953695,
+    "end_timestamp": 1779365842.0828326,
+    "rsr_vlm_success": true,
+    "rsr_bt_success": false,
+    "psr_perception_attempts": 2,
+    "psr_perception_successes": 2,
+    "psr_grasp_attempts": 1,
+    "psr_grasp_successes": 0,
+    "fsr_execution_attempts": 1,
+    "fsr_execution_successes": 0,
+    "arm_actions": {
+        "left_arm": [
+            {
+                "action": "PICK",
+                "start": 1779365840.0512776,
+                "end": 1779365842.0515416,
+                "success": false
+            }
+        ],
+        "right_arm": []
+    }
+}

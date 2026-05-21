@@ -19,6 +19,14 @@ class ObjectLocalizationClient(py_trees.behaviour.Behaviour):
         self.blackboard = py_trees.blackboard.Client(name=name)
         self.blackboard.register_key(key=f"{prefix}target_name", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key=f"{prefix}target_pose", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="metrics_logger", access=py_trees.common.Access.READ)
+
+    def _log_metric(self, success):
+        try:
+            if hasattr(self.blackboard, 'metrics_logger') and self.blackboard.metrics_logger:
+                self.blackboard.metrics_logger.log_perception(success)
+        except Exception:
+            pass
 
     def setup(self, **kwargs):
         try:
@@ -33,6 +41,7 @@ class ObjectLocalizationClient(py_trees.behaviour.Behaviour):
         return True
 
     def initialise(self):
+        self.logged = False
         target_name = "none"
         if self.target_name_override:
             target_name = self.target_name_override
@@ -51,12 +60,18 @@ class ObjectLocalizationClient(py_trees.behaviour.Behaviour):
 
     def update(self):
         if not self.send_goal_future:
+            if not getattr(self, 'logged', False):
+                self._log_metric(False)
+                self.logged = True
             return py_trees.common.Status.FAILURE
         if self.send_goal_future and not self.send_goal_future.done():
             return py_trees.common.Status.RUNNING
         if self.send_goal_future and self.send_goal_future.done() and not self.get_result_future:
             goal_handle = self.send_goal_future.result()
             if not goal_handle.accepted:
+                if not getattr(self, 'logged', False):
+                    self._log_metric(False)
+                    self.logged = True
                 return py_trees.common.Status.FAILURE
             self.get_result_future = goal_handle.get_result_async()
             return py_trees.common.Status.RUNNING
@@ -64,6 +79,9 @@ class ObjectLocalizationClient(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
         if self.get_result_future and self.get_result_future.done():
             result = self.get_result_future.result().result
+            if not getattr(self, 'logged', False):
+                self._log_metric(result.success)
+                self.logged = True
             if result.success:
                 setattr(self.blackboard, f"{self.prefix}target_pose", result.target_pose)
                 return py_trees.common.Status.SUCCESS

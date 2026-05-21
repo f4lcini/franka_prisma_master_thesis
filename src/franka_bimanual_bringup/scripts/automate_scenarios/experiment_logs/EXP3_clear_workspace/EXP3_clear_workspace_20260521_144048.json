@@ -1,0 +1,37 @@
+{
+    "mission_name": "EXP3_clear_workspace",
+    "start_timestamp": 1779374431.7075257,
+    "end_timestamp": 1779374448.931017,
+    "rsr_vlm_success": true,
+    "rsr_bt_success": false,
+    "psr_perception_attempts": 2,
+    "psr_perception_successes": 2,
+    "psr_grasp_attempts": 2,
+    "psr_grasp_successes": 2,
+    "fsr_execution_attempts": 3,
+    "fsr_execution_successes": 2,
+    "arm_actions": {
+        "left_arm": [
+            {
+                "action": "PICK",
+                "start": 1779374434.8794572,
+                "end": 1779374444.8791292,
+                "success": true
+            }
+        ],
+        "right_arm": [
+            {
+                "action": "PICK",
+                "start": 1779374434.8806555,
+                "end": 1779374445.875158,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779374446.8765655,
+                "end": 1779374448.8754647,
+                "success": false
+            }
+        ]
+    }
+}

@@ -3,6 +3,7 @@ import rclpy
 from rclpy.action import ActionClient
 from franka_custom_interfaces.action import PickObject
 import copy
+import time
 
 import tf2_ros
 import tf2_geometry_msgs  # noqa: F401 - registers the transform for PoseStamped
@@ -32,6 +33,27 @@ class PickActionClient(py_trees.behaviour.Behaviour):
         self.blackboard.register_key(key=f"{prefix}target_pose", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key=f"{prefix}active_arm", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="handover_ready", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="metrics_logger", access=py_trees.common.Access.READ)
+
+    def _log_metrics(self, success, error_msg=""):
+        try:
+            if hasattr(self.blackboard, 'metrics_logger') and self.blackboard.metrics_logger:
+                end_t = time.time()
+                target_arm = getattr(self.blackboard, f"{self.prefix}active_arm", self.prefix.replace("_", ""))
+                self.blackboard.metrics_logger.log_action(target_arm, "PICK", self.start_t, end_t, success)
+                
+                if success:
+                    self.blackboard.metrics_logger.log_execution(True)
+                    self.blackboard.metrics_logger.log_grasp(True)
+                else:
+                    if "grasp" in error_msg or "width" in error_msg or "slip" in error_msg:
+                        self.blackboard.metrics_logger.log_execution(True)
+                        self.blackboard.metrics_logger.log_grasp(False)
+                    else:
+                        self.blackboard.metrics_logger.log_execution(False)
+                        self.blackboard.metrics_logger.log_grasp(False)
+        except Exception:
+            pass
 
     def setup(self, **kwargs):
         # ... setup remains same ...
@@ -52,6 +74,8 @@ class PickActionClient(py_trees.behaviour.Behaviour):
         return True
 
     def initialise(self):
+        self.logged = False
+        self.start_t = time.time()
         self.logger.info(f"[{self.name}] Initializing Pick...")
         target_arm = "any"
         target_label = "none"
@@ -115,12 +139,20 @@ class PickActionClient(py_trees.behaviour.Behaviour):
             if self.send_goal_future and self.send_goal_future.done():
                 goal_handle = self.send_goal_future.result()
                 if not goal_handle.accepted:
+                    if not getattr(self, 'logged', False):
+                        self._log_metrics(False, "goal rejected")
+                        self.logged = True
                     return py_trees.common.Status.FAILURE
                 self.get_result_future = goal_handle.get_result_async()
             return py_trees.common.Status.RUNNING
         
         if self.get_result_future.done():
             result = self.get_result_future.result().result
+            error_msg = result.message.lower() if hasattr(result, 'message') else ""
+            if not getattr(self, 'logged', False):
+                self._log_metrics(result.success, error_msg)
+                self.logged = True
+
             if result.success:
                 target_label = getattr(self.blackboard, f"{self.prefix}target_name", "none")
                 if target_label == "shared":
@@ -129,7 +161,6 @@ class PickActionClient(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.SUCCESS
             
             # --- Robustness: Return FAILURE instead of infinite retry ---
-            error_msg = result.message.lower() if hasattr(result, 'message') else ""
             self.logger.error(f"[{self.name}] Pick FAILED: {error_msg}")
             return py_trees.common.Status.FAILURE
 

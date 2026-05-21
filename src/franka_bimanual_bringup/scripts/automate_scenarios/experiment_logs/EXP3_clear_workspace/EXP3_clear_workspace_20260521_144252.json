@@ -1,0 +1,61 @@
+{
+    "mission_name": "EXP3_clear_workspace",
+    "start_timestamp": 1779374533.7097583,
+    "end_timestamp": 1779374572.9250207,
+    "rsr_vlm_success": true,
+    "rsr_bt_success": false,
+    "psr_perception_attempts": 3,
+    "psr_perception_successes": 3,
+    "psr_grasp_attempts": 3,
+    "psr_grasp_successes": 2,
+    "fsr_execution_attempts": 7,
+    "fsr_execution_successes": 6,
+    "arm_actions": {
+        "left_arm": [
+            {
+                "action": "PICK",
+                "start": 1779374536.859043,
+                "end": 1779374546.8638551,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1779374549.8589456,
+                "end": 1779374557.8583744,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779374557.8585048,
+                "end": 1779374561.8619986,
+                "success": true
+            },
+            {
+                "action": "PICK",
+                "start": 1779374564.8627245,
+                "end": 1779374572.8584764,
+                "success": false
+            }
+        ],
+        "right_arm": [
+            {
+                "action": "PICK",
+                "start": 1779374537.8588846,
+                "end": 1779374548.8584352,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779374549.8603184,
+                "end": 1779374554.866878,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1779374562.859615,
+                "end": 1779374572.858922,
+                "success": true
+            }
+        ]
+    }
+}

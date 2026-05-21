@@ -3,6 +3,7 @@ import rclpy
 from rclpy.action import ActionClient
 from franka_custom_interfaces.action import PlaceObject
 import copy
+import time
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
 
@@ -27,6 +28,21 @@ class PlaceActionClient(py_trees.behaviour.Behaviour):
         self.blackboard.register_key(key="handover_starting", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="mission_type", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="mission_metadata", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="metrics_logger", access=py_trees.common.Access.READ)
+
+    def _log_metrics(self, success, error_msg=""):
+        try:
+            if hasattr(self.blackboard, 'metrics_logger') and self.blackboard.metrics_logger:
+                end_t = time.time()
+                target_arm = getattr(self.blackboard, f"{self.prefix}active_arm", self.prefix.replace("_", ""))
+                self.blackboard.metrics_logger.log_action(target_arm, "PLACE", self.start_t, end_t, success)
+                
+                if success:
+                    self.blackboard.metrics_logger.log_execution(True)
+                else:
+                    self.blackboard.metrics_logger.log_execution(False)
+        except Exception:
+            pass
 
     def setup(self, **kwargs):
         try:
@@ -42,6 +58,8 @@ class PlaceActionClient(py_trees.behaviour.Behaviour):
         return True
 
     def initialise(self):
+        self.logged = False
+        self.start_t = time.time()
         self.logger.info(f"[{self.name}] Initializing Place...")
         self.send_goal_future = None
         self.get_result_future = None
@@ -99,12 +117,20 @@ class PlaceActionClient(py_trees.behaviour.Behaviour):
             if self.send_goal_future and self.send_goal_future.done():
                 goal_handle = self.send_goal_future.result()
                 if not goal_handle.accepted:
+                    if not getattr(self, 'logged', False):
+                        self._log_metrics(False, "goal rejected")
+                        self.logged = True
                     return py_trees.common.Status.FAILURE
                 self.get_result_future = goal_handle.get_result_async()
             return py_trees.common.Status.RUNNING
         
         if self.get_result_future.done():
             result = self.get_result_future.result().result
+            error_msg = result.message.lower() if hasattr(result, 'message') else ""
+            if not getattr(self, 'logged', False):
+                self._log_metrics(result.success, error_msg)
+                self.logged = True
+
             if result.success:
                 mission_type = getattr(self.blackboard, "mission_type", "SIMPLE")
                 metadata = getattr(self.blackboard, "mission_metadata", {})
@@ -128,7 +154,6 @@ class PlaceActionClient(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.SUCCESS
             
             # --- Robustness: Return FAILURE instead of infinite retry ---
-            error_msg = result.message.lower() if hasattr(result, 'message') else ""
             self.logger.error(f"[{self.name}] Place FAILED: {error_msg}")
             return py_trees.common.Status.FAILURE
 

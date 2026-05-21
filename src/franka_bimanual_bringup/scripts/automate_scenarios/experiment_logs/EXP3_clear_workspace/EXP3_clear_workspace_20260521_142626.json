@@ -1,0 +1,73 @@
+{
+    "mission_name": "EXP3_clear_workspace",
+    "start_timestamp": 1779373535.15124,
+    "end_timestamp": 1779373586.3783054,
+    "rsr_vlm_success": true,
+    "rsr_bt_success": false,
+    "psr_perception_attempts": 3,
+    "psr_perception_successes": 3,
+    "psr_grasp_attempts": 3,
+    "psr_grasp_successes": 3,
+    "fsr_execution_attempts": 9,
+    "fsr_execution_successes": 8,
+    "arm_actions": {
+        "left_arm": [
+            {
+                "action": "PICK",
+                "start": 1779373538.3129833,
+                "end": 1779373547.3109593,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1779373548.3091803,
+                "end": 1779373555.311931,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779373555.3120077,
+                "end": 1779373559.308637,
+                "success": true
+            },
+            {
+                "action": "PICK",
+                "start": 1779373562.3108964,
+                "end": 1779373571.3088472,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779373571.3089101,
+                "end": 1779373575.3087268,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1779373576.3119562,
+                "end": 1779373586.3098235,
+                "success": false
+            }
+        ],
+        "right_arm": [
+            {
+                "action": "PICK",
+                "start": 1779373539.316658,
+                "end": 1779373549.3089595,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779373560.3102922,
+                "end": 1779373565.3161623,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1779373576.3126845,
+                "end": 1779373586.310002,
+                "success": true
+            }
+        ]
+    }
+}

@@ -1,0 +1,37 @@
+{
+    "mission_name": "EXP2_transfer_handover",
+    "start_timestamp": 1779370745.1127293,
+    "end_timestamp": 1779370760.2787495,
+    "rsr_vlm_success": true,
+    "rsr_bt_success": false,
+    "psr_perception_attempts": 2,
+    "psr_perception_successes": 2,
+    "psr_grasp_attempts": 2,
+    "psr_grasp_successes": 2,
+    "fsr_execution_attempts": 3,
+    "fsr_execution_successes": 2,
+    "arm_actions": {
+        "left_arm": [
+            {
+                "action": "PICK",
+                "start": 1779370748.2616568,
+                "end": 1779370757.2751923,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1779370757.275359,
+                "end": 1779370760.2607374,
+                "success": false
+            }
+        ],
+        "right_arm": [
+            {
+                "action": "PICK",
+                "start": 1779370749.2646575,
+                "end": 1779370760.2609289,
+                "success": true
+            }
+        ]
+    }
+}

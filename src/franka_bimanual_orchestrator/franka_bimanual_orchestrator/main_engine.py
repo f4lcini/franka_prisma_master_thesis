@@ -40,7 +40,7 @@ from franka_bimanual_orchestrator.behaviors.planner_utils import PlanSplitter, D
 # Called identically for both the static-JSON and the dynamic-VLM paths so
 # that behaviour nodes never hit a KeyError.
 # ---------------------------------------------------------------------------
-def _init_blackboard(full_plan: dict, object_override: str = None):
+def _init_blackboard(full_plan: dict, object_override: str = None, metrics_logger=None):
     """Register all blackboard keys and set safe default values."""
     bb = py_trees.blackboard.Client(name="MainConfig")
 
@@ -51,10 +51,12 @@ def _init_blackboard(full_plan: dict, object_override: str = None):
         "left_target_location",  "right_target_location",
         "left_target_pose",      "right_target_pose",
         "mission_metadata",      "mission_type",
-        "handover_starting",
+        "handover_starting",     "metrics_logger",
     ]
     for k in keys:
         bb.register_key(key=k, access=py_trees.common.Access.WRITE)
+        
+    bb.metrics_logger = metrics_logger
 
     # Defaults
     bb.left_target_name      = "none"
@@ -168,6 +170,13 @@ def main():
 
     full_plan = {}
     task_desc = args.task
+    
+    if args.plan and task_desc == "Bimanual Operation":
+        import os
+        task_desc = os.path.splitext(os.path.basename(args.plan))[0]
+    
+    from franka_bimanual_orchestrator.metrics import MetricsLogger
+    metrics_logger = MetricsLogger(experiment_name=task_desc)
 
     # -----------------------------------------------------------------------
     # MODE 1 – STATIC JSON
@@ -182,7 +191,8 @@ def main():
             return
 
         # Initialise blackboard (with optional object override)
-        _init_blackboard(full_plan, object_override=args.object)
+        metrics_logger.mark_vlm_success(True)
+        _init_blackboard(full_plan, object_override=args.object, metrics_logger=metrics_logger)
 
         # Apply --object override directly to plan steps as well
         if args.object:
@@ -305,10 +315,16 @@ def main():
                 return
         else:
             print(f"❌ VLM failed: {result.message}")
+            metrics_logger.mark_vlm_success(False)
+            metrics_logger.mark_bt_success(False)
+            import os
+            base_path = "/mm_ws/src/franka_bimanual_bringup/scripts/automate_scenarios/experiment_logs" if os.path.exists("/mm_ws") else "/home/hargalaten/Documents/vfalcini/franka_prisma_master_thesis/src/franka_bimanual_bringup/scripts/automate_scenarios/experiment_logs"
+            metrics_logger.save_log(base_path)
             return
 
         # Initialise blackboard identically to the static path
-        _init_blackboard(full_plan)
+        metrics_logger.mark_vlm_success(True)
+        _init_blackboard(full_plan, metrics_logger=metrics_logger)
 
     # -----------------------------------------------------------------------
     # Build & run the Behaviour Tree (common to both modes)
@@ -349,14 +365,23 @@ def main():
             status = tree.root.status
             if status == py_trees.common.Status.SUCCESS:
                 print("\n✅ MISSION COMPLETED: Both arms finished successfully!")
+                metrics_logger.mark_bt_success(True)
                 break
             if status == py_trees.common.Status.FAILURE:
                 print("\n❌ MISSION FAILED: Plan aborted. Check logs for details.")
+                metrics_logger.mark_bt_success(False)
                 break
     except KeyboardInterrupt:
         print("\n🛑 Manual interruption.")
+        metrics_logger.mark_bt_success(False)
     finally:
         tree.shutdown()
+        
+        import os
+        base_path = "/mm_ws/src/franka_bimanual_bringup/scripts/automate_scenarios/experiment_logs" if os.path.exists("/mm_ws") else "/home/hargalaten/Documents/vfalcini/franka_prisma_master_thesis/src/franka_bimanual_bringup/scripts/automate_scenarios/experiment_logs"
+        log_path = metrics_logger.save_log(base_path)
+        print(f"\n📊 Metrics saved to: {log_path}")
+        
         rclpy.try_shutdown()
 
 

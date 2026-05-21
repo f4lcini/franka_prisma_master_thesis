@@ -213,11 +213,11 @@ class SkillBehaviors:
             has_mutex = await self._request_mutex(arm_group)
 
         try:
-            # 2. Approach (PTP)
-            self.logger.info(f"[{arm_group}] Step 1: Approach (PTP)")
+            # 2. Approach (LIN)
+            self.logger.info(f"[{arm_group}] Step 1: Approach (LIN)")
             pre_grasp = copy.deepcopy(req.target_pose)
             pre_grasp.pose.position.z = pre_grasp_z
-            if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_grasp, planner="PTP"):
+            if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_grasp, planner="LIN"):
                 self.logger.error(f"[{arm_group}] Step 1 (Approach) FAILED")
                 self.safe_abort(goal_handle); result.success = False; return result
                 
@@ -288,9 +288,9 @@ class SkillBehaviors:
             has_mutex = await self._request_mutex(arm_group)
         
         try:
-            # 1. Approach
-            self.logger.info(f"[{arm_group}] Step 1: Approach (PTP)")
-            if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_place, planner="PTP"):
+            # 1. Approach (LIN)
+            self.logger.info(f"[{arm_group}] Step 1: Approach (LIN)")
+            if not await self.robot_control_api.send_moveit_goal_async(arm_group, target_pose=pre_place, planner="LIN"):
                 self.logger.error(f"[{arm_group}] Step 1 (Approach) FAILED")
                 self.safe_abort(goal_handle); return result
                 
