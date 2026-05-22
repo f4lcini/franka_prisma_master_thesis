@@ -4,16 +4,13 @@ from scipy.spatial.transform import Rotation
 import yaml
 import os
 
-# =================================================================
-# CALIBRAZIONE CAMERA - 13 MAGGIO 2026
-# AprilTag ID 0 posizionato al CENTRO del tavolo (0,0,0)
-# =================================================================
+
 
 # 1. Matrice Camera (Optical Frame) -> Tag (FORNITA DA UTENTE)
 T_link_tag = np.array([
-    [ 0.936, -0.351,  0.035,  0.092],
-    [-0.093, -0.340, -0.936,  0.179],
-    [ 0.341,  0.872, -0.351,  1.450],
+    [ 0.938, -0.347,  0.027,  0.094],
+    [-0.103, -0.351, -0.931,  0.172],
+    [ 0.333,  0.870, -0.365,  1.465],
     [ 0.000,  0.000,  0.000,  1.000]
 ])
 

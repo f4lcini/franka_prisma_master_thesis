@@ -29,6 +29,10 @@ except Exception:
 
 try:
     from ultralytics import YOLO
+    import torch
+    # FUNDAMENTAL: limit PyTorch to 2 threads so it doesn't freeze all CPU cores!
+    # Without this, a CPU forward pass starves the 1kHz Franka loop.
+    torch.set_num_threads(2)
 except ImportError:
     YOLO = None
 
@@ -339,42 +343,48 @@ class ObjectLocalizationNode(Node):
         cx = self.camera_intrinsics['cx']
         cy = self.camera_intrinsics['cy']
 
-        NUM_FRAMES  = 3     # campioni per robustezza temporale
+        self._busy = True  # Pause 1Hz background inferences
+        
+        NUM_FRAMES  = 2     # Ridotto per limitare il carico CPU ed evitare reflex aborts
         NMS_DIST_M  = 0.08  # soglia NMS: oggetti a <8 cm = stesso oggetto
 
         all_detections = []
 
-        for _ in range(NUM_FRAMES):
-            try:
-                cv_image = self.cv_bridge.imgmsg_to_cv2(self.latest_image, 'bgr8')
-                results  = self.model(cv_image, verbose=False, conf=0.10, imgsz=640)
+        try:
+            for _ in range(NUM_FRAMES):
+                try:
+                    cv_image = self.cv_bridge.imgmsg_to_cv2(self.latest_image, 'bgr8')
+                    results  = self.model(cv_image, verbose=False, conf=0.10, imgsz=640)
+    
+                    for box in results[0].boxes:
+                        cls_id = int(box.cls[0].item())
+                        conf   = float(box.conf[0].item())
+                        label  = self.model.names[cls_id]
+    
+                        x1, y1, x2, y2 = box.xyxy[0].tolist()
+                        u = (x1 + x2) / 2.0
+                        v = y2  # base del bounding box = punto di appoggio
+    
+                        # Proiezione sul piano tavolo (z=0 nel frame mondo)
+                        v_opt   = np.array([(u - cx) / fx, (v - cy) / fy, 1.0])
+                        v_world = R_opt_to_table @ v_opt
+                        if abs(v_world[2]) < 1e-6:
+                            continue
+                        lam     = -cam_pos[2] / v_world[2]
+                        p_world = cam_pos + lam * v_world
+    
+                        all_detections.append({
+                            'label':   label,
+                            'x_world': float(p_world[0]),
+                            'y_world': float(p_world[1]),
+                            'conf':    conf,
+                        })
+                except Exception as e:
+                    self.get_logger().error(f"Errore YOLO in scan_table frame: {e}")
+                time.sleep(0.2)  # Aumentato a 200ms per far respirare il thread RT a 1kHz!
 
-                for box in results[0].boxes:
-                    cls_id = int(box.cls[0].item())
-                    conf   = float(box.conf[0].item())
-                    label  = self.model.names[cls_id]
-
-                    x1, y1, x2, y2 = box.xyxy[0].tolist()
-                    u = (x1 + x2) / 2.0
-                    v = y2  # base del bounding box = punto di appoggio
-
-                    # Proiezione sul piano tavolo (z=0 nel frame mondo)
-                    v_opt   = np.array([(u - cx) / fx, (v - cy) / fy, 1.0])
-                    v_world = R_opt_to_table @ v_opt
-                    if abs(v_world[2]) < 1e-6:
-                        continue
-                    lam     = -cam_pos[2] / v_world[2]
-                    p_world = cam_pos + lam * v_world
-
-                    all_detections.append({
-                        'label':   label,
-                        'x_world': float(p_world[0]),
-                        'y_world': float(p_world[1]),
-                        'conf':    conf,
-                    })
-            except Exception as e:
-                self.get_logger().error(f"Errore YOLO in scan_table frame: {e}")
-            time.sleep(0.05)
+        finally:
+            self._busy = False
 
         if not all_detections:
             response.success = True

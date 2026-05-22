@@ -103,14 +103,14 @@ def main():
         print(f"Directory {base_path} not found.")
         return
 
-    subdirs = [d for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))]
+    exp_dirs = []
+    for root, dirs, files in os.walk(base_path):
+        if any(f.endswith('.json') for f in files):
+            exp_dirs.append(root)
     
-    if not subdirs:
-        files = [f for f in os.listdir(base_path) if f.endswith('.json')]
-        if not files:
-            print("No log files found.")
-            return
-        subdirs = [""]
+    if not exp_dirs:
+        print("No log files found in any subdirectories.")
+        return
 
     global_metrics = {k: [] for k in ['RSR', 'PSR_Mission', 'PSR_Action', 'FSR_Mission', 'FSR_Action', 'PEO_Percent', 'PEO_Seconds', 'Mission_Time']}
     global_counts = {k: 0 for k in ['RSR_total', 'RSR_succ', 'PSR_M_total', 'PSR_M_succ', 'PSR_A_total', 'PSR_A_succ', 'FSR_M_total', 'FSR_M_succ', 'FSR_A_total', 'FSR_A_succ']}
@@ -123,8 +123,7 @@ def main():
         'arm_successes':    {},
     }
     
-    for subdir in subdirs:
-        exp_path = os.path.join(base_path, subdir) if subdir else base_path
+    for exp_path in exp_dirs:
         files = [f for f in os.listdir(exp_path) if f.endswith('.json')]
         if not files:
             continue
@@ -258,10 +257,10 @@ def main():
             except Exception as e:
                 print(f"Error reading {f}: {e}")
 
-        exp_name = subdir if subdir else "Uncategorized"
+        exp_name = os.path.relpath(exp_path, base_path)
         print_metrics(f"Experiment: {exp_name}", metrics, counts, fails, detail, len(files))
 
-    if len(subdirs) > 1 or (len(subdirs) == 1 and subdirs[0] != ""):
+    if len(exp_dirs) > 1 or (len(exp_dirs) == 1 and exp_dirs[0] != base_path):
         total_logs = len(global_metrics['RSR'])
         if total_logs > 0:
             print_metrics("GLOBAL AGGREGATE RESULTS", global_metrics, global_counts, global_fails, global_detail, total_logs)

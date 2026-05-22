@@ -16,12 +16,15 @@ class MetricsLogger:
             'end_timestamp': 0.0,
             'rsr_vlm_success': False,
             'rsr_bt_success': False,
+            'vlm_input_prompt': None,
+            'vlm_output_plan': None,
             'psr_perception_attempts': 0,
             'psr_perception_successes': 0,
             'psr_grasp_attempts': 0,
             'psr_grasp_successes': 0,
             'fsr_execution_attempts': 0,
             'fsr_execution_successes': 0,
+            'scene_inventory': [],
             'arm_actions': {
                 'left_arm': [],
                 'right_arm': []
@@ -33,6 +36,15 @@ class MetricsLogger:
 
     def mark_bt_success(self, success):
         self.metrics['rsr_bt_success'] = success
+
+    def log_vlm_plan(self, plan_str):
+        self.metrics['vlm_output_plan'] = plan_str
+
+    def log_vlm_prompt(self, prompt_str):
+        self.metrics['vlm_input_prompt'] = prompt_str
+
+    def log_scene_inventory(self, scene_inventory):
+        self.metrics['scene_inventory'] = scene_inventory
 
     def log_perception(self, success):
         self.metrics['psr_perception_attempts'] += 1

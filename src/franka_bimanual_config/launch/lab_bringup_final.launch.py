@@ -20,7 +20,8 @@ def robot_description_dependent_nodes_spawner(
         use_fake_hardware,
         load_gripper,
         left_ip,
-        right_ip
+        right_ip,
+        use_rviz
     ):
 
     pkg_config = get_package_share_directory('franka_bimanual_config')
@@ -29,6 +30,7 @@ def robot_description_dependent_nodes_spawner(
     use_fake_hardware_str = context.perform_substitution(use_fake_hardware)
     left_ip_str = context.perform_substitution(left_ip)
     right_ip_str = context.perform_substitution(right_ip)
+    use_rviz_str = context.perform_substitution(use_rviz)
 
     # 1. URDF Processing
     franka_xacro_filepath = os.path.join(pkg_config, 'urdf', 'bimanual_custom.urdf.xacro')
@@ -150,7 +152,7 @@ def robot_description_dependent_nodes_spawner(
         'default_acceleration_scaling_factor': 1.0,
     }
 
-    return [
+    nodes_to_return = [
         Node(
             package='franka_gripper',
             executable='franka_gripper_node',
@@ -207,24 +209,27 @@ def robot_description_dependent_nodes_spawner(
                 moveit_controllers_config,
                 trajectory_execution,
             ],
-        ),
-        
-
-        # RViz with MoveIt parameters
-        Node(
-            package='rviz2',
-            executable='rviz2',
-            name='rviz2',
-            arguments=['--display-config', os.path.join(pkg_config, 'rviz', 'bimanual_moveit.rviz')],
-            parameters=[
-                robot_description,
-                robot_description_semantic,
-                kinematics_config,
-                joint_limits_config,
-                planning_pipeline_config,
-            ],
-        ),
+        )
     ]
+    
+    if use_rviz_str.lower() == 'true':
+        nodes_to_return.append(
+            Node(
+                package='rviz2',
+                executable='rviz2',
+                name='rviz2',
+                arguments=['--display-config', os.path.join(pkg_config, 'rviz', 'bimanual_moveit.rviz')],
+                parameters=[
+                    robot_description,
+                    robot_description_semantic,
+                    kinematics_config,
+                    joint_limits_config,
+                    planning_pipeline_config,
+                ],
+            )
+        )
+        
+    return nodes_to_return
 
 def generate_launch_description():
     pkg_config = get_package_share_directory('franka_bimanual_config')
@@ -240,7 +245,7 @@ def generate_launch_description():
     # Spawner Function
     nodes_spawner = OpaqueFunction(
         function=robot_description_dependent_nodes_spawner,
-        args=[use_fake_hardware, load_gripper, left_ip, right_ip]
+        args=[use_fake_hardware, load_gripper, left_ip, right_ip, use_rviz]
     )
 
     # Controller Spawners

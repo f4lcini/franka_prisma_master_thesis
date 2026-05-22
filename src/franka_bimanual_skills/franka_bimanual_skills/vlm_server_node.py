@@ -172,43 +172,53 @@ class VlmServerNode(Node):
 
         # ── System Prompt ────────────────────────────────────────────────────
         system_prompt = (
-            "You are the task planner for a dual-arm Franka Research 3 robot system.\n"
-            "Your ONLY job is to output a JSON plan following the EXACT structure shown below.\n\n"
-
-            "--- MANDATORY OUTPUT STRUCTURE ---\n"
-            "Each arm sequence MUST contain EXACTLY these 4 steps in this exact order:\n"
-            "  1. FIND_OBJECT  (localize the object with YOLO)\n"
-            "  2. PICK         (grasp the object)\n"
-            "  3. PLACE        (deposit the object at its destination)\n"
-            "  4. MOVE_HOME    (return arm to rest)\n\n"
-
-            "FORBIDDEN: Do NOT add SYNC_BARRIER, WAIT, or any other step. Do NOT add more than 4 steps per arm.\n\n"
-
-            "--- EXAMPLE OUTPUT (follow this structure exactly) ---\n"
-            '{\n'
-            '  "task_name": "Sort items",\n'
+            "You are the core intelligence of the Semantic-Based Skill Orchestration Framework for Coordinating Bimanual Robotic Tasks (using two Franka Research 3 arms).\n"
+            "Your objective is to act as a Vision-Language Model (VLM). You MUST directly analyze the provided image of the workspace to infer spatial semantics, object affordances, and potential collision zones before generating a JSON plan.\n"
+            "CRITICAL: The generated JSON plan will be fed into a dynamic Behavior Tree engine. The 'left_arm_sequence' and 'right_arm_sequence' will be executed IN PARALLEL. You must use SYNC_BARRIER to explicitly synchronize them when sequential steps are required.\n\n"
+            
+            "--- INITIAL STATE ---\n"
+            "Assume both arms are empty and currently in the 'ready' pose.\n\n"
+            
+            "--- AVAILABLE ACTIONS ---\n"
+            "- FIND_OBJECT: Localize an object with YOLO. Requires 'target_name' and 'arm'.\n"
+            "- PICK: Grasp an object. Requires 'target_name' and 'arm'. If picking from the shared zone, use 'target_name': 'shared' (NO FIND_OBJECT needed).\n"
+            "- PLACE: Deposit an object. Requires 'target_name' ('box_ws_sx', 'box_ws_dx', or 'shared') and 'arm'.\n"
+            "- MOVE_HOME: Move arm to a resting pose. Optionally requires 'pose_name' ('ready' or 'midway'). IMPORTANT: In 'midway' pose, the gripper DOES NOT open (useful for holding objects during coordination). The mission MUST always end with a MOVE_HOME (pose_name 'ready') for both arms.\n"
+            "- SYNC_BARRIER: A synchronization point. The arm pauses until the other arm reaches its SYNC_BARRIER. Ensure both arms have the EXACT same number of SYNC_BARRIERs in their sequences.\n\n"
+            
+            "--- PREDEFINED LOCATIONS & POSES ---\n"
+            "- 'box_ws_sx': The drop-off box located in the left workspace (accessible only by left_arm).\n"
+            "- 'box_ws_dx': The drop-off box located in the right workspace (accessible only by right_arm).\n"
+            "- 'shared': The common overlapping workspace in the center. Used to transfer objects between arms or place items centrally.\n"
+            "- 'ready': The default safe resting pose for the arms.\n"
+            "- 'midway': An intermediate safe pose where the gripper remains CLOSED (holding the object). Used while waiting for the other arm.\n\n"
+            
+            "--- SPATIAL & SAFETY RULES ---\n"
+            "1. 'left_arm' operates on the left. It drops objects in 'box_ws_sx' or 'shared'.\n"
+            "2. 'right_arm' operates on the right. It drops objects in 'box_ws_dx' or 'shared'.\n"
+            "3. END OF MISSION: Both arms MUST ALWAYS finish their sequences with a 'MOVE_HOME' (pose_name 'ready').\n"
+            "4. COLLISION AVOIDANCE & MAX PARALLELISM: Both arms CANNOT access 'shared' at the same time. To maximize parallel execution, delay the SYNC_BARRIER as much as possible. Place the SYNC_BARRIER immediately BEFORE the 'PLACE' action in 'shared', so both arms can FIND and PICK simultaneously without waiting.\n"
+            "5. HANDOVERS: To transfer an object, the donor places it in 'shared' and waits (SYNC_BARRIER). The recipient waits (SYNC_BARRIER) until the donor is clear, then picks from 'shared'.\n"
+            "6. INANIMATE OBJECTS ONLY: You MUST strictly ignore any detected object labeled 'person'. The robot can only physically manipulate inanimate items (e.g. 'sports ball', 'bottle', 'cup'). Do NEVER attempt to FIND or PICK a 'person'.\n\n"
+            
+            "--- TASK CONTEXTS (Reference Experiments) ---\n"
+            "The system handles 3 physical setups. Infer the correct goal and plan accordingly:\n"
+            "1. EXP1 (Sort Items): Both drop-off boxes are present. Goal: sort items independently into respective boxes.\n"
+            "2. EXP2 (Transfer/Handover): Only the right box ('box_ws_dx') is present. Goal: items from the left must be transferred to the right arm via 'shared' to reach the box.\n"
+            "3. EXP3 (Clear Workspace): The destination box is located centrally in the 'shared' zone. Goal: both arms must place all objects into 'shared' without colliding.\n\n"
+            
+            "--- OUTPUT FORMAT ---\n"
+            "You must output STRICTLY a JSON object mapping to the TaskPlan schema. Here is a generic EXAMPLE (completely different from the actual experiments) to show the syntax:\n"
+            "{\n"
             '  "left_arm_sequence": [\n'
-            '    {"action": "FIND_OBJECT", "target_name": "sports ball", "arm": "left_arm"},\n'
-            '    {"action": "PICK",        "target_name": "sports ball", "arm": "left_arm"},\n'
-            '    {"action": "PLACE",       "target_name": "box_ws_sx",   "arm": "left_arm"},\n'
-            '    {"action": "MOVE_HOME",   "arm": "left_arm", "pose_name": "ready"}\n'
+            '    {"action": "MOVE_HOME", "pose_name": "midway", "arm": "left_arm"},\n'
+            '    {"action": "MOVE_HOME", "pose_name": "ready", "arm": "left_arm"}\n'
             '  ],\n'
             '  "right_arm_sequence": [\n'
-            '    {"action": "FIND_OBJECT", "target_name": "sports ball", "arm": "right_arm"},\n'
-            '    {"action": "PICK",        "target_name": "sports ball", "arm": "right_arm"},\n'
-            '    {"action": "PLACE",       "target_name": "box_ws_dx",   "arm": "right_arm"},\n'
-            '    {"action": "MOVE_HOME",   "arm": "right_arm", "pose_name": "ready"}\n'
+            '    {"action": "MOVE_HOME", "pose_name": "midway", "arm": "right_arm"},\n'
+            '    {"action": "MOVE_HOME", "pose_name": "ready", "arm": "right_arm"}\n'
             '  ]\n'
-            '}\n\n'
-
-            "--- RULES ---\n"
-            "- left_arm handles objects on the LEFT side (X < 0). Destination: 'box_ws_sx'.\n"
-            "- right_arm handles objects on the RIGHT side (X >= 0). Destination: 'box_ws_dx'.\n"
-            "- Use ONLY the EXACT label string from YOLO detections (e.g. 'sports ball', 'bottle', 'cup').\n"
-            "- If one side has no detected object, use MOVE_HOME as the only step for that arm.\n"
-            "- Do NOT include 'chair', 'person', or any label not relevant to the sorting task.\n\n"
-
-            "Format your output strictly as a JSON matching the TaskPlan schema with no markdown."
+            "}\n"
         )
 
         # ── YOLO Grounding via /scan_table ───────────────────────────────────
@@ -225,9 +235,8 @@ class VlmServerNode(Node):
                     f"(X={obj.get('x_world', 0.0):.3f}m, Confidence: {obj.get('conf', 0.0):.2f})\n"
                 )
             yolo_info += (
-                "\nCRITICAL RULE: You MUST ONLY use these detected physical objects in your plan! "
-                "Use the exact Label string. Assign each object to the arm indicated by its Spatial Side. "
-                "Do NOT use generic names like 'left_item' or 'right_item'.\n\n"
+                "\nCRITICAL RULE: While YOLO provides these base textual detections, you MUST analyze the attached image to verify spatial relationships, object accessibility, and plan safe bimanual sequences. "
+                "Use the exact Label string from YOLO, but use your visual understanding to dictate the interaction order and SYNC_BARRIER placements. Do NOT use generic names like 'left_item' or 'right_item'.\n\n"
             )
         else:
             yolo_info += (
@@ -265,26 +274,14 @@ class VlmServerNode(Node):
                     )
                     json_plan = response.text
                     
-                    # ── Normalizza il piano alla struttura esatta FIND→PICK→PLACE→HOME ──
-                    # Questo garantisce che il piano VLM sia identico a EXP1_sort_items.json
                     try:
-                        plan_obj = json.loads(json_plan)
-                        for arm_key in ['left_arm_sequence', 'right_arm_sequence']:
-                            seq = plan_obj.get(arm_key, [])
-                            # Prendi solo il primo passo di ogni tipo (ordine naturale)
-                            find  = next((s for s in seq if s.get('action') == 'FIND_OBJECT'), None)
-                            pick  = next((s for s in seq if s.get('action') == 'PICK'), None)
-                            place = next((s for s in seq if s.get('action') == 'PLACE'), None)
-                            home  = next((s for s in seq if s.get('action') == 'MOVE_HOME'), None)
-                            normalized = [s for s in [find, pick, place, home] if s is not None]
-                            if len(normalized) == 4:
-                                plan_obj[arm_key] = normalized
-                            # Se manca qualcosa, lascia invariata (caso degradato)
-                        json_plan = json.dumps(plan_obj, indent=2)
-                        self.get_logger().info(f"✅ Piano normalizzato a struttura FIND→PICK→PLACE→HOME")
+                        plan_dict = json.loads(json_plan)
+                        plan_dict["scene_inventory"] = detected_objects
+                        plan_dict["vlm_input_prompt"] = full_system_prompt
+                        json_plan = json.dumps(plan_dict, indent=2)
                     except Exception as e:
-                        self.get_logger().warn(f"⚠️ Normalizzazione piano fallita: {e} — uso output grezzo")
-
+                        self.get_logger().error(f"Failed to inject scene_inventory into VLM plan: {e}")
+                    
                     self.get_logger().info(f"✅ Piano generato con '{model_name}': {json_plan}")
 
                     self.last_plan_cache = json_plan
