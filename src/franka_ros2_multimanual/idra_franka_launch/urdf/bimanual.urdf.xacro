@@ -48,6 +48,12 @@
       <origin xyz="0.145 0.145 0.009" />
       <material name="platematerial" />
     </visual>
+    <collision>
+      <geometry>
+        <box size="0.29 0.29 0.018" />
+      </geometry>
+      <origin xyz="0.145 0.145 0.009" />
+    </collision>
   </link>
 
   <joint name="table_to_plate1" type="fixed">
@@ -64,6 +70,12 @@
       <origin xyz="0.145 0.145 0.009" />
       <material name="platematerial" />
     </visual>
+    <collision>
+      <geometry>
+        <box size="0.29 0.29 0.018" />
+      </geometry>
+      <origin xyz="0.145 0.145 0.009" />
+    </collision>
   </link>
 
   <joint name="table_to_plate2" type="fixed">
