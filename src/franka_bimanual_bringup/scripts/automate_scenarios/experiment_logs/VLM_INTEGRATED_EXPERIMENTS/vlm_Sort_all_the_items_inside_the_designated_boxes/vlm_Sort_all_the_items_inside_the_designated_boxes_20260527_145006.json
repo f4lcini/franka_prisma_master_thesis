@@ -1,0 +1,20 @@
+{
+    "mission_name": "vlm_Sort_all_the_items_inside_the_designated_boxes",
+    "start_timestamp": 1779893403.949707,
+    "end_timestamp": 1779893406.1494021,
+    "rsr_vlm_success": false,
+    "rsr_bt_success": false,
+    "vlm_input_prompt": null,
+    "vlm_output_plan": null,
+    "psr_perception_attempts": 0,
+    "psr_perception_successes": 0,
+    "psr_grasp_attempts": 0,
+    "psr_grasp_successes": 0,
+    "fsr_execution_attempts": 0,
+    "fsr_execution_successes": 0,
+    "scene_inventory": [],
+    "arm_actions": {
+        "left_arm": [],
+        "right_arm": []
+    }
+}

@@ -84,7 +84,58 @@ def compute_overlap(left_intervals, right_intervals):
                 overlap_time += (o_end - o_start)
     return overlap_time
 
+def inject_sync_barriers(log_data):
+    # If there's a VLM plan, we can infer the exact duration of the SYNC_BARRIER
+    # by looking at the gap between the preceding and succeeding actions.
+    plan = log_data.get('vlm_output_plan')
+    if not plan: return log_data
+    
+    for arm in ['left_arm', 'right_arm']:
+        seq_key = f"{arm}_sequence"
+        if seq_key not in plan: continue
+        planned_seq = plan[seq_key]
+        
+        executed = log_data.get('arm_actions', {}).get(arm, [])
+        if not executed: continue
+        
+        new_executed = []
+        exec_idx = 0
+        
+        for p_action in planned_seq:
+            act_type = p_action.get('action')
+            if act_type == 'FIND_OBJECT':
+                continue
+                
+            if act_type == 'SYNC_BARRIER':
+                if exec_idx > 0 and exec_idx < len(executed):
+                    prev_act = executed[exec_idx - 1]
+                    next_act = executed[exec_idx]
+                    gap_start = prev_act['end']
+                    gap_end = next_act['start']
+                    if gap_end > gap_start:
+                        new_executed.append({
+                            'action': 'SYNC_BARRIER',
+                            'start': gap_start,
+                            'end': gap_end,
+                            'success': True
+                        })
+            else:
+                if exec_idx < len(executed) and executed[exec_idx]['action'] == act_type:
+                    new_executed.append(executed[exec_idx])
+                    exec_idx += 1
+                    
+        # Add any remaining executed actions just in case
+        while exec_idx < len(executed):
+            new_executed.append(executed[exec_idx])
+            exec_idx += 1
+            
+        log_data['arm_actions'][arm] = new_executed
+    return log_data
+
 def plot_gantt(log_data, exp_name):
+    # Inject sync barriers into the log data dynamically
+    log_data = inject_sync_barriers(log_data)
+    
     fig, ax = plt.subplots(figsize=(6, 3))
     
     left_actions = log_data.get('arm_actions', {}).get('left_arm', [])
@@ -95,7 +146,7 @@ def plot_gantt(log_data, exp_name):
         if left_actions: start_ts = left_actions[0]['start']
         elif right_actions: start_ts = right_actions[0]['start']
     
-    colors = {"PICK": "#0072B2", "PLACE": "#D55E00", "MOVE_HOME": "#009E73", "SYNC_BARRIER": "#CC79A7", "FIND_OBJECT": "#E69F00", "UNKNOWN": "gray"}
+    colors = {"PICK": "#0072B2", "PLACE": "#D55E00", "MOVE_HOME": "#009E73", "SYNC_BARRIER": "#CC79A7", "UNKNOWN": "gray"}
     
     l_intervals = []
     r_intervals = []
@@ -123,7 +174,7 @@ def plot_gantt(log_data, exp_name):
     ax.set_xlabel("Time (s)")
     ax.set_title(f"Bimanual Timeline ({exp_name})")
     
-    handles = [mpatches.Patch(color=c, label=k) for k, c in colors.items() if k in ["PICK", "PLACE", "MOVE_HOME", "SYNC_BARRIER", "FIND_OBJECT"]]
+    handles = [mpatches.Patch(color=c, label=k) for k, c in colors.items() if k in ["PICK", "PLACE", "MOVE_HOME", "SYNC_BARRIER"]]
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.3), ncol=4)
     
     plt.tight_layout()
