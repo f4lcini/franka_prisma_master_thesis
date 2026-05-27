@@ -22,7 +22,8 @@ plt.rcParams.update({
     "lines.linewidth": 1.5,
 })
 
-OUTPUT_DIR = "/home/falco_robotics/vf_projects_portfolio/mm_ws/src/franka_bimanual_bringup/scripts/plots"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR = "/home/hargalaten/vfalcini_demos/Thesis/images/plots"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 COLORS = ["#0072B2", "#E69F00", "#009E73", "#D55E00", "#CC79A7", "#56B4E9"]
@@ -94,7 +95,7 @@ def plot_gantt(log_data, exp_name):
         if left_actions: start_ts = left_actions[0]['start']
         elif right_actions: start_ts = right_actions[0]['start']
     
-    colors = {"PICK": "#0072B2", "PLACE": "#D55E00", "MOVE_HOME": "#009E73", "HANDOVER": "#CC79A7", "UNKNOWN": "gray"}
+    colors = {"PICK": "#0072B2", "PLACE": "#D55E00", "MOVE_HOME": "#009E73", "SYNC_BARRIER": "#CC79A7", "FIND_OBJECT": "#E69F00", "UNKNOWN": "gray"}
     
     l_intervals = []
     r_intervals = []
@@ -122,7 +123,7 @@ def plot_gantt(log_data, exp_name):
     ax.set_xlabel("Time (s)")
     ax.set_title(f"Bimanual Timeline ({exp_name})")
     
-    handles = [mpatches.Patch(color=c, label=k) for k, c in colors.items() if k in ["PICK", "PLACE", "MOVE_HOME", "HANDOVER"]]
+    handles = [mpatches.Patch(color=c, label=k) for k, c in colors.items() if k in ["PICK", "PLACE", "MOVE_HOME", "SYNC_BARRIER", "FIND_OBJECT"]]
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.3), ncol=4)
     
     plt.tight_layout()
@@ -333,7 +334,7 @@ def plot_detailed_counts(experiments_dict):
     plt.close()
 
 if __name__ == "__main__":
-    logs_dir = "/home/falco_robotics/vf_projects_portfolio/mm_ws/src/franka_bimanual_bringup/scripts/automate_scenarios/experiment_logs"
+    logs_dir = os.path.join(SCRIPT_DIR, "automate_scenarios", "experiment_logs")
     experiments = get_data(logs_dir)
     
     if not experiments:

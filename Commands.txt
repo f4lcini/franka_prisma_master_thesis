@@ -180,6 +180,8 @@ ros2 action send_goal /franka2_gripper/homing franka_msgs/action/Homing "{}"
 sudo apt update
 sudo apt install ros-humble-apriltag-ros
 
+Move home
+python3 src/franka_bimanual_bringup/scripts/automate_scenarios/atom_synch_home.py
 
 # ------------------------------------------
 # 13. THESIS EXPERIMENTS PROMPTS
