@@ -15,8 +15,9 @@ from cv_bridge import CvBridge
 import PIL.Image
 
 from franka_bimanual_skills.skills_repertoire import TaskPlan
-from google import genai
-from google.genai import types
+import base64
+from io import BytesIO
+import requests
 
 
 class VlmServerNode(Node):
@@ -27,10 +28,9 @@ class VlmServerNode(Node):
         self.cv_bridge   = CvBridge()
         self.latest_image = None
 
-        # ── Gemini API ────────────────────────────────────────────────────────
-        api_key = os.environ.get("GEMINI_API_KEY")
+        # ── OpenRouter API ────────────────────────────────────────────────────
+        api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
-            # Fallback: cerca il file .env sia in Docker (/mm_ws) che su host
             possible_paths = [
                 "/mm_ws/KEY/.env",
                 "/mm_ws/src/franka_bimanual_skills/launch/.env",
@@ -44,25 +44,28 @@ class VlmServerNode(Node):
                         for line in f:
                             if '=' in line and not line.strip().startswith('#'):
                                 k, v = line.strip().split('=', 1)
-                                if k.strip() == "GEMINI_API_KEY":
+                                if k.strip() == "OPENROUTER_API_KEY":
                                     api_key = v.strip().strip('"').strip("'")
-                                    os.environ["GEMINI_API_KEY"] = api_key
+                                    os.environ["OPENROUTER_API_KEY"] = api_key
                                     break
-                    break
+                    if api_key:
+                        break
 
         if not api_key:
             self.get_logger().error(
-                "❌ GEMINI_API_KEY non definita e nessun file .env trovato!"
+                "❌ OPENROUTER_API_KEY non definita e nessun file .env trovato!"
             )
 
-        self.gemini_client = genai.Client(api_key=api_key)
-        # Modelli in ordine di preferenza: se uno è a quota, si prova il successivo
+        self.api_key = api_key
         self.model_candidates = [
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
-            "gemini-1.5-pro",
-            "gemini-1.5-flash",
-            "gemini-1.5-flash-8b"
+            # --- MODELLI VLM (Vision-Language Models / Multimodali) ---
+            "nvidia/nemotron-nano-12b-v2-vl:free",
+            "google/gemma-4-31b-it:free",
+            
+            # --- MODELLI LLM (Solo Testo / Ragionamento Avanzato) ---
+            "deepseek/deepseek-v4-flash:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "openrouter/free"
         ]
         self.last_plan_cache = None
         self.last_task_input = ""
@@ -111,6 +114,22 @@ class VlmServerNode(Node):
 
     def cancel_callback(self, goal_handle):
         return CancelResponse.ACCEPT
+
+    def _clean_json_output(self, raw_text: str) -> str:
+        """
+        Rimuove la formattazione Markdown dal payload JSON
+        per prevenire JSONDecodeError.
+        """
+        cleaned = raw_text.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        elif cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+            
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+            
+        return cleaned.strip()
 
     # ─────────────────────────────────────────────────────────────────────────
     # Scene scan via /scan_table service
@@ -246,70 +265,95 @@ class VlmServerNode(Node):
 
         self.get_logger().info(f"👁️ YOLO TABLE SCAN RESULT:\n{yolo_info}")
 
-        # ── Build Gemini request ──────────────────────────────────────────────
+        # ── Call OpenRouter with model fallback ────────────────────────────
         full_system_prompt = system_prompt + "\n" + yolo_info
-        contents = [full_system_prompt, f"User Command: {task_description}"]
-        if self.latest_image:
-            self.get_logger().info("📸 Camera image included in VLM query.")
-            contents.append(self.latest_image)
-        else:
-            self.get_logger().warn("⚠️ No camera image — VLM will plan from text only.")
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "HTTP-Referer": "https://github.com/hargalaten/franka_prisma_master_thesis",
+            "X-OpenRouter-Title": "Franka Prisma",
+            "Content-Type": "application/json"
+        }
 
-        # ── Call Gemini with model fallback on 429 ────────────────────────────
         for model_name in self.model_candidates:
-            self.get_logger().info(f"🤖 Tentativo con modello: '{model_name}'...")
-            max_retries = 5 if model_name == "gemini-2.5-flash" else 2
+            self.get_logger().info(f"🤖 Tentativo con modello: '{model_name}' su OpenRouter...")
+            max_retries = 3
             base_delay  = 5.0
+            
+            is_text_only = "deepseek" in model_name.lower() or "llama-3.3" in model_name.lower() or "openrouter/free" in model_name.lower()
+            
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": full_system_prompt + "\n\nUser Command: " + task_description}
+                    ]
+                }
+            ]
+            
+            if self.latest_image and not is_text_only:
+                buffered = BytesIO()
+                self.latest_image.save(buffered, format="JPEG")
+                img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                messages[0]["content"].append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{img_str}"}
+                })
+            elif self.latest_image and is_text_only:
+                self.get_logger().info(f"ℹ️ {model_name} è un LLM puramente testuale: l'immagine della telecamera verrà omessa.")
+            else:
+                self.get_logger().warn("⚠️ Nessuna immagine disponibile dalla telecamera — Il VLM pianificherà solo tramite testo.")
 
             for attempt in range(max_retries):
                 try:
-                    response = self.gemini_client.models.generate_content(
-                        model=model_name,
-                        contents=contents,
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            response_schema=TaskPlan,
-                            temperature=0.1,
-                        ),
+                    api_url = "https://openrouter.ai/api/v1/chat/completions"
+                    
+                    payload = {
+                        "model": model_name.strip(),
+                        "messages": messages,
+                        "temperature": 0.1,
+                        "response_format": {"type": "json_object"}
+                    }
+                    
+                    response = requests.post(
+                        api_url,
+                        headers=headers,
+                        json=payload,
+                        timeout=30.0
                     )
-                    json_plan = response.text
+                    
+                    if response.status_code == 429:
+                        self.get_logger().warn(f"⚠️ Quota 429 (Rate Limit) su '{model_name}'. Salto al prossimo modello...")
+                        break
+                        
+                    response.raise_for_status()
+                    
+                    resp_json = response.json()
+                    raw_json_plan = resp_json["choices"][0]["message"]["content"]
+                    
+                    clean_json_str = self._clean_json_output(raw_json_plan)
                     
                     try:
-                        plan_dict = json.loads(json_plan)
+                        plan_dict = json.loads(clean_json_str)
                         plan_dict["scene_inventory"] = detected_objects
                         plan_dict["vlm_input_prompt"] = full_system_prompt
-                        json_plan = json.dumps(plan_dict, indent=2)
+                        final_json_plan = json.dumps(plan_dict, indent=2)
                     except Exception as e:
-                        self.get_logger().error(f"Failed to inject scene_inventory into VLM plan: {e}")
+                        self.get_logger().error(f"Failed to parse sanitized JSON: {e}\nRaw output: {clean_json_str}")
+                        raise e
                     
-                    self.get_logger().info(f"✅ Piano generato con '{model_name}': {json_plan}")
+                    self.get_logger().info(f"✅ Piano generato con '{model_name}': {final_json_plan}")
 
-                    self.last_plan_cache = json_plan
+                    self.last_plan_cache = final_json_plan
                     result.success       = True
-                    result.vlm_plan_json  = json_plan
+                    result.vlm_plan_json = final_json_plan
                     result.message       = f"Plan generated successfully with {model_name}."
                     goal_handle.succeed()
                     return result
 
                 except Exception as e:
-                    err_str  = str(e)
-                    is_quota = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
-                    is_unavailable = "503" in err_str or "UNAVAILABLE" in err_str
-                    self.get_logger().error(
-                        f"❌ '{model_name}' attempt {attempt+1}/{max_retries}: {e}"
-                    )
-                    if is_quota:
-                        self.get_logger().warn(
-                            f"⚠️  Quota 429 su '{model_name}', provo modello successivo..."
-                        )
-                        break
-                    elif is_unavailable and attempt < max_retries - 1:
-                        wait = base_delay * (attempt + 1)
-                        self.get_logger().warn(
-                            f"⚠️  503 su '{model_name}' (attempt {attempt+1}/{max_retries}), riprovo tra {wait:.0f}s..."
-                        )
-                        time.sleep(wait)
-                    elif attempt < max_retries - 1:
+                    self.get_logger().error(f"❌ Errore '{model_name}' attempt {attempt+1}/{max_retries}: {e}")
+                    if attempt < max_retries - 1:
                         time.sleep(base_delay)
                         base_delay *= 2
                     else:
@@ -317,7 +361,7 @@ class VlmServerNode(Node):
 
         # Tutti i modelli hanno fallito
         result.success = False
-        result.message = "Tutti i modelli Gemini hanno fallito (quota esaurita o errore API)."
+        result.message = "Tutti i modelli VLM gratuiti hanno fallito (limite rate o errori API)."
         goal_handle.abort()
         return result
 
