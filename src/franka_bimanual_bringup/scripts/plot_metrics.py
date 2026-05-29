@@ -55,7 +55,9 @@ def get_data(base_path):
             for f in json_files:
                 try:
                     with open(os.path.join(root, f), 'r') as fp:
-                        experiments[exp_name].append(json.load(fp))
+                        data = json.load(fp)
+                        data['_filename'] = f
+                        experiments[exp_name].append(data)
                 except:
                     pass
                     
@@ -134,7 +136,6 @@ def inject_sync_barriers(log_data):
 
 def plot_gantt(log_data, exp_name):
     # Inject sync barriers into the log data dynamically
-    log_data = inject_sync_barriers(log_data)
     
     fig, ax = plt.subplots(figsize=(6, 3))
     
@@ -325,10 +326,10 @@ def plot_detailed_counts(experiments_dict):
             mtc_succ += d.get('fsr_execution_successes', 0)
             
         data_to_plot[key] = {
-            "VLM": (vlm_att, vlm_succ),
-            "Percep": (perc_att, perc_succ),
+            "Plan": (vlm_att, vlm_succ),
+            "Vision": (perc_att, perc_succ),
             "Grasp": (grasp_att, grasp_succ),
-            "MTC": (mtc_att, mtc_succ)
+            "Action": (mtc_att, mtc_succ)
         }
         
     num_plots = len(exp_keys)
@@ -338,7 +339,7 @@ def plot_detailed_counts(experiments_dict):
     fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 3.5 * rows), squeeze=False)
     fig.suptitle("Detailed Breakdown: Attempts vs Successes", fontsize=14, fontweight='bold', y=1.02)
     
-    categories = ["VLM", "Percep", "Grasp", "MTC"]
+    categories = ["Plan", "Vision", "Grasp", "Action"]
     x = np.arange(len(categories))
     width = 0.35
     
@@ -384,6 +385,55 @@ def plot_detailed_counts(experiments_dict):
     plt.savefig(os.path.join(OUTPUT_DIR, "detailed_counts_bar.pdf"), format='pdf', bbox_inches='tight')
     plt.close()
 
+def plot_vlm_vs_baseline_success(experiments_dict):
+    baseline_att, baseline_succ = 0, 0
+    vlm_att, vlm_succ = 0, 0
+    
+    for exp_name, logs in experiments_dict.items():
+        is_vlm = exp_name.startswith('V-EXP')
+        
+        for d in logs:
+            succ = d.get('rsr_vlm_success', False) and d.get('rsr_bt_success', False)
+            if is_vlm:
+                vlm_att += 1
+                if succ: vlm_succ += 1
+            else:
+                baseline_att += 1
+                if succ: baseline_succ += 1
+                
+    categories = ["Baseline (Without VLM)", "Integrated (With VLM)"]
+    attempts = [baseline_att, vlm_att]
+    successes = [baseline_succ, vlm_succ]
+    
+    x = np.arange(len(categories))
+    width = 0.35
+    
+    fig, ax = plt.subplots(figsize=(5, 4))
+    
+    rects1 = ax.bar(x - width/2, attempts, width, label='Total Missions', color='lightgray', edgecolor='black')
+    rects2 = ax.bar(x + width/2, successes, width, label='Successful Missions', color='#009E73', edgecolor='black')
+    
+    ax.set_ylabel('Number of Missions')
+    ax.set_title('Mission Success: Baseline vs VLM Integrated', fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories, fontweight='bold')
+    ax.legend(loc='upper right')
+    
+    for rect in rects1:
+        h = rect.get_height()
+        if h > 0: ax.annotate(f'{int(h)}', xy=(rect.get_x() + rect.get_width()/2, h), xytext=(0,3), textcoords="offset points", ha='center', va='bottom', fontsize=10)
+    for rect in rects2:
+        h = rect.get_height()
+        if h > 0: ax.annotate(f'{int(h)}', xy=(rect.get_x() + rect.get_width()/2, h), xytext=(0,3), textcoords="offset points", ha='center', va='bottom', fontsize=10, fontweight='bold')
+            
+    if baseline_att > 0: ax.annotate(f'{baseline_succ/baseline_att*100:.1f}%', xy=(x[0] + width/2, max(5, baseline_succ/2)), ha='center', va='center', color='white', fontweight='bold')
+    if vlm_att > 0: ax.annotate(f'{vlm_succ/vlm_att*100:.1f}%', xy=(x[1] + width/2, max(5, vlm_succ/2)), ha='center', va='center', color='white', fontweight='bold')
+                    
+    ax.set_ylim(0, max(attempts) * 1.2)
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUTPUT_DIR, "vlm_vs_baseline_success.pdf"), format='pdf', bbox_inches='tight')
+    plt.close()
+
 if __name__ == "__main__":
     logs_dir = os.path.join(SCRIPT_DIR, "automate_scenarios", "experiment_logs")
     experiments = get_data(logs_dir)
@@ -398,14 +448,31 @@ if __name__ == "__main__":
                 
         # Generate new concise outputs
         export_latex_table(experiments)
+        plot_vlm_vs_baseline_success(experiments)
         plot_action_durations(experiments)
         plot_detailed_counts(experiments)
         
-        # Generate a Gantt for the first successful log of EVERY experiment
+        # Generate a Gantt for the best performing FULL successful log of EVERY experiment
         for exp_name, logs in experiments.items():
             successful_logs = [l for l in logs if l.get('rsr_vlm_success') and l.get('rsr_bt_success')]
             if successful_logs:
-                plot_gantt(successful_logs[0], exp_name)
-                print(f"Gantt generated from a successful mission in {exp_name}.")
+                best_log = None
+                best_metric = (-1, float('inf')) # (num_actions, duration)
+                for l in successful_logs:
+                    num_acts = len(l.get('arm_actions', {}).get('left_arm', [])) + len(l.get('arm_actions', {}).get('right_arm', []))
+                    start_ts = l.get('start_timestamp', 0)
+                    end_ts = l.get('end_timestamp', 0)
+                    duration = end_ts - start_ts if end_ts > start_ts else float('inf')
+                    
+                    if num_acts > best_metric[0] or (num_acts == best_metric[0] and duration < best_metric[1]):
+                        best_metric = (num_acts, duration)
+                        best_log = l
+                
+                if best_log is None:
+                    best_log = successful_logs[0]
+                    
+                plot_gantt(best_log, exp_name)
+                time_str = f"{best_metric[1]:.2f}s" if best_metric[1] != float('inf') else "N/A"
+                print(f"Gantt generated from BEST FULL mission in {exp_name} ({best_metric[0]} actions, Time: {time_str}).")
         
         print(f"Data mapping complete. Output saved to {OUTPUT_DIR}")

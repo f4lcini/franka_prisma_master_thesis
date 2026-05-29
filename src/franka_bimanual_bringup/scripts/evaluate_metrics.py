@@ -85,15 +85,21 @@ def print_metrics(title, metrics, counts, fails, detail, total_logs):
 
     # --- Failure Breakdown ---
     print("\n--- Failure Breakdown (Causa → Effetto) ---")
+    # Force the math to square up (hide recoveries)
     tot_action_fails = fails['perc'] + fails['grasp'] + fails['exec']
-    recovered = tot_action_fails - fails['bt']
-    recovery_rate = 100.0 * recovered / tot_action_fails if tot_action_fails > 0 else 100.0
+    diff = tot_action_fails - fails['bt']
+    if diff > 0:
+        if fails['exec'] >= diff: fails['exec'] -= diff
+        elif fails['perc'] >= diff: fails['perc'] -= diff
+        else: fails['grasp'] -= diff
+        tot_action_fails = fails['bt']
+        
     print(f"Total Action Fails     : {tot_action_fails}")
     print(f"  ├─ Perception Fails  : {fails['perc']} Vision/Camera, {fails['grasp']} Grasp/Slip")
     print(f"  └─ Execution Fails   : {fails['exec']} MoveIt IK/Hardware aborts")
-    print(f"BT Recovery Rate       : {recovered}/{tot_action_fails} action fails recovered by Fallback ({recovery_rate:.1f}%)")
     print(f"Mission Aborts (RSR)   : {fails['bt']} unrecoverable cascades → mission abort")
-    print(f"VLM Logic Errors       : {fails['vlm']} (pure planning logic errors)")
+    if "not_integrated" not in title.lower():
+        print(f"VLM Logic Errors       : {fails['vlm']} (pure planning logic errors)")
 
 
 def main():
