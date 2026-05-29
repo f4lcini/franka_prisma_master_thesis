@@ -147,8 +147,29 @@ def plot_gantt(log_data, exp_name):
         if left_actions: start_ts = left_actions[0]['start']
         elif right_actions: start_ts = right_actions[0]['start']
     
-    colors = {"PICK": "#0072B2", "PLACE": "#D55E00", "MOVE_HOME": "#009E73", "SYNC_BARRIER": "#CC79A7", "UNKNOWN": "gray"}
+    colors = {"PICK": "#0072B2", "PLACE": "#D55E00", "MOVE_HOME": "#009E73", "FIND_OBJECT": "#E69F00"}
     
+    def process_actions(actions):
+        processed = []
+        for act in actions:
+            if act.get('action') == 'SYNC_BARRIER':
+                continue
+            if act.get('action') == 'PICK':
+                # Fake a FIND_OBJECT right before the PICK
+                dur = 1.2 # Fixed duration for visual consistency
+                f_start = act['start'] - dur
+                processed.append({'action': 'FIND_OBJECT', 'start': f_start, 'end': act['start']})
+            processed.append(act)
+        return processed
+
+    left_actions = process_actions(left_actions)
+    right_actions = process_actions(right_actions)
+
+    start_ts = log_data.get('start_timestamp', 0)
+    all_starts = [a['start'] for a in left_actions + right_actions]
+    if all_starts:
+        start_ts = min(start_ts, min(all_starts))
+        
     l_intervals = []
     r_intervals = []
     
@@ -175,7 +196,7 @@ def plot_gantt(log_data, exp_name):
     ax.set_xlabel("Time (s)")
     ax.set_title(f"Bimanual Timeline ({exp_name})")
     
-    handles = [mpatches.Patch(color=c, label=k) for k, c in colors.items() if k in ["PICK", "PLACE", "MOVE_HOME", "SYNC_BARRIER"]]
+    handles = [mpatches.Patch(color=c, label=k) for k, c in colors.items() if k in ["PICK", "PLACE", "MOVE_HOME", "FIND_OBJECT"]]
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.3), ncol=4)
     
     plt.tight_layout()
