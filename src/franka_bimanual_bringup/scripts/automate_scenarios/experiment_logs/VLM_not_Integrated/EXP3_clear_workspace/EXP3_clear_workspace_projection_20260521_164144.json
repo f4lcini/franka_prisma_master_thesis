@@ -1,0 +1,73 @@
+{
+    "mission_name": "EXP3_clear_workspace",
+    "start_timestamp": 1779374504.794027,
+    "end_timestamp": 1779374548.0363424,
+    "rsr_vlm_success": true,
+    "rsr_bt_success": true,
+    "psr_perception_attempts": 4,
+    "psr_perception_successes": 4,
+    "psr_grasp_attempts": 3,
+    "psr_grasp_successes": 3,
+    "fsr_execution_attempts": 9,
+    "fsr_execution_successes": 9,
+    "arm_actions": {
+        "left_arm": [
+            {
+                "action": "PICK",
+                "start": 1779374507.9755933,
+                "end": 1779374517.9759097,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1779374518.98309,
+                "end": 1779374525.9744158,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779374525.9744883,
+                "end": 1779374529.9747493,
+                "success": true
+            },
+            {
+                "action": "PICK",
+                "start": 1779374532.974762,
+                "end": 1779374542.9751077,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779374542.9751701,
+                "end": 1779374546.98001,
+                "success": true
+            }
+        ],
+        "right_arm": [
+            {
+                "action": "PICK",
+                "start": 1779374508.975016,
+                "end": 1779374516.9748714,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779374518.9841275,
+                "end": 1779374523.9788094,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1779374530.9751532,
+                "end": 1779374540.9751444,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1779374540.9752233,
+                "end": 1779374545.9749062,
+                "success": true
+            }
+        ]
+    }
+}

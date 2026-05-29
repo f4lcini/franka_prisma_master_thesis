@@ -1,7 +1,7 @@
 {
-    "mission_name": "vlm_transfer_the_object_on_the_table_to_the_box",
-    "start_timestamp": 1779454030.629541,
-    "end_timestamp": 1779454057.8894796,
+    "mission_name": "vlm_clear_the_entire_workspace",
+    "start_timestamp": 1780047896.7031586,
+    "end_timestamp": 1780047916.7882855,
     "rsr_vlm_success": false,
     "rsr_bt_success": false,
     "vlm_input_prompt": null,

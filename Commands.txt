@@ -183,6 +183,9 @@ sudo apt install ros-humble-apriltag-ros
 Move home
 python3 src/franka_bimanual_bringup/scripts/automate_scenarios/atom_synch_home.py
 
+sudo chown -R $USER:$USER /home/hargalaten/Documents/vfalcini/franka_prisma_master_thesis
+
+
 # ------------------------------------------
 # 13. THESIS EXPERIMENTS PROMPTS
 # ------------------------------------------

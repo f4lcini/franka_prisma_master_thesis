@@ -1,0 +1,264 @@
+{
+    "mission_name": "vlm_clear_the_entire_workspace",
+    "start_timestamp": 1780044473.580174,
+    "end_timestamp": 1780044519.7141886,
+    "rsr_vlm_success": true,
+    "rsr_bt_success": false,
+    "vlm_input_prompt": "You are the core intelligence of the Semantic-Based Skill Orchestration Framework for Coordinating Bimanual Robotic Tasks (using two Franka Research 3 arms).\nYour objective is to act as a Vision-Language Model (VLM). You MUST directly analyze the provided image of the workspace to infer spatial semantics, object affordances, and potential collision zones before generating a JSON plan.\nCRITICAL: The generated JSON plan will be fed into a dynamic Behavior Tree engine. The 'left_arm_sequence' and 'right_arm_sequence' will be executed IN PARALLEL. You must use SYNC_BARRIER to explicitly synchronize them when sequential steps are required.\n\n--- INITIAL STATE ---\nAssume both arms are empty and currently in the 'ready' pose.\n\n--- AVAILABLE ACTIONS ---\n- FIND_OBJECT: Localize an object with YOLO. Requires 'target_name' and 'arm'.\n- PICK: Grasp an object. Requires 'target_name' and 'arm'. If picking from the shared zone, use 'target_name': 'shared' (NO FIND_OBJECT needed).\n- PLACE: Deposit an object. Requires 'target_name' ('box_ws_sx', 'box_ws_dx', or 'shared') and 'arm'.\n- MOVE_HOME: Move arm to a resting pose. Optionally requires 'pose_name' ('ready' or 'midway'). IMPORTANT: In 'midway' pose, the gripper DOES NOT open (useful for holding objects during coordination). The mission MUST always end with a MOVE_HOME (pose_name 'ready') for both arms.\n- SYNC_BARRIER: A synchronization point. The arm pauses until the other arm reaches its SYNC_BARRIER. Ensure both arms have the EXACT same number of SYNC_BARRIERs in their sequences.\n\n--- PREDEFINED LOCATIONS & POSES ---\n- 'box_ws_sx': The drop-off box located in the left workspace (accessible only by left_arm).\n- 'box_ws_dx': The drop-off box located in the right workspace (accessible only by right_arm).\n- 'shared': The common overlapping workspace in the center. Used to transfer objects between arms or place items centrally.\n- 'ready': The default safe resting pose for the arms.\n- 'midway': An intermediate safe pose where the gripper remains CLOSED (holding the object). Used while waiting for the other arm.\n\n--- SPATIAL & SAFETY RULES ---\n1. 'left_arm' operates on the left. It drops objects in 'box_ws_sx' or 'shared'.\n2. 'right_arm' operates on the right. It drops objects in 'box_ws_dx' or 'shared'.\n3. END OF MISSION: Both arms MUST ALWAYS finish their sequences with a 'MOVE_HOME' (pose_name 'ready').\n4. COLLISION AVOIDANCE & MAX PARALLELISM: Both arms CANNOT access 'shared' at the same time. To maximize parallel execution, delay the SYNC_BARRIER as much as possible. Place the SYNC_BARRIER immediately BEFORE the 'PLACE' action in 'shared', so both arms can FIND and PICK simultaneously without waiting.\n5. HANDOVERS: To transfer an object, the donor places it in 'shared' and waits (SYNC_BARRIER). The recipient waits (SYNC_BARRIER) until the donor is clear, then picks from 'shared'.\n6. INANIMATE OBJECTS ONLY: You MUST strictly ignore any detected object labeled 'person'. The robot can only physically manipulate inanimate items (e.g. 'sports ball', 'bottle', 'cup'). Do NEVER attempt to FIND or PICK a 'person'.\n7. LOGICAL SEQUENCE (PICK & PLACE): Once an arm performs a 'FIND_OBJECT' and a 'PICK', it MUST eventually perform a 'PLACE'. It makes no sense to leave an object in the gripper. If an arm needs to wait while holding an object (e.g., for synchronization), use 'MOVE_HOME' with 'pose_name': 'midway' (which keeps the gripper closed) combined with a 'SYNC_BARRIER', before finally proceeding to 'PLACE'.\n\n--- TASK CONTEXTS (Reference Experiments) ---\nThe system handles 3 physical setups. Infer the correct goal and plan accordingly:\n1. EXP1 (Sort Items): Both drop-off boxes are present. Goal: sort items independently into respective boxes.\n2. EXP2 (Transfer/Handover): Only the right box ('box_ws_dx') is present. Goal: items from the left must be transferred to the right arm via 'shared' to reach the box.\n3. EXP3 (Clear Workspace): The destination box is located centrally in the 'shared' zone. Goal: both arms must place all objects into 'shared' without colliding.\n\n--- OUTPUT FORMAT ---\nYou must output STRICTLY a JSON object mapping to the TaskPlan schema. Here is a generic EXAMPLE (completely different from the actual experiments) to show the syntax:\n{\n  \"left_arm_sequence\": [\n    {\"action\": \"MOVE_HOME\", \"pose_name\": \"midway\", \"arm\": \"left_arm\"},\n    {\"action\": \"MOVE_HOME\", \"pose_name\": \"ready\", \"arm\": \"left_arm\"}\n  ],\n  \"right_arm_sequence\": [\n    {\"action\": \"MOVE_HOME\", \"pose_name\": \"midway\", \"arm\": \"right_arm\"},\n    {\"action\": \"MOVE_HOME\", \"pose_name\": \"ready\", \"arm\": \"right_arm\"}\n  ]\n}\n\n--- CURRENT ACTIVE DETECTIONS FROM YOLOv26m (via /scan_table) ---\nThe YOLO vision system has currently detected the following physical objects on the table:\n- Object 1: Label = 'chair', Spatial Side = left_side \u2192 recommended arm: left_arm (X=-0.176m, Confidence: 0.79)\n- Object 2: Label = 'sports ball', Spatial Side = right_side \u2192 recommended arm: right_arm (X=0.305m, Confidence: 0.75)\n- Object 3: Label = 'sports ball', Spatial Side = left_side \u2192 recommended arm: left_arm (X=-0.321m, Confidence: 0.72)\n- Object 4: Label = 'cup', Spatial Side = left_side \u2192 recommended arm: left_arm (X=-0.193m, Confidence: 0.72)\n- Object 5: Label = 'cup', Spatial Side = right_side \u2192 recommended arm: right_arm (X=0.147m, Confidence: 0.66)\n- Object 6: Label = 'dining table', Spatial Side = left_side \u2192 recommended arm: left_arm (X=-0.222m, Confidence: 0.17)\n- Object 7: Label = 'tv', Spatial Side = left_side \u2192 recommended arm: left_arm (X=-0.658m, Confidence: 0.16)\n- Object 8: Label = 'bottle', Spatial Side = left_side \u2192 recommended arm: left_arm (X=-0.728m, Confidence: 0.15)\n\nCRITICAL RULE: While YOLO provides these base textual detections, you MUST analyze the attached image to verify spatial relationships, object accessibility, and plan safe bimanual sequences. Use the exact Label string from YOLO, but use your visual understanding to dictate the interaction order and SYNC_BARRIER placements. Do NOT use generic names like 'left_item' or 'right_item'.\n\n",
+    "vlm_output_plan": {
+        "task_name": "Clear Workspace into Shared Tray",
+        "left_arm_sequence": [
+            {
+                "action": "FIND_OBJECT",
+                "target_name": "sports ball",
+                "arm": "left_arm"
+            },
+            {
+                "action": "PICK",
+                "target_name": "sports ball",
+                "arm": "left_arm",
+                "grasp_type": "top"
+            },
+            {
+                "action": "MOVE_HOME",
+                "arm": "left_arm",
+                "pose_name": "midway"
+            },
+            {
+                "action": "SYNC_BARRIER",
+                "arm": "left_arm"
+            },
+            {
+                "action": "PLACE",
+                "target_name": "shared",
+                "arm": "left_arm"
+            },
+            {
+                "action": "MOVE_HOME",
+                "arm": "left_arm",
+                "pose_name": "ready"
+            },
+            {
+                "action": "FIND_OBJECT",
+                "target_name": "cup",
+                "arm": "left_arm"
+            },
+            {
+                "action": "PICK",
+                "target_name": "cup",
+                "arm": "left_arm",
+                "grasp_type": "top"
+            },
+            {
+                "action": "MOVE_HOME",
+                "arm": "left_arm",
+                "pose_name": "midway"
+            },
+            {
+                "action": "SYNC_BARRIER",
+                "arm": "left_arm"
+            },
+            {
+                "action": "PLACE",
+                "target_name": "shared",
+                "arm": "left_arm"
+            },
+            {
+                "action": "MOVE_HOME",
+                "arm": "left_arm",
+                "pose_name": "ready"
+            },
+            {
+                "action": "MOVE_HOME",
+                "arm": "left_arm",
+                "pose_name": "ready"
+            }
+        ],
+        "right_arm_sequence": [
+            {
+                "action": "FIND_OBJECT",
+                "target_name": "sports ball",
+                "arm": "right_arm"
+            },
+            {
+                "action": "PICK",
+                "target_name": "sports ball",
+                "arm": "right_arm",
+                "grasp_type": "top"
+            },
+            {
+                "action": "MOVE_HOME",
+                "arm": "right_arm",
+                "pose_name": "midway"
+            },
+            {
+                "action": "SYNC_BARRIER",
+                "arm": "right_arm"
+            },
+            {
+                "action": "WAIT",
+                "seconds": 5,
+                "arm": "right_arm",
+                "message": "Waiting for left arm to place first item in shared."
+            },
+            {
+                "action": "PLACE",
+                "target_name": "shared",
+                "arm": "right_arm"
+            },
+            {
+                "action": "MOVE_HOME",
+                "arm": "right_arm",
+                "pose_name": "ready"
+            },
+            {
+                "action": "FIND_OBJECT",
+                "target_name": "cup",
+                "arm": "right_arm"
+            },
+            {
+                "action": "PICK",
+                "target_name": "cup",
+                "arm": "right_arm",
+                "grasp_type": "top"
+            },
+            {
+                "action": "MOVE_HOME",
+                "arm": "right_arm",
+                "pose_name": "midway"
+            },
+            {
+                "action": "SYNC_BARRIER",
+                "arm": "right_arm"
+            },
+            {
+                "action": "WAIT",
+                "seconds": 5,
+                "arm": "right_arm",
+                "message": "Waiting for left arm to place second item in shared."
+            },
+            {
+                "action": "PLACE",
+                "target_name": "shared",
+                "arm": "right_arm"
+            },
+            {
+                "action": "MOVE_HOME",
+                "arm": "right_arm",
+                "pose_name": "ready"
+            },
+            {
+                "action": "MOVE_HOME",
+                "arm": "right_arm",
+                "pose_name": "ready"
+            }
+        ],
+        "coordination_notes": "Both arms pick objects from their respective sides in parallel. They then synchronize using SYNC_BARRIER before placing into the 'shared' central tray. To avoid collision in the 'shared' zone, the right arm waits for the left arm to complete its placement before proceeding with its own. This sequence is repeated for all objects."
+    },
+    "psr_perception_attempts": 2,
+    "psr_perception_successes": 2,
+    "psr_grasp_attempts": 2,
+    "psr_grasp_successes": 2,
+    "fsr_execution_attempts": 6,
+    "fsr_execution_successes": 5,
+    "scene_inventory": [
+        {
+            "label": "chair",
+            "x_world": -0.17617626211240567,
+            "y_world": 0.77317280654656,
+            "conf": 0.7923842072486877,
+            "side": "left_side"
+        },
+        {
+            "label": "sports ball",
+            "x_world": 0.30473426587837193,
+            "y_world": -0.28955733913574255,
+            "conf": 0.7532773613929749,
+            "side": "right_side"
+        },
+        {
+            "label": "sports ball",
+            "x_world": -0.3210086609463415,
+            "y_world": -0.27194477350563684,
+            "conf": 0.7225614190101624,
+            "side": "left_side"
+        },
+        {
+            "label": "cup",
+            "x_world": -0.1934324827403151,
+            "y_world": -0.1553700059710077,
+            "conf": 0.7152858972549438,
+            "side": "left_side"
+        },
+        {
+            "label": "cup",
+            "x_world": 0.14740842332575965,
+            "y_world": -0.2235588668302131,
+            "conf": 0.6609380841255188,
+            "side": "right_side"
+        },
+        {
+            "label": "dining table",
+            "x_world": -0.22239739446472506,
+            "y_world": -0.5065633614429427,
+            "conf": 0.16973154246807098,
+            "side": "left_side"
+        },
+        {
+            "label": "tv",
+            "x_world": -0.6578257322751117,
+            "y_world": 0.5207603727616543,
+            "conf": 0.15539613366127014,
+            "side": "left_side"
+        },
+        {
+            "label": "bottle",
+            "x_world": -0.7276362450238801,
+            "y_world": 3.6354337253686047,
+            "conf": 0.14574916660785675,
+            "side": "left_side"
+        }
+    ],
+    "arm_actions": {
+        "left_arm": [
+            {
+                "action": "PICK",
+                "start": 1780044495.6372724,
+                "end": 1780044504.644959,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1780044504.6450596,
+                "end": 1780044508.6373875,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1780044511.6419468,
+                "end": 1780044519.6388829,
+                "success": true
+            }
+        ],
+        "right_arm": [
+            {
+                "action": "PICK",
+                "start": 1780044495.6384761,
+                "end": 1780044505.637645,
+                "success": true
+            },
+            {
+                "action": "MOVE_HOME",
+                "start": 1780044505.637702,
+                "end": 1780044510.6373694,
+                "success": true
+            },
+            {
+                "action": "PLACE",
+                "start": 1780044517.6374335,
+                "end": 1780044519.6402283,
+                "success": false
+            }
+        ]
+    }
+}

@@ -86,7 +86,6 @@ class ObjectLocalizationNode(Node):
 
         # Debug Image and Marker Publishers
         self.debug_image_pub = self.create_publisher(Image, '/yolo_debug_image', 10)
-        self.scan_image_pub = self.create_publisher(Image, '/yolo_scan_image', 10)
         self.pose_pub = self.create_publisher(PoseStamped, '/yolo_detected_pose', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '/yolo_markers', 10)
 
@@ -380,16 +379,6 @@ class ObjectLocalizationNode(Node):
                             'y_world': float(p_world[1]),
                             'conf':    conf,
                         })
-                        
-                    # Publish annotated high-res image
-                    try:
-                        annotated_frame = results[0].plot(labels=True, boxes=True)
-                        scan_msg = self.cv_bridge.cv2_to_imgmsg(annotated_frame, 'bgr8')
-                        scan_msg.header = self.latest_image.header
-                        self.scan_image_pub.publish(scan_msg)
-                    except Exception as e:
-                        self.get_logger().error(f"Errore pubblicazione scan image: {e}")
-                        
                 except Exception as e:
                     self.get_logger().error(f"Errore YOLO in scan_table frame: {e}")
                 time.sleep(0.2)  # Aumentato a 200ms per far respirare il thread RT a 1kHz!
