@@ -23,7 +23,7 @@ plt.rcParams.update({
 })
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = "/home/hargalaten/vfalcini_demos/Thesis/images/plots"
+OUTPUT_DIR = "/home/falco_robotics/vf_projects_portfolio/VF_tesi_prisma/images/plots"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 COLORS = ["#0072B2", "#E69F00", "#009E73", "#D55E00", "#CC79A7", "#56B4E9"]
@@ -203,6 +203,7 @@ def plot_gantt(log_data, exp_name):
     # Save with exp_name in the filename so they don't overwrite each other
     safe_name = exp_name.replace(" ", "_")
     plt.savefig(os.path.join(OUTPUT_DIR, f"gantt_chart_{safe_name}.pdf"), format='pdf', bbox_inches='tight')
+    plt.savefig(os.path.join(OUTPUT_DIR, f"gantt_chart_{safe_name}.svg"), format='svg', bbox_inches='tight')
     plt.close()
 
 def export_latex_table(experiments_dict):
@@ -215,7 +216,7 @@ def export_latex_table(experiments_dict):
         f.write("\\label{tab:performance_metrics}\n")
         f.write("\\begin{tabular}{l c c c c c}\n")
         f.write("\\hline\n")
-        f.write("\\textbf{Scenario} & \\textbf{RSR (\\%)} & \\textbf{PSR (\\%)} & \\textbf{FSR (\\%)} & \\textbf{PEO (\\%)} & \\textbf{Time (s)} \\\\\n")
+        f.write("\\textbf{Scenario} & \\textbf{RSR (\\%)} & \\textbf{PSR (\\%)} & \\textbf{HSR (\\%)} & \\textbf{PEO (\\%)} & \\textbf{Time (s)} \\\\\n")
         f.write("\\hline\n")
         
         for exp_name, logs in experiments_dict.items():
@@ -315,19 +316,16 @@ def plot_action_durations(experiments_dict):
         
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, "action_durations_violin.pdf"), format='pdf', bbox_inches='tight')
+    plt.savefig(os.path.join(OUTPUT_DIR, "action_durations_violin.svg"), format='svg', bbox_inches='tight')
     plt.close()
 
 def plot_detailed_counts(experiments_dict):
     # Prepare data including GLOBAL
-    exp_keys = list(experiments_dict.keys()) + ["GLOBAL"]
     all_logs = []
     for logs in experiments_dict.values():
         all_logs.extend(logs)
         
-    data_to_plot = {}
-    for key in exp_keys:
-        logs = all_logs if key == "GLOBAL" else experiments_dict[key]
-        
+    def aggregate_data(logs):
         vlm_att, vlm_succ = 0, 0
         perc_att, perc_succ = 0, 0
         grasp_att, grasp_succ = 0, 0
@@ -346,23 +344,62 @@ def plot_detailed_counts(experiments_dict):
             mtc_att += d.get('fsr_execution_attempts', 0)
             mtc_succ += d.get('fsr_execution_successes', 0)
             
-        data_to_plot[key] = {
+        return {
             "Plan": (vlm_att, vlm_succ),
             "Vision": (perc_att, perc_succ),
             "Grasp": (grasp_att, grasp_succ),
-            "Action": (mtc_att, mtc_succ)
+            "Kinematics": (mtc_att, mtc_succ)
         }
+
+    categories = ["Plan", "Vision", "Grasp", "Kinematics"]
+    x = np.arange(len(categories))
+    width = 0.35
+
+    # 1. Plot GLOBAL as a separate figure
+    global_data = aggregate_data(all_logs)
+    
+    fig, ax = plt.subplots(figsize=(6, 4))
+    
+    attempts = [global_data[cat][0] for cat in categories]
+    successes = [global_data[cat][1] for cat in categories]
+    
+    rects1 = ax.bar(x - width/2, attempts, width, label='Attempts', color='lightgray', edgecolor='black')
+    rects2 = ax.bar(x + width/2, successes, width, label='Successes', color='#0072B2', edgecolor='black')
+    
+    ax.set_title("Global Breakdown: Attempts vs Successes", fontweight='bold', fontsize=12)
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories, fontsize=11)
+    ax.set_ylabel("Count")
+    
+    for rect in rects1:
+        h = rect.get_height()
+        if h > 0: ax.annotate(f'{int(h)}', xy=(rect.get_x() + rect.get_width()/2, h), xytext=(0,2), textcoords="offset points", ha='center', va='bottom', fontsize=10)
+    for rect in rects2:
+        h = rect.get_height()
+        if h > 0: ax.annotate(f'{int(h)}', xy=(rect.get_x() + rect.get_width()/2, h), xytext=(0,2), textcoords="offset points", ha='center', va='bottom', fontsize=10)
+        
+    max_y = max(max(attempts), 1)
+    ax.set_ylim(0, max_y * 1.25)
+    ax.legend(loc='upper right')
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUTPUT_DIR, "global_counts_bar.pdf"), format='pdf', bbox_inches='tight')
+    plt.savefig(os.path.join(OUTPUT_DIR, "global_counts_bar.svg"), format='svg', bbox_inches='tight')
+    plt.close()
+
+    # 2. Plot Detailed Scenarios as a separate figure
+    exp_keys = list(experiments_dict.keys())
+    
+    data_to_plot = {}
+    for key in exp_keys:
+        data_to_plot[key] = aggregate_data(experiments_dict[key])
         
     num_plots = len(exp_keys)
     cols = min(3, num_plots)
     rows = int(np.ceil(num_plots / cols))
     
     fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 3.5 * rows), squeeze=False)
-    fig.suptitle("Detailed Breakdown: Attempts vs Successes", fontsize=14, fontweight='bold', y=1.02)
-    
-    categories = ["Plan", "Vision", "Grasp", "Action"]
-    x = np.arange(len(categories))
-    width = 0.35
+    fig.suptitle("Scenario Breakdown: Attempts vs Successes", fontsize=14, fontweight='bold', y=1.02)
     
     for idx, key in enumerate(exp_keys):
         r = idx // cols
@@ -381,7 +418,6 @@ def plot_detailed_counts(experiments_dict):
         ax.set_xticklabels(categories)
         if c == 0: ax.set_ylabel("Count")
         
-        # Add integer labels on top
         for rect in rects1:
             h = rect.get_height()
             if h > 0: ax.annotate(f'{int(h)}', xy=(rect.get_x() + rect.get_width()/2, h), xytext=(0,2), textcoords="offset points", ha='center', va='bottom', fontsize=9)
@@ -389,14 +425,12 @@ def plot_detailed_counts(experiments_dict):
             h = rect.get_height()
             if h > 0: ax.annotate(f'{int(h)}', xy=(rect.get_x() + rect.get_width()/2, h), xytext=(0,2), textcoords="offset points", ha='center', va='bottom', fontsize=9)
             
-        # Error text inside plot
         max_y = max(max(attempts), 1)
-        ax.set_ylim(0, max_y * 1.2)
+        ax.set_ylim(0, max_y * 1.25)
         
         if idx == 0:
             ax.legend(loc='upper right')
 
-    # Hide unused subplots
     for idx in range(num_plots, rows * cols):
         r = idx // cols
         c = idx % cols
@@ -404,6 +438,7 @@ def plot_detailed_counts(experiments_dict):
         
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, "detailed_counts_bar.pdf"), format='pdf', bbox_inches='tight')
+    plt.savefig(os.path.join(OUTPUT_DIR, "detailed_counts_bar.svg"), format='svg', bbox_inches='tight')
     plt.close()
 
 def plot_vlm_vs_baseline_success(experiments_dict):
@@ -453,6 +488,7 @@ def plot_vlm_vs_baseline_success(experiments_dict):
     ax.set_ylim(0, max(attempts) * 1.2)
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, "vlm_vs_baseline_success.pdf"), format='pdf', bbox_inches='tight')
+    plt.savefig(os.path.join(OUTPUT_DIR, "vlm_vs_baseline_success.svg"), format='svg', bbox_inches='tight')
     plt.close()
 
 if __name__ == "__main__":
@@ -464,7 +500,7 @@ if __name__ == "__main__":
     else:
         # Clear out old plots to avoid confusion
         for f in os.listdir(OUTPUT_DIR):
-            if f.endswith('.pdf') or f.endswith('.tex'):
+            if f.endswith('.pdf') or f.endswith('.tex') or f.endswith('.svg'):
                 os.remove(os.path.join(OUTPUT_DIR, f))
                 
         # Generate new concise outputs
