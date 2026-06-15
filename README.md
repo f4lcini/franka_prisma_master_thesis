@@ -22,6 +22,37 @@ The `src/` directory contains various ROS 2 packages, each dedicated to a specif
 - **`franka_manipulation_env`**: Defines the surrounding workspace, laboratory setup, and static collision objects via URDF configurations(USED FOR GAZEBO SIMULATION ONLY!)
 - **`franka_ros2` & `franka_ros2_multimanual`**: Core drivers and hardware interfaces for communicating directly with the real Franka controllers in concurrent bimanual setups.
 
+---
+
+## 🐳 Docker Setup & Management
+
+This project is containerized to ensure a reproducible environment. Use the following commands to build the image and manage the container. 
+
+### Building and Starting the Container
+Navigate to the directory containing your `docker-compose.yml` (e.g., `src/franka_ros2/`) and run:
+```bash
+# Rebuild the Docker image from scratch (run this if you modify the Dockerfile)
+docker compose build
+
+# Start the container in the background
+docker compose up -d
+```
+
+### Accessing the Container
+To run the ROS 2 pipelines, you need to open a terminal inside the running container:
+```bash
+# Open an interactive bash session inside the container
+docker exec -it franka_vlm_container bash
+# Note: The container name might be `franka_ros2` depending on your active compose file.
+```
+
+### Stopping the Container
+```bash
+# Stop and cleanly remove the container when you're done
+docker compose down
+```
+
+---
 
 ## 💻 Execution Guide: Simulation Pipeline (Gazebo)
 
