@@ -64,6 +64,7 @@ RUN apt-get update && apt-get install -y \
     ros-humble-action-msgs \
     ros-humble-tf2-msgs \
     ros-humble-pinocchio \
+    ros-humble-apriltag-ros \
     ros-humble-generate-parameter-library \
     ros-humble-joint-state-publisher \
     ros-humble-joint-state-publisher-gui \
