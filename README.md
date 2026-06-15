@@ -23,6 +23,26 @@ The `src/` directory contains various ROS 2 packages, each dedicated to a specif
 - **`franka_ros2` & `franka_ros2_multimanual`**: Core drivers and hardware interfaces for communicating directly with the real Franka controllers in concurrent bimanual setups.
 
 
+## 💻 Execution Guide: Simulation Pipeline (Gazebo)
+
+> ⚠️ **IMPORTANT**: To launch the simulation using the bimanual setup in Gazebo, you **MUST** switch to the `Parallel_Coordinated` branch!
+
+To run the framework in simulation, use the following commands across different terminals:
+
+### Terminal 1: Simulation (Gazebo + MoveGroup + RViz)
+*Note: `demo_moveit_bimanual` is a wrapper that launches Gazebo AND MoveGroup. Wait ~12 seconds after launch, as MoveGroup starts with a delay to give Gazebo time to load.*
+```bash
+ros2 launch franka_bimanual_config demo_moveit_bimanual.launch.py use_gazebo:=true
+```
+
+### Terminal 2: Python MoveIt Server & Skills (The Muscles)
+*Launches MoveIt server, Cartesian Bridge, and Sync Barrier Coordinator.*
+```bash
+ros2 launch franka_bimanual_bringup parallel_test_backends.launch.py 
+```
+
+---
+
 ## 🚀 Execution Guide: Hardware Pipeline (Modular Bimanual)
 
 To run the framework on the physical hardware, you need to launch several independent modules across different terminals. This modular approach ensures clean logging and isolated debugging.
