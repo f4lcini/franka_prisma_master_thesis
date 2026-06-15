@@ -30,6 +30,18 @@ This project is containerized to ensure a reproducible environment and clean dep
 
 Use the following commands to build the image and manage the container from the root directory:
 
+### Environment Setup (Gemini API Key)
+Before building or starting the container, you must configure your personal Google Gemini API key. 
+1. Copy the provided `.env.example` file to create a `.env` file:
+   ```bash
+   cp .env.example .env
+   ```
+2. Open the `.env` file and insert your custom API key:
+   ```env
+   GEMINI_API_KEY=your_personal_api_key_here
+   ```
+This key is automatically securely passed to the Docker container to power the VLM (Vision-Language Model) reasoning modules.
+
 ### Building and Starting the Container
 ```bash
 # Build/Rebuild the Docker image from scratch (Run this to apply the new AprilTag and YOLO additions)
