@@ -3,8 +3,7 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import Command, LaunchConfiguration
+from launch.substitutions import Command
 from launch_ros.parameter_descriptions import ParameterValue
 
 def load_yaml(package_name, file_path):
@@ -17,20 +16,13 @@ def load_yaml(package_name, file_path):
         return None
 
 def generate_launch_description():
-    pkg_env_share = get_package_share_directory('franka_bimanual_config')
-    use_sim_time = LaunchConfiguration('use_sim_time', default='false')
-
-    declare_use_sim_time = DeclareLaunchArgument(
-        'use_sim_time',
-        default_value='false',
-        description='Use simulation (Gazebo) clock if true'
-    )
+    pkg_env_share = get_package_share_directory('franka_manipulation_env')
 
     # --- 1. Load MoveIt Configuration Parameters ---
     
     # URDF (Robot Description)
     xacro_file_urdf = os.path.join(pkg_env_share, 'urdf', 'bimanual_custom.urdf.xacro')
-    robot_description_config = Command(['xacro', ' ', xacro_file_urdf, ' ', 'hand:=true', ' ', 'gazebo:=false', ' ', 'ros2_control:=false'])
+    robot_description_config = Command(['xacro', ' ', xacro_file_urdf, ' ', 'hand:=true', ' ', 'gazebo:=true', ' ', 'ros2_control:=false'])
     robot_description = {"robot_description": ParameterValue(robot_description_config, value_type=str)}
 
     # SRDF (Robot Description Semantic)
@@ -39,8 +31,8 @@ def generate_launch_description():
     robot_description_semantic = {"robot_description_semantic": ParameterValue(robot_description_semantic_config, value_type=str)}
 
     # Kinematics & Joint Limits
-    kinematics_yaml = load_yaml('franka_bimanual_config', 'config/kinematics_bimanual.yaml')
-    joint_limits_yaml = load_yaml('franka_bimanual_config', 'config/joint_limits_bimanual.yaml')
+    kinematics_yaml = load_yaml('franka_manipulation_env', 'config/kinematics_bimanual.yaml')
+    joint_limits_yaml = load_yaml('franka_manipulation_env', 'config/joint_limits_bimanual.yaml')
 
     # Planning Pipelines (Forcing Pilz)
     ompl_base_yaml = load_yaml('franka_fr3_moveit_config', 'config/ompl_planning.yaml')
@@ -60,12 +52,11 @@ def generate_launch_description():
 
     # --- 2. Define Nodes ---
 
-    # Cartesian Bridge Node: replaces bimanual_planner_node (C++ JTC path)
-    # Exposes the same /parallel_move action but executes via Cartesian Impedance
-    bridge_node = Node(
-        package='franka_bimanual_skills',
-        executable='cartesian_bridge_node',
-        name='cartesian_bridge_node',
+    # Bimanual C++ Planner (Action Server: /parallel_move)
+    planner_node = Node(
+        package='franka_bimanual_planner',
+        executable='bimanual_planner_node',
+        name='bimanual_planner_node',
         output='screen',
         parameters=[
             robot_description,
@@ -73,7 +64,7 @@ def generate_launch_description():
             kinematics_yaml,
             {"robot_description_planning": joint_limits_yaml} if joint_limits_yaml else {},
             planning_pipeline_parameters,
-            {'use_sim_time': use_sim_time}
+            {'use_sim_time': True}
         ]
     )
 
@@ -83,20 +74,10 @@ def generate_launch_description():
         executable='simple_moveit_server',
         name='simple_moveit_server',
         output='screen',
-        parameters=[{'use_sim_time': use_sim_time}]
-    )
-
-    # Sync Barrier Coordinator
-    sync_barrier_coordinator_node = Node(
-        package='franka_bimanual_skills',
-        executable='sync_barrier_coordinator',
-        name='sync_barrier_coordinator',
-        output='screen'
+        parameters=[{'use_sim_time': True}]
     )
 
     return LaunchDescription([
-        declare_use_sim_time,
-        bridge_node,
-        skill_server_node,
-        sync_barrier_coordinator_node
+        planner_node,
+        skill_server_node
     ])

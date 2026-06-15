@@ -5,7 +5,7 @@ from setuptools import find_packages, setup
 package_name = 'franka_bimanual_skills'
 
 setup(
-    name=package_name,
+    name='franka-bimanual-skills',
     version='0.0.0',
     packages=find_packages(exclude=['test']),
     data_files=[
@@ -29,11 +29,12 @@ setup(
     entry_points={
         'console_scripts': [
             # Syntax: executable_name = package_name.module_name:main_function
+            # This defines the executable 'fr3_pnp_node' invoked in run_pnp.launch.py
+            'fr3_pnp_node = franka_bimanual_skills.fr3_pnp_node:main',
             'vlm_server_node = franka_bimanual_skills.vlm_server_node:main',
             'object_localization_node = franka_bimanual_skills.object_localization_node:main',
             'simple_moveit_server = franka_bimanual_skills.simple_moveit_server:main',
-            'sync_barrier_coordinator = franka_bimanual_skills.sync_barrier_coordinator:main',
-            'cartesian_bridge_node = franka_bimanual_skills.cartesian_bridge_node:main'
+            'handover_coordinator = franka_bimanual_skills.handover_coordinator:main',
         ],
     },
 )
